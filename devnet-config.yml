@@ -1,7 +1,0 @@
----
-json_rpc_url: "https://devnet.solana.com"
-websocket_url: ""
-keypair_path: keys/devnet-validator-keypair.json
-address_labels:
-  "11111111111111111111111111111111": System Program
-commitment: confirmed

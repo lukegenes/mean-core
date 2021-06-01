@@ -6,14 +6,15 @@
     "test": "tests"
   },
   "dependencies": {
-    "@solana/web3.js": "^1.10.0",
+    "@solana/web3.js": "^1.12.0",
     "borsh": "^0.4.0",
     "mz": "^2.7.0",
     "yaml": "^1.10.2",
     "bn.js": "^5.1.0",
     "buffer": "6.0.3",
     "buffer-layout": "^1.2.0",
-    "prompt-sync": "4.2.0"
+    "prompt-sync": "4.2.0",
+    "dotenv": "10.0.0"
   },
   "devDependencies": {
     "@tsconfig/recommended": "^1.0.1",

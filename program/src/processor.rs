@@ -2,13 +2,13 @@
 
 use solana_program::{
     msg,
-    // system_instruction,
-    // program::invoke,
+    system_instruction,
+    program::invoke,
     pubkey::Pubkey,
     // stake_history::Epoch,
     entrypoint::ProgramResult,
     // program_error::ProgramError,
-    // instruction::{ AccountMeta, Instruction },
+    instruction::{ AccountMeta, Instruction },
     account_info::{ next_account_info, AccountInfo },
     program_pack::{ IsInitialized, Pack },
     sysvar::{ clock::Clock, rent::Rent, Sysvar }    
@@ -18,7 +18,7 @@ use crate::{
     // instruction,
     error::StreamError,
     instruction::StreamInstruction,
-    state::{ Stream, StreamTerms }
+    state::{ Stream, StreamTerms, LAMPORTS_PER_SOL }
 };
 
 pub struct Processor {}
@@ -37,7 +37,7 @@ impl Processor {
         match instruction {
 
             StreamInstruction::CreateStream {
-                stream_name,
+                // stream_name,
                 treasurer_address,
                 treasury_address,
                 beneficiary_withdrawal_address,
@@ -52,11 +52,12 @@ impl Processor {
             } => {
 
                 msg!("Instruction: Create Stream");
+                msg!("Funding amount: {:?}", funding_amount);
 
                 Self::process_create_stream(
                     accounts, 
                     program_id,
-                    stream_name,
+                    // stream_name,
                     treasurer_address,
                     treasury_address,
                     beneficiary_withdrawal_address,
@@ -167,7 +168,7 @@ impl Processor {
     fn process_create_stream(
         accounts: &[AccountInfo],
         program_id: &Pubkey,
-        stream_name: String,
+        // stream_name: String,
         treasurer_address: Pubkey,
         treasury_address: Pubkey,
         beneficiary_withdrawal_address: Pubkey,
@@ -180,6 +181,14 @@ impl Processor {
         cliff_vest_percent: u64
         
     ) -> ProgramResult {
+
+        // msg!("Stream name: {:?}", stream_name);
+        msg!("Treasurer address: {:?}", treasurer_address.to_string());
+        msg!("Treasury address: {:?}", treasury_address.to_string());
+        msg!("Benericiary address: {:?}", beneficiary_withdrawal_address.to_string());
+        msg!("Funding amount: {:?}", funding_amount);
+        msg!("Rate amount: {:?}", rate_amount);
+        msg!("Rate interval seconds: {:?}", rate_interval_in_seconds);  
 
         let account_info_iter = &mut accounts.iter();
         let treasurer_account_info = next_account_info(account_info_iter)?;
@@ -203,7 +212,7 @@ impl Processor {
             return Err(StreamError::InvalidRentException.into());
         }
 
-        if treasury_account_info.owner == program_id || stream_account_info.owner != program_id {
+        if treasury_account_info.owner != program_id || stream_account_info.owner != program_id {
             return Err(StreamError::InvalidStreamInstruction.into());
         }
 
@@ -223,16 +232,40 @@ impl Processor {
             escrow_vested_amount = rate * (clock.slot - starting_block_height);
         }
 
-        let total_deposits = funding_amount;
+        let total_deposits = funding_amount * LAMPORTS_PER_SOL;
+
+        if funding_amount > treasurer_account_info.lamports() {
+            return Err(StreamError::InsufficientFunds.into());
+        }
+        
+        // if total_deposits > 0 {
+
+        //     msg!("Total deposit: {:?}", total_deposits);
+
+        //     let instruction = system_instruction::transfer(
+        //         treasurer_account_info.key,
+        //         treasury_account_info.key,
+        //         total_deposits
+        //     );
+
+        //     invoke(
+        //         &instruction,
+        //         &[
+        //             treasurer_account_info.clone(),
+        //             treasury_account_info.clone()
+        //         ]
+        //     );
+        // }
 
         if total_deposits > 0 {
+            msg!("Total deposit: {:?}", total_deposits);
             **treasurer_account_info.lamports.borrow_mut() -= total_deposits;
             **treasury_account_info.lamports.borrow_mut() += total_deposits;
         }
 
         let escrow_unvested_amount = total_deposits - escrow_vested_amount;
 
-        stream.stream_name = stream_name;
+        // stream.stream_name = stream_name;
         stream.treasurer_address = treasurer_address;
         stream.rate_amount = rate_amount;
         stream.rate_interval_in_seconds = rate_interval_in_seconds;
@@ -491,11 +524,11 @@ impl Processor {
 
         } else { // Approved: Update stream data and close stream terms account
 
-            if stream_terms.stream_name.ne(&String::from("")) && 
-               stream_terms.stream_name.ne(&stream.stream_name) {
+            // if stream_terms.stream_name.ne(&String::from("")) && 
+            //    stream_terms.stream_name.ne(&stream.stream_name) {
 
-                stream.stream_name = stream.stream_name
-            }
+            //     stream.stream_name = stream.stream_name
+            // }
 
             if stream_terms.treasurer_address.ne(&Pubkey::default()) && 
                 stream_terms.treasurer_address.ne(&stream.treasurer_address) {

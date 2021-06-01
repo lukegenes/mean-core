@@ -23,18 +23,80 @@ import {
     publicKey,
     uint64,
     AVAILABLE_PROGRAM_ACTIONS,
-    PROGRAM_ACTIONS
+    PROGRAM_ACTIONS,
+    PROGRAM_ID,
+    cstring,
+    toBuffer
 
-} from './utils';
+} from './src/utils';
 
 import * as BufferLayout from 'buffer-layout';
-import * as borsh from 'borsh';
+import * as BN from 'bn.js';
 
 const prompt = require('prompt-sync')();
 const connection = new Connection('https://devnet.solana.com');
 
 async function sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function createStreamExec() {
+    // console.log('Provide your wallet URL');
+    // console.log('');
+    // const providerUrl = prompt('Wallet URL: ');
+    // console.log('');
+    // const wallet = new Wallet(providerUrl);
+    // wallet.on('connect', publicKey => console.log('Connected to ' + publicKey.toBase58()));
+    // wallet.on('disconnect', () => console.log('Disconnected'));
+    // await wallet.connect();
+    // const message = "Please sign this message for proof of address ownership.";
+    // const data = new TextEncoder().encode(message);
+    // let { signature } = await wallet.sign(data, 'utf8');
+    // console.log('Provide the stream terms');
+    // console.log('');
+    // const beneficiaryPublicKey = prompt('Beneficiary address: ');
+    // const treasuryPublicKey = prompt('Treasury account address (OPTIONAL): ');
+    // const beneficiaryTokenAccountPublicKey = prompt('Associated token account for the beneficiary: ');
+    // const streamName = prompt('Friendly stream name (OPTIONAL): ');
+    // const initialFundingAmount = prompt('Initial funding amount (OPTIONAL): ');
+    // const rateAmount = prompt('Rate amount: ');
+    // const rateIntervalInSeconds = prompt('Rate interval in seconds (DEFAULT = 60): ');
+    // const startDate = prompt('Start date (DEFAULT = Now): ');
+
+    // let tx = createStream(
+    //     wallet.publicKey,
+
+    // );
+}
+
+async function createStream(
+    treasurer: PublicKey,
+    beneficiary: PublicKey,
+    treasury: PublicKey,
+    associatedToken: PublicKey,
+    streamName: String,
+    fundingAmount: number,
+    rateAmount: number,
+    rateIntervalInSeconds: number,
+    startUtc: Date
+) {
+
+
+}
+
+async function addFunds(
+    from: PublicKey,
+    to: PublicKey,
+    contributionToken: PublicKey,
+    amount: number) {
+
+}
+
+async function withdraw(
+    from: PublicKey,
+    amount: number
+) {
+
 }
 
 async function create_stream() {
@@ -47,7 +109,7 @@ async function create_stream() {
     console.log('Payer account: ' + payerAccount.publicKey.toBase58());
     console.log('');
 
-    // const treasurerPublicKey = new PublicKey(prompt('Type your public key: '));
+    // const treasurerPublicKey = new PublicKey(prompt('Type your secret key: '));
     const treasurerPrivateKeyArray = prompt('Type your private key: ');
     const treasurerPrivateKey = Buffer.from(JSON.parse(treasurerPrivateKeyArray))
     console.log('');
@@ -85,7 +147,7 @@ async function create_stream() {
                 treasuryAccount = Keypair.generate();
                 treasuryAddressKey = treasuryAccount.publicKey;
                 createTreasuryInstruction = SystemProgram.createAccount({
-                    fromPubkey: payerAccount.publicKey,
+                    fromPubkey: treasurerAccount.publicKey,
                     newAccountPubkey: treasuryAddressKey,
                     lamports: amount,
                     space: 0,
@@ -96,7 +158,7 @@ async function create_stream() {
             .finally(() => { });
     }
 
-    let streamFriendlyName = prompt('Enter a friendly name for the money stream (OPTIONAL): ');
+    // let streamFriendlyName = prompt('Enter a friendly name for the money stream (OPTIONAL): ');
     let initialAmount = prompt('Initial deposit amount (OPTIONAL): ');
     let rateAmount = prompt('Rate amount: ');
     let rateInterval = prompt('Rate interval in seconds (OPTIONAL, default HOUR = 60 seconds): ');
@@ -111,7 +173,7 @@ async function create_stream() {
         .then((amount) => {
             streamAccount = Keypair.generate();
             createStreamAccountInstruction = SystemProgram.createAccount({
-                fromPubkey: payerAccount.publicKey,
+                fromPubkey: treasurerAccount.publicKey,
                 newAccountPubkey: streamAccount.publicKey,
                 lamports: amount,
                 space: StreamLayout.span,
@@ -121,42 +183,65 @@ async function create_stream() {
         .catch((e) => { console.log(e); })
         .finally(() => { });
 
-    let data = Buffer.alloc(StreamLayout.span);
+    const createStreamLayout = BufferLayout.struct([
+        BufferLayout.u8('tag'),
+        // cstring('stream_name'),
+        BufferLayout.blob(32, 'treasurer_address'),
+        BufferLayout.blob(32, 'treasury_address'),
+        BufferLayout.blob(32, 'beneficiary_withdrawal_address'),
+        BufferLayout.blob(32, 'escrow_token_address'),
+        BufferLayout.blob(8, 'funding_amount'),
+        BufferLayout.nu64('rate_amount'),
+        BufferLayout.nu64('rate_interval_in_seconds'),
+        BufferLayout.nu64('start_utc'),
+        BufferLayout.nu64('rate_cliff_in_seconds'),
+        BufferLayout.nu64('cliff_vest_amount'),
+        BufferLayout.nu64('cliff_vest_percent')
+    ]);
+
+    let data = Buffer.alloc(createStreamLayout.span)
     {
+        // let fundingAmount = parseFloat(initialAmount) * LAMPORTS_PER_SOL;
+
+        console.log(initialAmount);
+
         const decodedData = {
             tag: 0,
-            stream_name: streamFriendlyName,
+            // stream_name: streamFriendlyName,
             treasurer_address: Buffer.from(treasurerAccount.publicKey.toBuffer()),
             treasury_address: Buffer.from(treasuryAddressKey.toBuffer()),
             beneficiary_withdrawal_address: Buffer.from(beneficiaryAddressKey.toBuffer()),
             escrow_token_address: Buffer.from(streamAccount.publicKey.toBuffer()),
-            funding_amount: initialAmount,
-            rate_amount: rateAmount.length ? parseInt(rateAmount) : 0,
+            funding_amount: Buffer.from(new BN(parseInt(initialAmount)).toBuffer("le", 8)),
+            rate_amount: parseInt(rateAmount),
             rate_interval_in_seconds: rateInterval.length ? parseInt(rateInterval) : 60,
-            start_time: Date.now(),
+            start_utc: Date.now(),
             rate_cliff_in_seconds: 0,
             cliff_vest_amount: 0,
-            cliff_vest_percent: 100
+            cliff_vest_percent: 100,
         };
 
-        const encodeLength = StreamLayout.encode(decodedData, data);
+        console.log(decodedData);
+        const encodeLength = createStreamLayout.encode(decodedData, data);
         data = data.slice(0, encodeLength);
-    }
+    };
+
+    console.log(data);
 
     const createStreamInstruction = new TransactionInstruction({
-        programId: programAccount.publicKey,
-        data: data,
         keys: [
             { pubkey: treasurerAccount.publicKey, isSigner: true, isWritable: false },
             { pubkey: beneficiaryAddressKey, isSigner: false, isWritable: false },
             { pubkey: treasuryAddressKey, isSigner: false, isWritable: true },
             { pubkey: streamAccount.publicKey, isSigner: false, isWritable: true },
-        ]
+        ],
+        programId: programAccount.publicKey,
+        data
     });
 
     const createStreamTx = new Transaction();
-    // createStreamTx.feePayer = treasurerAccount.publicKey;
-    let signers: Array<Signer> = [payerAccount, treasurerAccount];
+    createStreamTx.feePayer = treasurerAccount.publicKey;
+    let signers: Array<Signer> = [treasurerAccount];
 
     if (createTreasuryInstruction !== null) {
         createStreamTx.add(createTreasuryInstruction);
@@ -185,29 +270,21 @@ async function create_stream() {
         console.log(`Transaction ID: ${result}`);
         console.log('');
 
-        await connection.getAccountInfo(treasuryAddressKey)
-            .then((info) => {
-                console.log('');
-                console.log('Treasury account');
-                console.log('');
-                console.log(`Address: ${treasuryAddressKey.toBase58()}`);
-                console.log(`Balance: ${info !== null ? (info.lamports / LAMPORTS_PER_SOL) : 0} SOL`);
-                console.log('');
-            })
-            .catch((e) => console.log(e))
-            .finally(() => { });
+        let info = await connection.getAccountInfo(treasuryAccount.publicKey);
+        console.log('');
+        console.log('Treasury account');
+        console.log('');
+        console.log(`Address: ${treasuryAccount.publicKey.toBase58()}`);
+        console.log(`Balance: ${(info !== null ? (info.lamports / LAMPORTS_PER_SOL) : 0)} SOL`);
+        console.log('');
 
-        await connection.getAccountInfo(streamAccount.publicKey)
-            .then((info) => {
-                console.log('');
-                console.log('Stream account');
-                console.log('');
-                console.log(`Address: ${streamAccount.publicKey.toBase58()}`);
-                console.log(`Balance: ${info !== null ? (info.lamports / LAMPORTS_PER_SOL) : 0} SOL`);
-                console.log('');
-            })
-            .catch((e) => console.log(e))
-            .finally(() => { });
+        info = await connection.getAccountInfo(streamAccount.publicKey);
+        console.log('');
+        console.log('Stream account');
+        console.log('');
+        console.log(`Address: ${streamAccount.publicKey.toBase58()}`);
+        console.log(`Balance: ${(info !== null ? (info.lamports / LAMPORTS_PER_SOL) : 0)} SOL`);
+        console.log('');
     }
 };
 

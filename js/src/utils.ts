@@ -10,11 +10,12 @@ import {
 
 import { readFile } from 'mz/fs';
 import { Buffer } from 'buffer';
+import * as BN from 'bn.js';
 import * as BufferLayout from 'buffer-layout';
-import * as BN from "bn.js";
 var pathUtil = require('path');
 export const PROGRAM_PATH = pathUtil.resolve(__dirname);
 export const STREAM_SIZE = 232;
+export const PROGRAM_ID = '8gGPr3whMoMRG5sRUnv9tykpNX5VxveDEL4pAfYGtjnX';
 
 export const enum PROGRAM_ACTIONS {
     createStream = 1,
@@ -30,6 +31,10 @@ export const AVAILABLE_PROGRAM_ACTIONS = [
     { id: PROGRAM_ACTIONS.createStream, name: "Create Stream" },
     { id: PROGRAM_ACTIONS.closeStream, name: "Close Stream" },
 ]
+
+export type StreamTerms = {
+
+}
 
 export async function createConnection(url = "https://devnet.solana.com") {
     return new Connection(url);
@@ -74,8 +79,8 @@ export const publicKey = (property: string = 'publicKey'): Object => {
     return BufferLayout.blob(32, property);
 };
 
-export const string = (property: string = 'string'): Object => {
-    const layout = BufferLayout.blob(32, property);
+export const cstring = (property: string = 'string'): Object => {
+    const layout = BufferLayout.blob(16, property);
 
     layout.decode = (buffer: Buffer) => {
         return String.fromCharCode.apply(null, new Uint16Array(buffer));
@@ -91,57 +96,21 @@ export const string = (property: string = 'string'): Object => {
     };
 
     return layout;
+    // return BufferLayout.blob(32, property);
 };
 
-export const uint64 = (property = "uint64"): unknown => {
-    const layout = BufferLayout.blob(8, property);
-
-    const _decode = layout.decode.bind(layout);
-    const _encode = layout.encode.bind(layout);
-
-    layout.decode = (buffer: Buffer, offset: number) => {
-        const data = _decode(buffer, offset);
-        return new BN(
-            [...data]
-                .reverse()
-                .map((i) => `00${i.toString(16)}`.slice(-2))
-                .join(""),
-            16
-        );
-    };
-
-    layout.encode = (num: BN, buffer: Buffer, offset: number) => {
-        const a = num.toArray().reverse();
-        let b = Buffer.from(a);
-        if (b.length !== 8) {
-            const zeroPad = Buffer.alloc(8);
-            b.copy(zeroPad);
-            b = zeroPad;
-        }
-        return _encode(b, buffer, offset);
-    };
-
-    return layout;
+export const uint64 = (property = "uint64"): Object => {
+    return BufferLayout.blob(8, property);
 };
 
-export const StreamLayout: typeof BufferLayout.Structure = BufferLayout.struct([
-    BufferLayout.u8('tag'),
-    BufferLayout.u8('initialized'),
-    publicKey('stream_id'),
-    string('stream_name'),
-    publicKey('treasurer_address'),
-    BufferLayout.nu64('rate_amount'),
-    BufferLayout.nu64('rate_interval_in_seconds'),
-    BufferLayout.nu64('start_utc'),
-    BufferLayout.nu64('rate_cliff_in_seconds'),
-    BufferLayout.nu64('cliff_vest_amount'),
-    BufferLayout.nu64('cliff_vest_percent'),
-    publicKey('beneficiary_withdrawal_address'),
-    publicKey('escrow_token_address'),
-    BufferLayout.nu64('escrow_vested_amount'),
-    BufferLayout.nu64('escrow_unvested_amount'),
-    publicKey('treasury_address'),
-    BufferLayout.nu64('escrow_estimated_depletion_utc'),
-    BufferLayout.nu64('total_deposits'),
-    BufferLayout.nu64('total_withdrawals')
-]);
+
+
+export function toBuffer(value: number): Buffer {
+    let bn = new BN(value);
+    const a = bn.toArray().reverse();
+    const b = Buffer.from(a);
+    const zeroPad = Buffer.alloc(8);
+    b.copy(zeroPad);
+
+    return zeroPad;
+}

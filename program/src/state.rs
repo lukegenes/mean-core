@@ -19,6 +19,8 @@ use arrayref::{
 
 use crate::error::StreamError;
 
+pub const LAMPORTS_PER_SOL: u64 = 1000000000;
+
 #[derive(Clone, Debug)]
 pub struct StreamTerms {
     pub initialized: bool,
@@ -150,7 +152,7 @@ impl Pack for StreamTerms {
 #[derive(Clone, Debug)]
 pub struct Stream {
     pub initialized: bool,
-    pub stream_name: String,
+    // pub stream_name: String,
     pub treasurer_address: Pubkey,
     pub rate_amount: u64,
     pub rate_interval_in_seconds: u64,
@@ -180,7 +182,7 @@ impl Default for Stream {
     fn default() -> Self {
         Self {
             initialized: false,
-            stream_name: String::default(),
+            // stream_name: String::default(),
             treasurer_address: Pubkey::default(),                   
             rate_amount: 0,
             rate_interval_in_seconds: 0,
@@ -201,13 +203,13 @@ impl Default for Stream {
 }
 
 impl Pack for Stream {
-    const LEN: usize = 249;
+    const LEN: usize = 217;
 
     fn pack_into_slice(&self, output: &mut [u8]) {
         let output = array_mut_ref![output, 0, Stream::LEN];
         let (
             initialized_output,
-            stream_name_output,
+            // stream_name_output,
             treasurer_address_output,
             rate_amount_output,
             rate_interval_in_seconds_output,
@@ -224,11 +226,11 @@ impl Pack for Stream {
             total_deposits_output,
             total_withdrawals_output
             
-        ) = mut_array_refs![output, 1, 32, 32, 8, 8, 8, 8, 8, 8, 32, 32, 8, 8, 32, 8, 8, 8];
+        ) = mut_array_refs![output, 1, 32, 8, 8, 8, 8, 8, 8, 32, 32, 8, 8, 32, 8, 8, 8];
 
         let Stream {
             initialized,
-            stream_name,
+            // stream_name,
             treasurer_address,
             rate_amount,
             rate_interval_in_seconds,
@@ -248,7 +250,7 @@ impl Pack for Stream {
         } = self;
 
         initialized_output[0] = *initialized as u8;
-        stream_name_output.copy_from_slice(stream_name.as_ref());
+        // stream_name_output.copy_from_slice(stream_name.as_ref());
         treasurer_address_output.copy_from_slice(treasurer_address.as_ref());
         *rate_amount_output = rate_amount.to_le_bytes();
         *rate_interval_in_seconds_output = rate_interval_in_seconds.to_le_bytes();
@@ -270,7 +272,7 @@ impl Pack for Stream {
         let input = array_ref![input, 0, Stream::LEN];
         let (
             initialized,
-            stream_name,
+            // stream_name,
             treasurer_address,
             rate_amount,
             rate_interval_in_seconds,
@@ -287,7 +289,7 @@ impl Pack for Stream {
             total_deposits,
             total_withdrawals
             
-        ) = array_refs![input, 1, 32, 32, 8, 8, 8, 8, 8, 8, 32, 32, 8, 8, 32, 8, 8, 8];
+        ) = array_refs![input, 1, 32, 8, 8, 8, 8, 8, 8, 32, 32, 8, 8, 32, 8, 8, 8];
 
         let initialized = match initialized {
             [0] => false,
@@ -297,7 +299,7 @@ impl Pack for Stream {
 
         Ok(Stream {
             initialized, 
-            stream_name: String::from_utf8_lossy(stream_name).to_string(),
+            // stream_name: String::from_utf8_lossy(stream_name).to_string(),
             treasurer_address: Pubkey::new_from_array(*treasurer_address),                   
             rate_amount: u64::from_le_bytes(*rate_amount),
             rate_interval_in_seconds: u64::from_le_bytes(*rate_interval_in_seconds),

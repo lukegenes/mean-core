@@ -18,7 +18,7 @@ use solana_program::{
 
 use crate::error::StreamError;
 
-declare_id!("F2XJx58pW5D2CzLMYx4zsbNXmECwSE3CiYokJDnKPYCe");
+declare_id!("2HEkjrj21DX2ecNQjAEUPKwr2pEnwSBjgi9GUHWtKnhH");
 
 pub fn check_program_account(program_id: &Pubkey) -> ProgramResult {
     if program_id != &id() {

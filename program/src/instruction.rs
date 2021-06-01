@@ -7,7 +7,7 @@ use std::{
 };
 
 use solana_program::{
-    // msg,
+    msg,
     pubkey::Pubkey,
     // program_error::ProgramError,
     instruction::{ AccountMeta, Instruction }
@@ -25,7 +25,7 @@ pub enum StreamInstruction {
     /// 2. `[]` The treasury account (Money stream treasury account).
     /// 3. `[writable]` The stream account (Money stream state account).
     CreateStream {
-        stream_name: String,
+        // stream_name: String,
         treasurer_address: Pubkey,
         beneficiary_withdrawal_address: Pubkey,
         treasury_address: Pubkey,
@@ -94,6 +94,8 @@ impl StreamInstruction {
 
     pub fn unpack(instruction_data: &[u8]) -> Result<Self, StreamError> {
 
+        msg!("Unpack: {:?}", instruction_data.len());
+        msg!("Unpack: {:?}", instruction_data);
         let (&tag, result) = instruction_data
             .split_first()
             .ok_or(StreamError::InvalidStreamInstruction.into())?;
@@ -118,7 +120,7 @@ impl StreamInstruction {
         match self {
 
             Self::CreateStream {
-                stream_name,
+                // stream_name,
                 treasurer_address,
                 treasury_address,
                 beneficiary_withdrawal_address,
@@ -132,9 +134,10 @@ impl StreamInstruction {
 
             } => {
 
+                msg!("Funding amount: {:?}", funding_amount);
                 buf.push(0);
 
-                buf.extend_from_slice(stream_name.as_ref());
+                // buf.extend_from_slice(stream_name.as_ref());
                 buf.extend_from_slice(treasurer_address.as_ref());
                 buf.extend_from_slice(treasury_address.as_ref());
                 buf.extend_from_slice(beneficiary_withdrawal_address.as_ref());
@@ -213,10 +216,10 @@ impl StreamInstruction {
 
     fn unpack_create_stream(input: &[u8]) -> Result<Self, StreamError> {
 
-        let (stream_name, result) = Self::unpack_string(input)?;
-        let (treasurer_address, result) = Self::unpack_pubkey(result)?;
+        // let (stream_name, result) = Self::unpack_string(input)?;
+        let (treasurer_address, result) = Self::unpack_pubkey(input)?;
         let (treasury_address, result) = Self::unpack_pubkey(result)?;
-        let (beneficiary_withdrawal_address, result) = Self::unpack_pubkey(result)?;
+        let (beneficiary_withdrawal_address, result) = Self::unpack_pubkey(result)?;        
 
         let (funding_amount, result) = result.split_at(8);
         let funding_amount = Self::unpack_u64(funding_amount)?;
@@ -237,10 +240,10 @@ impl StreamInstruction {
         let cliff_vest_amount = Self::unpack_u64(cliff_vest_amount)?;
 
         let (cliff_vest_percent, _result) = result.split_at(8);
-        let cliff_vest_percent = Self::unpack_u64(cliff_vest_percent)?;
+        let cliff_vest_percent = Self::unpack_u64(cliff_vest_percent)?;        
 
         Ok(Self::CreateStream {
-            stream_name,
+            // stream_name,
             treasurer_address,
             treasury_address,
             beneficiary_withdrawal_address,
@@ -351,7 +354,7 @@ impl StreamInstruction {
  pub fn create_stream(
     stream_account_key: &Pubkey,
     program_id: &Pubkey,
-    stream_name: String,
+    // stream_name: String,
     treasurer_address: Pubkey,
     beneficiary_withdrawal_address: Pubkey,
     treasury_address: Pubkey,
@@ -368,7 +371,7 @@ impl StreamInstruction {
     check_program_account(program_id);
 
     let data = StreamInstruction::CreateStream {
-        stream_name,
+        // stream_name,
         treasurer_address,
         beneficiary_withdrawal_address,
         treasury_address,
