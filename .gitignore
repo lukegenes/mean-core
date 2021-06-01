@@ -10,6 +10,7 @@
 /program/**/*.rs.bk
 
 # These are custom exclusions
+/program/keys/
 /program/keys/*.json
 /program/keys/*.seed
 /program/dist/
@@ -18,4 +19,5 @@
 /program/devnet-config.yml
 /program/testnet-config.yml
 
+/js/package-lock.json
 /js/node_modules/*
