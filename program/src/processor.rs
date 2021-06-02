@@ -37,10 +37,11 @@ impl Processor {
         match instruction {
 
             StreamInstruction::CreateStream {
-                // stream_name,
+                stream_name,
                 treasurer_address,
-                treasury_address,
                 beneficiary_withdrawal_address,
+                escrow_token_address,
+                treasury_address,
                 funding_amount,
                 rate_amount,
                 rate_interval_in_seconds,
@@ -57,10 +58,11 @@ impl Processor {
                 Self::process_create_stream(
                     accounts, 
                     program_id,
-                    // stream_name,
+                    stream_name,
                     treasurer_address,
-                    treasury_address,
                     beneficiary_withdrawal_address,
+                    escrow_token_address,
+                    treasury_address,
                     funding_amount,
                     rate_amount,
                     rate_interval_in_seconds,
@@ -168,10 +170,11 @@ impl Processor {
     fn process_create_stream(
         accounts: &[AccountInfo],
         program_id: &Pubkey,
-        // stream_name: String,
+        stream_name: String,
         treasurer_address: Pubkey,
-        treasury_address: Pubkey,
         beneficiary_withdrawal_address: Pubkey,
+        escrow_token_address: Pubkey,
+        treasury_address: Pubkey,
         funding_amount: u64,
         rate_amount: u64,
         rate_interval_in_seconds: u64,
@@ -183,9 +186,11 @@ impl Processor {
     ) -> ProgramResult {
 
         // msg!("Stream name: {:?}", stream_name);
+        msg!("Stream name: {:?}", stream_name.to_string());
         msg!("Treasurer address: {:?}", treasurer_address.to_string());
-        msg!("Treasury address: {:?}", treasury_address.to_string());
         msg!("Benericiary address: {:?}", beneficiary_withdrawal_address.to_string());
+        msg!("Escrow token: {:?}", escrow_token_address.to_string());
+        msg!("Treasury address: {:?}", treasury_address.to_string());
         msg!("Funding amount: {:?}", funding_amount);
         msg!("Rate amount: {:?}", rate_amount);
         msg!("Rate interval seconds: {:?}", rate_interval_in_seconds);  
@@ -223,47 +228,29 @@ impl Processor {
             return Err(StreamError::StreamAlreadyInitialized.into()); // already initialized
         }
 
-        let clock = Clock::get()?; 
-        let starting_block_height = clock.slot + start_utc + rate_cliff_in_seconds; 
-        let rate = rate_amount / rate_interval_in_seconds;
-        let mut escrow_vested_amount = 0;
-
-        if starting_block_height < clock.slot {
-            escrow_vested_amount = rate * (clock.slot - starting_block_height);
-        }
-
         let total_deposits = funding_amount * LAMPORTS_PER_SOL;
 
         if funding_amount > treasurer_account_info.lamports() {
             return Err(StreamError::InsufficientFunds.into());
         }
-        
-        // if total_deposits > 0 {
-
-        //     msg!("Total deposit: {:?}", total_deposits);
-
-        //     let instruction = system_instruction::transfer(
-        //         treasurer_account_info.key,
-        //         treasury_account_info.key,
-        //         total_deposits
-        //     );
-
-        //     invoke(
-        //         &instruction,
-        //         &[
-        //             treasurer_account_info.clone(),
-        //             treasury_account_info.clone()
-        //         ]
-        //     );
-        // }
 
         if total_deposits > 0 {
             msg!("Total deposit: {:?}", total_deposits);
-            **treasurer_account_info.lamports.borrow_mut() -= total_deposits;
-            **treasury_account_info.lamports.borrow_mut() += total_deposits;
-        }
 
-        let escrow_unvested_amount = total_deposits - escrow_vested_amount;
+            // **treasurer_account_info.lamports.borrow_mut() -= total_deposits;
+            // **treasury_account_info.lamports.borrow_mut() += total_deposits;
+
+            // let transfer_ix = system_instruction::transfer(
+            //     treasurer_account_info.key,
+            //     treasury_account_info.key,
+            //     total_deposits
+            // );
+
+            // invoke(&transfer_ix, &[
+            //     treasurer_account_info.clone(),
+            //     treasury_account_info.clone()
+            // ]);
+        }
 
         // stream.stream_name = stream_name;
         stream.treasurer_address = treasurer_address;
@@ -274,8 +261,7 @@ impl Processor {
         stream.cliff_vest_amount = cliff_vest_amount;
         stream.cliff_vest_percent = cliff_vest_percent;
         stream.beneficiary_withdrawal_address = beneficiary_withdrawal_address;
-        stream.escrow_vested_amount = escrow_vested_amount;
-        stream.escrow_unvested_amount = escrow_unvested_amount;
+        stream.escrow_token_address = escrow_token_address;
         stream.treasury_address = treasury_address;
         stream.treasury_estimated_depletion_utc = 0;
         stream.total_deposits = total_deposits;
@@ -302,11 +288,11 @@ impl Processor {
             return Err(StreamError::MissingInstructionSignature.into());
         }
 
-        let stream_account_info = next_account_info(account_info_iter)?;
+        // let stream_account_info = next_account_info(account_info_iter)?;
 
-        if stream_account_info.owner != program_id {
-            return Err(StreamError::InstructionNotAuthorized.into());
-        }
+        // if stream_account_info.owner != program_id {
+        //     return Err(StreamError::InstructionNotAuthorized.into());
+        // }
 
         let contribution_lamports = contribution_amount;
 
@@ -320,16 +306,16 @@ impl Processor {
         **contributor_account_info.lamports.borrow_mut() -= contribution_lamports;
         **treasury_account_info.lamports.borrow_mut() += contribution_lamports;
 
-        // Update the stream data
-        let mut stream = Stream::unpack_from_slice(&stream_account_info.data.borrow())?;
-        let clock = Clock::get()?;
-        let rate = stream.rate_amount / stream.rate_interval_in_seconds;
-        stream.total_deposits += contribution_lamports;
-        stream.escrow_vested_amount = rate * (clock.slot - stream.start_utc);        
-        let escrow_unvested_amount = stream.total_deposits - stream.total_withdrawals - stream.escrow_vested_amount;
-        stream.escrow_unvested_amount = escrow_unvested_amount;
+        // // Update the stream data
+        // let mut stream = Stream::unpack_from_slice(&stream_account_info.data.borrow())?;
+        // let clock = Clock::get()?;
+        // let rate = stream.rate_amount / stream.rate_interval_in_seconds;
+        // stream.total_deposits += contribution_lamports;
+        // stream.escrow_vested_amount = rate * (clock.slot - stream.start_utc);        
+        // let escrow_unvested_amount = stream.total_deposits - stream.total_withdrawals - stream.escrow_vested_amount;
+        // stream.escrow_unvested_amount = escrow_unvested_amount;
 
-        Stream::pack_into_slice(&stream, &mut stream_account_info.data.borrow_mut());
+        // Stream::pack_into_slice(&stream, &mut stream_account_info.data.borrow_mut());
 
         Ok(())
     }
@@ -364,11 +350,10 @@ impl Processor {
             return Err(StreamError::InvalidWithdrawalDate.into());
         }
 
-        stream.escrow_vested_amount = rate * (clock.slot - start_block_height);
-        let escrow_unvested_amount = stream.total_deposits - stream.total_withdrawals - stream.escrow_vested_amount;
-        stream.escrow_unvested_amount = escrow_unvested_amount;
+        let escrow_vested_amount = rate * (clock.slot - start_block_height);
+        let escrow_unvested_amount = stream.total_deposits - stream.total_withdrawals - escrow_vested_amount;
 
-        if withdrawal_amount > stream.escrow_vested_amount {
+        if withdrawal_amount > escrow_vested_amount {
             return Err(StreamError::NotAllowedWithdrawalAmount.into());
         }
 
@@ -379,12 +364,12 @@ impl Processor {
 
         } else {
             // Cretit the beneficiary account
-            **treasury_account_info.lamports.borrow_mut() -= stream.escrow_vested_amount;
-            **beneficiary_account_info.lamports.borrow_mut() += stream.escrow_vested_amount;
+            **treasury_account_info.lamports.borrow_mut() -= escrow_vested_amount;
+            **beneficiary_account_info.lamports.borrow_mut() += escrow_vested_amount;
         }
 
         stream.total_withdrawals += withdrawal_amount;
-        stream.escrow_unvested_amount = stream.total_deposits - stream.total_withdrawals - stream.escrow_vested_amount;
+        // escrow_unvested_amount = stream.total_deposits - stream.total_withdrawals - escrow_vested_amount;
 
         // Save
         Stream::pack_into_slice(&stream, &mut stream_account_info.data.borrow_mut());
@@ -621,9 +606,8 @@ impl Processor {
         // Stoping the stream adn updating data
         let clock = Clock::get()?; 
         let rate = stream.rate_amount / stream.rate_interval_in_seconds;
-        stream.escrow_vested_amount = rate * (clock.slot - stream.start_utc);        
-        let escrow_unvested_amount = stream.total_deposits - stream.total_withdrawals - stream.escrow_vested_amount;
-        stream.escrow_unvested_amount = escrow_unvested_amount;
+        let escrow_vested_amount = rate * (clock.slot - stream.start_utc);        
+        let escrow_unvested_amount = stream.total_deposits - stream.total_withdrawals - escrow_vested_amount;
         stream.rate_amount = 0;
 
         // Distributing escrow vested amount to the beneficiary
@@ -635,8 +619,8 @@ impl Processor {
 
         let treasury_account_info = next_account_info(account_info_iter)?;
 
-        **treasury_account_info.lamports.borrow_mut() -= stream.escrow_vested_amount;
-        **beneficiary_account_info.lamports.borrow_mut() = stream.escrow_vested_amount;
+        **treasury_account_info.lamports.borrow_mut() -= escrow_vested_amount;
+        **beneficiary_account_info.lamports.borrow_mut() = escrow_vested_amount;
 
         // Close stream account
         **stream_account_info.lamports.borrow_mut() = 0;
