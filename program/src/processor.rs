@@ -53,7 +53,6 @@ impl Processor {
             } => {
 
                 msg!("Instruction: Create Stream");
-                msg!("Funding amount: {:?}", funding_amount);
 
                 Self::process_create_stream(
                     accounts, 
@@ -185,16 +184,6 @@ impl Processor {
         
     ) -> ProgramResult {
 
-        // msg!("Stream name: {:?}", stream_name);
-        msg!("Stream name: {:?}", stream_name.to_string());
-        msg!("Treasurer address: {:?}", treasurer_address.to_string());
-        msg!("Benericiary address: {:?}", beneficiary_withdrawal_address.to_string());
-        msg!("Escrow token: {:?}", escrow_token_address.to_string());
-        msg!("Treasury address: {:?}", treasury_address.to_string());
-        msg!("Funding amount: {:?}", funding_amount);
-        msg!("Rate amount: {:?}", rate_amount);
-        msg!("Rate interval seconds: {:?}", rate_interval_in_seconds);  
-
         let account_info_iter = &mut accounts.iter();
         let treasurer_account_info = next_account_info(account_info_iter)?;
 
@@ -217,7 +206,9 @@ impl Processor {
             return Err(StreamError::InvalidRentException.into());
         }
 
-        if treasury_account_info.owner != program_id || stream_account_info.owner != program_id {
+        let signer_authority_info = next_account_info(account_info_iter)?;
+
+        if treasurer_account_info.owner != signer_authority_info.key || stream_account_info.owner != program_id {
             return Err(StreamError::InvalidStreamInstruction.into());
         }
 
@@ -230,29 +221,26 @@ impl Processor {
 
         let total_deposits = funding_amount * LAMPORTS_PER_SOL;
 
-        if funding_amount > treasurer_account_info.lamports() {
+        if total_deposits > treasurer_account_info.lamports() {
             return Err(StreamError::InsufficientFunds.into());
         }
 
         if total_deposits > 0 {
-            msg!("Total deposit: {:?}", total_deposits);
 
-            // **treasurer_account_info.lamports.borrow_mut() -= total_deposits;
-            // **treasury_account_info.lamports.borrow_mut() += total_deposits;
+            let transfer_ix = system_instruction::transfer(
+                treasurer_account_info.key,
+                treasury_account_info.key,
+                total_deposits
+            );
 
-            // let transfer_ix = system_instruction::transfer(
-            //     treasurer_account_info.key,
-            //     treasury_account_info.key,
-            //     total_deposits
-            // );
-
-            // invoke(&transfer_ix, &[
-            //     treasurer_account_info.clone(),
-            //     treasury_account_info.clone()
-            // ]);
+            invoke(&transfer_ix, &[
+                treasurer_account_info.clone(),
+                treasury_account_info.clone(),
+                signer_authority_info.clone()
+            ]);
         }
 
-        // stream.stream_name = stream_name;
+        stream.stream_name = stream_name;
         stream.treasurer_address = treasurer_address;
         stream.rate_amount = rate_amount;
         stream.rate_interval_in_seconds = rate_interval_in_seconds;

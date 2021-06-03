@@ -24,6 +24,7 @@ pub enum StreamInstruction {
     /// 1. `[]` The beneficiary account (the recipient of the money)
     /// 2. `[]` The treasury account (Money stream treasury account).
     /// 3. `[writable]` The stream account (Money stream state account).
+    /// 4. `[]` The treasurer authority account (The owner of the account).
     CreateStream {
         stream_name: String,
         treasurer_address: Pubkey,
@@ -95,8 +96,6 @@ impl StreamInstruction {
 
     pub fn unpack(instruction_data: &[u8]) -> Result<Self, StreamError> {
 
-        msg!("Unpack: {:?}", instruction_data.len());
-        msg!("Unpack: {:?}", instruction_data);
         let (&tag, result) = instruction_data
             .split_first()
             .ok_or(StreamError::InvalidStreamInstruction.into())?;
@@ -136,7 +135,6 @@ impl StreamInstruction {
 
             } => {
 
-                msg!("Funding amount: {:?}", funding_amount);
                 buf.push(0);
 
                 buf.extend_from_slice(stream_name.as_ref());

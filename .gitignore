@@ -13,6 +13,9 @@
 /program/keys/
 /program/keys/*.json
 /program/keys/*.seed
+/program/keys/accounts/
+/program/key/accounts/*.json
+/program/keys/accounts/*.seed
 /program/dist/
 /program/dist/*.so
 
