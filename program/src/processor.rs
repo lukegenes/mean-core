@@ -52,7 +52,7 @@ impl Processor {
 
             } => {
 
-                msg!("Instruction: Create Stream");
+                msg!("Instruction: CreateStream");
 
                 Self::process_create_stream(
                     accounts, 
@@ -78,7 +78,7 @@ impl Processor {
 
             } => {
 
-                msg!("Instruction: Add Funds");
+                msg!("Instruction: AddFunds");
 
                 Self::process_add_funds(
                     accounts, 
@@ -114,7 +114,7 @@ impl Processor {
 
             } => {
 
-                msg!("Instruction: Propose Update");
+                msg!("Instruction: ProposeUpdate");
                 
                 Self::process_propose_update(
                     accounts, 
@@ -135,7 +135,7 @@ impl Processor {
             StreamInstruction::AnswerUpdate {
                 answer
             } => {
-                msg!("Instruction: Answer Update");
+                msg!("Instruction: AnswerUpdate");
                 
                 Self::process_answer_update(
                     accounts, 
@@ -154,7 +154,7 @@ impl Processor {
             },
 
             StreamInstruction::CloseTreasury => {
-                msg!("Instruction: Close Treasury");
+                msg!("Instruction: CloseTreasury");
 
                 Self::process_close_treasury(
                     accounts, 
