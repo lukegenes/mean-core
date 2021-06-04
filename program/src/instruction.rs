@@ -21,10 +21,10 @@ use crate::{
 pub enum StreamInstruction {
 
     /// 0. `[signer]` The treasurer account (the creator of the money stream) 
-    /// 1. `[]` The beneficiary account (the recipient of the money)
-    /// 2. `[]` The treasury account (Money stream treasury account).
-    /// 3. `[writable]` The stream account (Money stream state account).
-    /// 4. `[]` The treasurer authority account (The owner of the account).
+    /// 1. `[]` The treasury account (Money stream treasury account).
+    /// 2. `[writable]` The stream account (Money stream state account).
+    /// 3. `[]` The treasurer authority account (The owner of the account).
+    /// 4. `[]` MeanFi account (The Mean Operations account).
     CreateStream {
         stream_name: String,
         treasurer_address: Pubkey,
@@ -397,7 +397,11 @@ impl StreamInstruction {
         AccountMeta::new(*stream_account_key, false),
     ];
 
-    Ok(Instruction { program_id: *program_id, accounts, data })
+    Ok(Instruction { 
+        program_id: *program_id, 
+        accounts, 
+        data 
+    })
  }
 
  pub fn add_funds(
@@ -423,7 +427,11 @@ impl StreamInstruction {
         AccountMeta::new_readonly(*treasury_account_key, false)
     ];
 
-    Ok(Instruction { program_id: *program_id, accounts, data })
+    Ok(Instruction { 
+        program_id: *program_id, 
+        accounts, 
+        data 
+    })
  }
 
  pub fn close_stream(

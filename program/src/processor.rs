@@ -191,7 +191,6 @@ impl Processor {
             return Err(StreamError::MissingInstructionSignature.into());
         }
 
-        let _beneficiary_account_info = next_account_info(account_info_iter)?;
         // Rent excemption checks
         let rent = Rent::get()?;
         let treasury_account_info = next_account_info(account_info_iter)?;
@@ -208,29 +207,31 @@ impl Processor {
 
         let signer_authority_info = next_account_info(account_info_iter)?;
 
+        // Verify the treasurer's owner is valid and the stream owner is the money streming program
         if treasurer_account_info.owner != signer_authority_info.key || stream_account_info.owner != program_id {
             return Err(StreamError::InvalidStreamInstruction.into());
         }
 
-        // Update the stream data
         let mut stream = Stream::unpack_from_slice(&stream_account_info.data.borrow())?;
 
         if stream.is_initialized() {
             return Err(StreamError::StreamAlreadyInitialized.into()); // already initialized
         }
 
+        let flat_fee = 0.025f64;
+        let fees_lamports = flat_fee * (LAMPORTS_PER_SOL as f64);
         let total_deposits = funding_amount * LAMPORTS_PER_SOL;
 
         if total_deposits > treasurer_account_info.lamports() {
             return Err(StreamError::InsufficientFunds.into());
         }
 
-        if total_deposits > 0 {
+        if ((total_deposits as f64) - fees_lamports) > 0.0 {
 
             let transfer_ix = system_instruction::transfer(
                 treasurer_account_info.key,
                 treasury_account_info.key,
-                total_deposits
+                (((total_deposits as f64) - fees_lamports) as u64)
             );
 
             invoke(&transfer_ix, &[
@@ -240,6 +241,21 @@ impl Processor {
             ]);
         }
 
+        // Fees
+        let meanfi_account_info = next_account_info(account_info_iter)?;
+        let fees_transfer_ix = system_instruction::transfer(
+            treasurer_account_info.key,
+            meanfi_account_info.key,
+            fees_lamports as u64
+        );
+
+        invoke(&fees_transfer_ix, &[
+            treasurer_account_info.clone(),
+            meanfi_account_info.clone(),
+            signer_authority_info.clone()
+        ]);
+
+        // Update stream contract terms
         stream.stream_name = stream_name;
         stream.treasurer_address = treasurer_address;
         stream.rate_amount = rate_amount;
