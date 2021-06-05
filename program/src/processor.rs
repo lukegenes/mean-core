@@ -163,13 +163,13 @@ impl Processor {
         stream_name: String,
         beneficiary_withdrawal_address: Pubkey,
         escrow_token_address: Pubkey,
-        funding_amount: u64,
-        rate_amount: u64,
+        funding_amount: f64,
+        rate_amount: f64,
         rate_interval_in_seconds: u64,
         start_utc: u64,
         rate_cliff_in_seconds: u64,
-        cliff_vest_amount: u64,
-        cliff_vest_percent: u64
+        cliff_vest_amount: f64,
+        cliff_vest_percent: f64
         
     ) -> ProgramResult {
 
@@ -209,18 +209,19 @@ impl Processor {
 
         let flat_fee = 0.025f64;
         let fees_lamports = flat_fee * (LAMPORTS_PER_SOL as f64);
-        let total_deposits = funding_amount * LAMPORTS_PER_SOL;
+        let total_deposits = funding_amount * (LAMPORTS_PER_SOL as f64);
+        let treasurer_lamports = (treasurer_account_info.lamports() as f64);
 
-        if total_deposits > treasurer_account_info.lamports() {
+        if total_deposits > treasurer_lamports {
             return Err(StreamError::InsufficientFunds.into());
         }
 
-        if ((total_deposits as f64) - fees_lamports) > 0.0 {
+        if (total_deposits - fees_lamports) > 0.0 {
 
             let transfer_ix = system_instruction::transfer(
                 treasurer_account_info.key,
                 treasury_account_info.key,
-                (((total_deposits as f64) - fees_lamports) as u64)
+                (total_deposits - fees_lamports) as u64
             );
 
             invoke(&transfer_ix, &[
@@ -259,7 +260,7 @@ impl Processor {
         stream.treasury_address = *treasury_account_info.key;
         stream.treasury_estimated_depletion_utc = 0;
         stream.total_deposits = total_deposits;
-        stream.total_withdrawals = 0;
+        stream.total_withdrawals = 0.0;
         stream.initialized = true;
                 
         Stream::pack_into_slice(&stream, &mut stream_account_info.data.borrow_mut()); 
@@ -271,7 +272,7 @@ impl Processor {
         accounts: &[AccountInfo],
         program_id: &Pubkey,
         contribution_token_address: Pubkey,
-        contribution_amount: u64
+        contribution_amount: f64
 
     ) -> ProgramResult {
 
@@ -291,8 +292,9 @@ impl Processor {
         let treasury_account_info = next_account_info(account_info_iter)?;
         let contributor_account_authority_info = next_account_info(account_info_iter)?;
         let flat_fee = 0.03f64 * (contribution_lamports as f64);
+        let contributor_balance = (contributor_account_info.lamports() as f64);
 
-        if contribution_lamports > contributor_account_info.lamports() {
+        if contribution_lamports > contributor_balance {
             return Err(StreamError::InsufficientFunds.into());
         }
 
@@ -300,7 +302,7 @@ impl Processor {
         let transfer_ix = system_instruction::transfer(
             contributor_account_info.key,
             treasury_account_info.key,
-            (contribution_lamports - (flat_fee as u64))
+            (contribution_lamports - flat_fee) as u64
         );
 
         invoke(&transfer_ix, &[
@@ -342,7 +344,7 @@ impl Processor {
     fn process_withdraw(
         accounts: &[AccountInfo],
         program_id: &Pubkey,
-        withdrawal_amount: u64
+        withdrawal_amount: f64
 
     ) -> ProgramResult {
 
@@ -362,14 +364,14 @@ impl Processor {
         // Update stream account data
         let mut stream = Stream::unpack_from_slice(&stream_account_info.data.borrow())?;
         let clock = Clock::get()?; 
-        let rate = stream.rate_amount / stream.rate_interval_in_seconds;
+        let rate = stream.rate_amount / (stream.rate_interval_in_seconds as f64);
         let start_block_height = stream.start_utc + stream.rate_cliff_in_seconds;
 
         if start_block_height > clock.slot {
             return Err(StreamError::InvalidWithdrawalDate.into());
         }
 
-        let escrow_vested_amount = rate * (clock.slot - start_block_height);
+        let escrow_vested_amount = rate * ((clock.slot - start_block_height) as f64);
         let escrow_unvested_amount = stream.total_deposits - stream.total_withdrawals - escrow_vested_amount;
 
         if withdrawal_amount > escrow_vested_amount {
@@ -381,10 +383,10 @@ impl Processor {
         if stream.escrow_token_address.ne(&Pubkey::default()) {
             // The beneficiary has a token account (escrow_token_address) to swap the withdrawals
 
-        } else {
+        } else { // TODO
             // Cretit the beneficiary account
-            **treasury_account_info.lamports.borrow_mut() -= escrow_vested_amount;
-            **beneficiary_account_info.lamports.borrow_mut() += escrow_vested_amount;
+            // **treasury_account_info.lamports.borrow_mut() -= escrow_vested_amount;
+            // **beneficiary_account_info.lamports.borrow_mut() += escrow_vested_amount;
         }
 
         stream.total_withdrawals += withdrawal_amount;
@@ -405,7 +407,7 @@ impl Processor {
         treasury_address: Pubkey,
         beneficiary_withdrawal_address: Pubkey,
         escrow_token_address: Pubkey,
-        rate_amount: u64,
+        rate_amount: f64,
         rate_interval_in_seconds: u64,
         start_utc: u64,
         rate_cliff_in_seconds: u64
@@ -528,11 +530,9 @@ impl Processor {
 
         } else { // Approved: Update stream data and close stream terms account
 
-            // if stream_terms.stream_name.ne(&String::from("")) && 
-            //    stream_terms.stream_name.ne(&stream.stream_name) {
-
-            //     stream.stream_name = stream.stream_name
-            // }
+            if stream_terms.stream_name.ne(&stream.stream_name) {
+                stream.stream_name = stream.stream_name
+            }
 
             if stream_terms.treasurer_address.ne(&Pubkey::default()) && 
                 stream_terms.treasurer_address.ne(&stream.treasurer_address) {
@@ -558,8 +558,8 @@ impl Processor {
                 stream.treasury_address = stream_terms.treasury_address;
             }
 
-            if stream_terms.rate_amount != 0 && stream_terms.rate_amount != stream.rate_amount {       
-                stream.treasury_address = stream_terms.treasury_address;
+            if stream_terms.rate_amount != 0.0 && stream_terms.rate_amount != stream.rate_amount {       
+                stream.rate_amount = stream_terms.rate_amount;
             }
 
             if stream_terms.rate_interval_in_seconds != 0 && 
@@ -624,10 +624,10 @@ impl Processor {
         
         // Stoping the stream adn updating data
         let clock = Clock::get()?; 
-        let rate = stream.rate_amount / stream.rate_interval_in_seconds;
-        let escrow_vested_amount = rate * (clock.slot - stream.start_utc);        
+        let rate = stream.rate_amount / (stream.rate_interval_in_seconds as f64);
+        let escrow_vested_amount = rate * ((clock.slot - stream.start_utc) as f64);        
         let escrow_unvested_amount = stream.total_deposits - stream.total_withdrawals - escrow_vested_amount;
-        stream.rate_amount = 0;
+        stream.rate_amount = 0.0;
 
         // Distributing escrow vested amount to the beneficiary
         let escrow_vested_amount_in_tokens = 0;
@@ -636,10 +636,10 @@ impl Processor {
             // posiblemente para hacer el transfer necesito tener los 2 account sender and recipients porq hay q pasarselos al token swap o token program
         }
 
-        let treasury_account_info = next_account_info(account_info_iter)?;
+        let treasury_account_info = next_account_info(account_info_iter)?; // TODO 
 
-        **treasury_account_info.lamports.borrow_mut() -= escrow_vested_amount;
-        **beneficiary_account_info.lamports.borrow_mut() = escrow_vested_amount;
+        // **treasury_account_info.lamports.borrow_mut() -= escrow_vested_amount;
+        // **beneficiary_account_info.lamports.borrow_mut() = escrow_vested_amount;
 
         // Close stream account
         **stream_account_info.lamports.borrow_mut() = 0;

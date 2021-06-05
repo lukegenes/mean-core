@@ -30,7 +30,7 @@ pub struct StreamTerms {
     pub beneficiary_withdrawal_address: Pubkey,
     pub escrow_token_address: Pubkey,
     pub treasury_address: Pubkey,
-    pub rate_amount: u64,
+    pub rate_amount: f64,
     pub rate_interval_in_seconds: u64,
     pub start_utc: u64,
     pub rate_cliff_in_seconds: u64
@@ -54,7 +54,7 @@ impl Default for StreamTerms {
             beneficiary_withdrawal_address: Pubkey::default(),
             escrow_token_address: Pubkey::default(),
             treasury_address: Pubkey::default(),                 
-            rate_amount: 0,
+            rate_amount: 0.0,
             rate_interval_in_seconds: 0,
             start_utc: 0,
             rate_cliff_in_seconds: 0    
@@ -141,7 +141,7 @@ impl Pack for StreamTerms {
             beneficiary_withdrawal_address: Pubkey::new_from_array(*beneficiary_withdrawal_address),
             escrow_token_address: Pubkey::new_from_array(*escrow_token_address),
             treasury_address: Pubkey::new_from_array(*treasury_address),          
-            rate_amount: u64::from_le_bytes(*rate_amount),
+            rate_amount: f64::from_le_bytes(*rate_amount),
             rate_interval_in_seconds: u64::from_le_bytes(*rate_interval_in_seconds),
             start_utc: u64::from_le_bytes(*start_utc),
             rate_cliff_in_seconds: u64::from_le_bytes(*rate_cliff_in_seconds)
@@ -154,18 +154,18 @@ pub struct Stream {
     pub initialized: bool,
     pub stream_name: String,
     pub treasurer_address: Pubkey,
-    pub rate_amount: u64,
+    pub rate_amount: f64,
     pub rate_interval_in_seconds: u64,
     pub start_utc: u64,
     pub rate_cliff_in_seconds: u64,
-    pub cliff_vest_amount: u64,
-    pub cliff_vest_percent: u64,
+    pub cliff_vest_amount: f64,
+    pub cliff_vest_percent: f64,
     pub beneficiary_withdrawal_address: Pubkey,
     pub escrow_token_address: Pubkey,
     pub treasury_address: Pubkey,
     pub treasury_estimated_depletion_utc: u64,
-    pub total_deposits: u64,
-    pub total_withdrawals: u64
+    pub total_deposits: f64,
+    pub total_withdrawals: f64
 }
 
 impl Sealed for Stream {}
@@ -182,18 +182,18 @@ impl Default for Stream {
             initialized: false,
             stream_name: String::default(),
             treasurer_address: Pubkey::default(),                   
-            rate_amount: 0,
+            rate_amount: 0.0,
             rate_interval_in_seconds: 0,
             start_utc: 0,
             rate_cliff_in_seconds: 0,
-            cliff_vest_amount: 0,
-            cliff_vest_percent: 0,
+            cliff_vest_amount: 0.0,
+            cliff_vest_percent: 0.0,
             beneficiary_withdrawal_address: Pubkey::default(),
             escrow_token_address: Pubkey::default(),
             treasury_address: Pubkey::default(), 
             treasury_estimated_depletion_utc: 0,
-            total_deposits: 0,
-            total_withdrawals: 0
+            total_deposits: 0.0,
+            total_withdrawals: 0.0
         }
     }
 }
@@ -289,18 +289,18 @@ impl Pack for Stream {
             initialized, 
             stream_name: String::from_utf8_lossy(stream_name).to_string(),
             treasurer_address: Pubkey::new_from_array(*treasurer_address),                   
-            rate_amount: u64::from_le_bytes(*rate_amount),
+            rate_amount: f64::from_le_bytes(*rate_amount),
             rate_interval_in_seconds: u64::from_le_bytes(*rate_interval_in_seconds),
             start_utc: u64::from_le_bytes(*start_utc),
             rate_cliff_in_seconds: u64::from_le_bytes(*rate_cliff_in_seconds),
-            cliff_vest_amount: u64::from_le_bytes(*cliff_vest_amount),
-            cliff_vest_percent: u64::from_le_bytes(*cliff_vest_percent),
+            cliff_vest_amount: f64::from_le_bytes(*cliff_vest_amount),
+            cliff_vest_percent: f64::from_le_bytes(*cliff_vest_percent),
             beneficiary_withdrawal_address: Pubkey::new_from_array(*beneficiary_withdrawal_address),
             escrow_token_address: Pubkey::new_from_array(*escrow_token_address),
             treasury_address: Pubkey::new_from_array(*treasury_address), 
             treasury_estimated_depletion_utc: u64::from_le_bytes(*treasury_estimated_depletion_utc),
-            total_deposits: u64::from_le_bytes(*total_deposits),
-            total_withdrawals: u64::from_le_bytes(*total_withdrawals),
+            total_deposits: f64::from_le_bytes(*total_deposits),
+            total_withdrawals: f64::from_le_bytes(*total_withdrawals),
         })
     }
 }

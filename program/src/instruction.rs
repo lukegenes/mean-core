@@ -25,13 +25,13 @@ pub enum StreamInstruction {
         stream_name: String,
         beneficiary_withdrawal_address: Pubkey,
         escrow_token_address: Pubkey,
-        funding_amount: u64, // OPTIONAL
-        rate_amount: u64,
+        funding_amount: f64, // OPTIONAL
+        rate_amount: f64,
         rate_interval_in_seconds: u64,
         start_utc: u64,
         rate_cliff_in_seconds: u64,
-        cliff_vest_amount: u64, // OPTIONAL
-        cliff_vest_percent: u64, // OPTIONAL
+        cliff_vest_amount: f64, // OPTIONAL
+        cliff_vest_percent: f64, // OPTIONAL
     },
 
     /// 0. `[signer]` The contributor token account
@@ -42,14 +42,14 @@ pub enum StreamInstruction {
     /// 5. `[writable]` The stream account (Money stream state account).
     AddFunds {
         contribution_token_address: Pubkey,
-        contribution_amount: u64
+        contribution_amount: f64
     },
 
     /// 0. `[signer]` The beneficiary account (the recipient of the money)
     /// 1. `[writable]` The stream account.
     /// 2. `[]` The treasury account.
     Withdraw { 
-        withdrawal_amount: u64
+        withdrawal_amount: f64
     },
 
     /// 0. `[signer]` The initializer of the transaction (treasurer or beneficiary)
@@ -63,7 +63,7 @@ pub enum StreamInstruction {
         beneficiary_withdrawal_address: Pubkey,
         escrow_token_address: Pubkey, // OPTIONAL
         treasury_address: Pubkey,
-        rate_amount: u64,
+        rate_amount: f64,
         rate_interval_in_seconds: u64,
         start_utc: u64,
         rate_cliff_in_seconds: u64
@@ -215,10 +215,10 @@ impl StreamInstruction {
         let (escrow_token_address, result) = Self::unpack_pubkey(result)?; 
 
         let (funding_amount, result) = result.split_at(8);
-        let funding_amount = Self::unpack_u64(funding_amount)?;
+        let funding_amount = Self::unpack_f64(funding_amount)?;
 
         let (rate_amount, result) = result.split_at(8);
-        let rate_amount = Self::unpack_u64(rate_amount)?;
+        let rate_amount = Self::unpack_f64(rate_amount)?;
 
         let (rate_interval_in_seconds, result) = result.split_at(8);
         let rate_interval_in_seconds = Self::unpack_u64(rate_interval_in_seconds)?;
@@ -230,10 +230,10 @@ impl StreamInstruction {
         let rate_cliff_in_seconds = Self::unpack_u64(rate_cliff_in_seconds)?;
 
         let (cliff_vest_amount, result) = result.split_at(8);
-        let cliff_vest_amount = Self::unpack_u64(cliff_vest_amount)?;
+        let cliff_vest_amount = Self::unpack_f64(cliff_vest_amount)?;
 
         let (cliff_vest_percent, _result) = result.split_at(8);
-        let cliff_vest_percent = Self::unpack_u64(cliff_vest_percent)?;        
+        let cliff_vest_percent = Self::unpack_f64(cliff_vest_percent)?;        
 
         Ok(Self::CreateStream {
             stream_name,
@@ -252,7 +252,7 @@ impl StreamInstruction {
     fn unpack_add_funds(input: &[u8]) -> Result<Self, StreamError> {
         let (contribution_token_address, result) = Self::unpack_pubkey(input)?;
         let (contribution_amount, _result) = result.split_at(8);
-        let contribution_amount = Self::unpack_u64(contribution_amount)?;
+        let contribution_amount = Self::unpack_f64(contribution_amount)?;
 
         Ok(Self::AddFunds { 
             contribution_token_address,
@@ -262,7 +262,7 @@ impl StreamInstruction {
 
     fn unpack_withdraw(input: &[u8]) -> Result<Self, StreamError> {
         let (withdrawal_amount, _result) = input.split_at(8);
-        let withdrawal_amount = Self::unpack_u64(withdrawal_amount)?;
+        let withdrawal_amount = Self::unpack_f64(withdrawal_amount)?;
 
         Ok(Self::Withdraw { withdrawal_amount })
     }
@@ -276,7 +276,7 @@ impl StreamInstruction {
         let (escrow_token_address, result) = Self::unpack_pubkey(result)?;
 
         let (rate_amount, result) = result.split_at(8);
-        let rate_amount = Self::unpack_u64(rate_amount)?;
+        let rate_amount = Self::unpack_f64(rate_amount)?;
 
         let (rate_interval_in_seconds, result) = result.split_at(8);
         let rate_interval_in_seconds = Self::unpack_u64(rate_interval_in_seconds)?;
@@ -341,6 +341,16 @@ impl StreamInstruction {
 
         Ok(amount)
     }
+
+    fn unpack_f64(input: &[u8]) -> Result<f64, StreamError> {
+        let amount = input
+            .get(..8)
+            .and_then(|slice| slice.try_into().ok())
+            .map(f64::from_le_bytes)
+            .ok_or(StreamError::InvalidStreamInstruction)?;
+
+        Ok(amount)
+    }
  }
 
  pub fn create_stream(
@@ -354,13 +364,13 @@ impl StreamInstruction {
     beneficiary_withdrawal_address: Pubkey,
     escrow_token_address: Pubkey,
     treasury_address: Pubkey,
-    funding_amount: u64,
-    rate_amount: u64,
+    funding_amount: f64,
+    rate_amount: f64,
     rate_interval_in_seconds: u64,
     start_utc: u64,
     rate_cliff_in_seconds: u64,
-    cliff_vest_amount: u64,
-    cliff_vest_percent: u64,
+    cliff_vest_amount: f64,
+    cliff_vest_percent: f64,
 
  ) -> Result<Instruction, StreamError> {
 
@@ -401,7 +411,7 @@ impl StreamInstruction {
     treasury_account_key: &Pubkey,
     program_id: &Pubkey,
     contribution_token_address: Pubkey,
-    contribution_amount: u64,
+    contribution_amount: f64,
 
  ) -> Result<Instruction, StreamError> {
 
