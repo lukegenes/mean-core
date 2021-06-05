@@ -5,9 +5,7 @@ use solana_program::{
     system_instruction,
     program::invoke,
     pubkey::Pubkey,
-    // stake_history::Epoch,
     entrypoint::ProgramResult,
-    // program_error::ProgramError,
     instruction::{ AccountMeta, Instruction },
     account_info::{ next_account_info, AccountInfo },
     program_pack::{ IsInitialized, Pack },
@@ -15,7 +13,6 @@ use solana_program::{
 };
 
 use crate::{
-    // instruction,
     error::StreamError,
     instruction::StreamInstruction,
     state::{ Stream, StreamTerms, LAMPORTS_PER_SOL }
@@ -38,10 +35,8 @@ impl Processor {
 
             StreamInstruction::CreateStream {
                 stream_name,
-                treasurer_address,
                 beneficiary_withdrawal_address,
                 escrow_token_address,
-                treasury_address,
                 funding_amount,
                 rate_amount,
                 rate_interval_in_seconds,
@@ -58,10 +53,8 @@ impl Processor {
                     accounts, 
                     program_id,
                     stream_name,
-                    treasurer_address,
                     beneficiary_withdrawal_address,
                     escrow_token_address,
-                    treasury_address,
                     funding_amount,
                     rate_amount,
                     rate_interval_in_seconds,
@@ -161,8 +154,6 @@ impl Processor {
                     program_id
                 )
             }
-
-            // _ => Err(StreamError::InvalidStreamInstruction.into())
         }
     }
 
@@ -170,10 +161,8 @@ impl Processor {
         accounts: &[AccountInfo],
         program_id: &Pubkey,
         stream_name: String,
-        treasurer_address: Pubkey,
         beneficiary_withdrawal_address: Pubkey,
         escrow_token_address: Pubkey,
-        treasury_address: Pubkey,
         funding_amount: u64,
         rate_amount: u64,
         rate_interval_in_seconds: u64,
@@ -243,6 +232,7 @@ impl Processor {
 
         // Fees
         let meanfi_account_info = next_account_info(account_info_iter)?;
+        let meanfi_auth_account_info = next_account_info(account_info_iter)?;
         let fees_transfer_ix = system_instruction::transfer(
             treasurer_account_info.key,
             meanfi_account_info.key,
@@ -252,12 +242,12 @@ impl Processor {
         invoke(&fees_transfer_ix, &[
             treasurer_account_info.clone(),
             meanfi_account_info.clone(),
-            signer_authority_info.clone()
+            meanfi_auth_account_info.clone()
         ]);
 
         // Update stream contract terms
         stream.stream_name = stream_name;
-        stream.treasurer_address = treasurer_address;
+        stream.treasurer_address = *treasurer_account_info.key;
         stream.rate_amount = rate_amount;
         stream.rate_interval_in_seconds = rate_interval_in_seconds;
         stream.start_utc = start_utc;
@@ -266,7 +256,7 @@ impl Processor {
         stream.cliff_vest_percent = cliff_vest_percent;
         stream.beneficiary_withdrawal_address = beneficiary_withdrawal_address;
         stream.escrow_token_address = escrow_token_address;
-        stream.treasury_address = treasury_address;
+        stream.treasury_address = *treasury_account_info.key;
         stream.treasury_estimated_depletion_utc = 0;
         stream.total_deposits = total_deposits;
         stream.total_withdrawals = 0;
@@ -310,7 +300,7 @@ impl Processor {
         let transfer_ix = system_instruction::transfer(
             contributor_account_info.key,
             treasury_account_info.key,
-            ((contribution_lamports as f64) - flat_fee)
+            (contribution_lamports - (flat_fee as u64))
         );
 
         invoke(&transfer_ix, &[
@@ -320,23 +310,24 @@ impl Processor {
         ]);
 
         let meanfi_account_info = next_account_info(account_info_iter)?;
+        let meanfi_auth_account_info = next_account_info(account_info_iter)?;
 
         // Debit Mean fees from contributor and credit MeanFi account
         let meanfi_transfer_ix = system_instruction::transfer(
             contributor_account_info.key,
             meanfi_account_info.key,
-            (flat_fee as f64)
+            (flat_fee as u64)
         );
 
         invoke(&meanfi_transfer_ix, &[
             contributor_account_info.clone(),
             meanfi_account_info.clone(),
-            meanfi_account_authority_info.clone()
+            meanfi_auth_account_info.clone()
         ]);
 
         let stream_account_info = next_account_info(account_info_iter)?;
 
-        if stream_account_info.owner !== program_id {
+        if stream_account_info.owner != program_id {
             return Err(StreamError::InstructionNotAuthorized.into());
         }
 

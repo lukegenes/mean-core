@@ -1,15 +1,10 @@
 // Program API, (de)serializing instruction data
 
-use std::{
-    mem::size_of,
-    convert::TryInto,
-    // fmt::Display,
-};
+use std::{ mem::size_of, convert::TryInto };
 
 use solana_program::{
     msg,
     pubkey::Pubkey,
-    // program_error::ProgramError,
     instruction::{ AccountMeta, Instruction }
 };
 
@@ -28,10 +23,8 @@ pub enum StreamInstruction {
     /// 5. `[]` The MeanFi authority account (The owner of the MeanFi account).
     CreateStream {
         stream_name: String,
-        treasurer_address: Pubkey,
         beneficiary_withdrawal_address: Pubkey,
         escrow_token_address: Pubkey,
-        treasury_address: Pubkey,
         funding_amount: u64, // OPTIONAL
         rate_amount: u64,
         rate_interval_in_seconds: u64,
@@ -125,10 +118,8 @@ impl StreamInstruction {
 
             Self::CreateStream {
                 stream_name,
-                treasurer_address,
                 beneficiary_withdrawal_address,
                 escrow_token_address,
-                treasury_address,
                 funding_amount,
                 rate_amount,
                 rate_interval_in_seconds,
@@ -142,10 +133,8 @@ impl StreamInstruction {
                 buf.push(0);
 
                 buf.extend_from_slice(stream_name.as_ref());
-                buf.extend_from_slice(treasurer_address.as_ref());
                 buf.extend_from_slice(beneficiary_withdrawal_address.as_ref());
                 buf.extend_from_slice(escrow_token_address.as_ref());
-                buf.extend_from_slice(treasury_address.as_ref());
                 buf.extend_from_slice(&funding_amount.to_le_bytes());
                 buf.extend_from_slice(&rate_amount.to_le_bytes());
                 buf.extend_from_slice(&rate_interval_in_seconds.to_le_bytes());
@@ -222,10 +211,8 @@ impl StreamInstruction {
     fn unpack_create_stream(input: &[u8]) -> Result<Self, StreamError> {
 
         let (stream_name, result) = Self::unpack_string(input)?;
-        let (treasurer_address, result) = Self::unpack_pubkey(result)?;
         let (beneficiary_withdrawal_address, result) = Self::unpack_pubkey(result)?;
         let (escrow_token_address, result) = Self::unpack_pubkey(result)?; 
-        let (treasury_address, result) = Self::unpack_pubkey(result)?; 
 
         let (funding_amount, result) = result.split_at(8);
         let funding_amount = Self::unpack_u64(funding_amount)?;
@@ -250,8 +237,6 @@ impl StreamInstruction {
 
         Ok(Self::CreateStream {
             stream_name,
-            treasurer_address,
-            treasury_address,
             beneficiary_withdrawal_address,
             escrow_token_address,
             funding_amount,
@@ -359,10 +344,13 @@ impl StreamInstruction {
  }
 
  pub fn create_stream(
-    stream_account_key: &Pubkey,
     program_id: &Pubkey,
+    meanfi_address: Pubkey,
+    meanfi_auth_address: Pubkey,
+    stream_address: Pubkey,
     stream_name: String,
     treasurer_address: Pubkey,
+    treasurer_auth_address: Pubkey,
     beneficiary_withdrawal_address: Pubkey,
     escrow_token_address: Pubkey,
     treasury_address: Pubkey,
@@ -380,10 +368,8 @@ impl StreamInstruction {
 
     let data = StreamInstruction::CreateStream {
         stream_name,
-        treasurer_address,
         beneficiary_withdrawal_address,
         escrow_token_address,
-        treasury_address,
         funding_amount,
         rate_amount,
         rate_interval_in_seconds,
@@ -396,9 +382,11 @@ impl StreamInstruction {
 
     let accounts = vec![
         AccountMeta::new(treasurer_address, true),
-        AccountMeta::new_readonly(beneficiary_withdrawal_address, false),
         AccountMeta::new_readonly(treasury_address, false),
-        AccountMeta::new(*stream_account_key, false),
+        AccountMeta::new(stream_address, false),
+        AccountMeta::new(treasurer_auth_address, false),
+        AccountMeta::new(meanfi_address, false),
+        AccountMeta::new(meanfi_auth_address, false),
     ];
 
     Ok(Instruction { 
