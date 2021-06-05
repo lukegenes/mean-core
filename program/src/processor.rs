@@ -292,12 +292,6 @@ impl Processor {
             return Err(StreamError::MissingInstructionSignature.into());
         }
 
-        // let stream_account_info = next_account_info(account_info_iter)?;
-
-        // if stream_account_info.owner != program_id {
-        //     return Err(StreamError::InstructionNotAuthorized.into());
-        // }
-
         let contribution_lamports = contribution_amount;
 
         if contributor_account_info.owner == &spl_token::id() { // the contribution is in some token so need to swap those tokens to lamports
@@ -305,21 +299,51 @@ impl Processor {
         }
 
         let treasury_account_info = next_account_info(account_info_iter)?;
+        let contributor_account_authority_info = next_account_info(account_info_iter)?;
+        let flat_fee = 0.03f64 * (contribution_lamports as f64);
+
+        if contribution_lamports > contributor_account_info.lamports() {
+            return Err(StreamError::InsufficientFunds.into());
+        }
 
         // Credit the treasury account
-        **contributor_account_info.lamports.borrow_mut() -= contribution_lamports;
-        **treasury_account_info.lamports.borrow_mut() += contribution_lamports;
+        let transfer_ix = system_instruction::transfer(
+            contributor_account_info.key,
+            treasury_account_info.key,
+            ((contribution_lamports as f64) - flat_fee)
+        );
 
-        // // Update the stream data
-        // let mut stream = Stream::unpack_from_slice(&stream_account_info.data.borrow())?;
-        // let clock = Clock::get()?;
-        // let rate = stream.rate_amount / stream.rate_interval_in_seconds;
-        // stream.total_deposits += contribution_lamports;
-        // stream.escrow_vested_amount = rate * (clock.slot - stream.start_utc);        
-        // let escrow_unvested_amount = stream.total_deposits - stream.total_withdrawals - stream.escrow_vested_amount;
-        // stream.escrow_unvested_amount = escrow_unvested_amount;
+        invoke(&transfer_ix, &[
+            contributor_account_info.clone(),
+            treasury_account_info.clone(),
+            contributor_account_authority_info.clone()
+        ]);
 
-        // Stream::pack_into_slice(&stream, &mut stream_account_info.data.borrow_mut());
+        let meanfi_account_info = next_account_info(account_info_iter)?;
+
+        // Debit Mean fees from contributor and credit MeanFi account
+        let meanfi_transfer_ix = system_instruction::transfer(
+            contributor_account_info.key,
+            meanfi_account_info.key,
+            (flat_fee as f64)
+        );
+
+        invoke(&meanfi_transfer_ix, &[
+            contributor_account_info.clone(),
+            meanfi_account_info.clone(),
+            meanfi_account_authority_info.clone()
+        ]);
+
+        let stream_account_info = next_account_info(account_info_iter)?;
+
+        if stream_account_info.owner !== program_id {
+            return Err(StreamError::InstructionNotAuthorized.into());
+        }
+
+        // Update the stream data
+        let mut stream = Stream::unpack_from_slice(&stream_account_info.data.borrow())?;
+        stream.total_deposits += contribution_lamports;
+        Stream::pack_into_slice(&stream, &mut stream_account_info.data.borrow_mut());
 
         Ok(())
     }

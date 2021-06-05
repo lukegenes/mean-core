@@ -23,8 +23,9 @@ pub enum StreamInstruction {
     /// 0. `[signer]` The treasurer account (the creator of the money stream) 
     /// 1. `[]` The treasury account (Money stream treasury account).
     /// 2. `[writable]` The stream account (Money stream state account).
-    /// 3. `[]` The treasurer authority account (The owner of the account).
+    /// 3. `[]` The treasurer authority account (The owner of the treasurer account).
     /// 4. `[]` MeanFi account (The Mean Operations account).
+    /// 5. `[]` The MeanFi authority account (The owner of the MeanFi account).
     CreateStream {
         stream_name: String,
         treasurer_address: Pubkey,
@@ -41,8 +42,11 @@ pub enum StreamInstruction {
     },
 
     /// 0. `[signer]` The contributor token account
-    /// 1. `[writable]` The stream account (Money stream state account).
-    /// 2. `[]` The treasury account (Money stream treasury account).
+    /// 1. `[]` The treasury account (Money stream treasury account).
+    /// 2. `[]` The contributor authority account (The owner of the contributor token account -> Token Program).
+    /// 3. `[writable]` MeanFi account (The Mean Operations account).
+    /// 4. `[]` The MeanFi authority account (The owner of the MeanFi account).
+    /// 5. `[writable]` The stream account (Money stream state account).
     AddFunds {
         contribution_token_address: Pubkey,
         contribution_amount: u64
