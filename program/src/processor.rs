@@ -40,7 +40,7 @@ impl Processor {
                 stream_name,
                 treasury_address,
                 stream_address,
-                beneficiary_withdrawal_address,
+                beneficiary_address,
                 funding_amount,
                 rate_amount,
                 rate_interval_in_seconds,
@@ -59,7 +59,7 @@ impl Processor {
                     stream_name,
                     treasury_address,
                     stream_address,
-                    beneficiary_withdrawal_address,
+                    beneficiary_address,
                     funding_amount,
                     rate_amount,
                     rate_interval_in_seconds,
@@ -103,8 +103,8 @@ impl Processor {
                 stream_name,
                 treasurer_address,
                 treasury_address,
-                beneficiary_withdrawal_address,
-                escrow_token_address,
+                beneficiary_address,
+                beneficiary_token_address,
                 rate_amount,
                 rate_interval_in_seconds,
                 start_utc,
@@ -121,8 +121,8 @@ impl Processor {
                     stream_name,
                     treasurer_address,
                     treasury_address,
-                    beneficiary_withdrawal_address,
-                    escrow_token_address,
+                    beneficiary_address,
+                    beneficiary_token_address,
                     rate_amount,
                     rate_interval_in_seconds,
                     start_utc,
@@ -168,7 +168,7 @@ impl Processor {
         stream_name: String,
         treasury_address: Pubkey,
         stream_address: Pubkey,
-        beneficiary_withdrawal_address: Pubkey,
+        beneficiary_address: Pubkey,
         funding_amount: f64,
         rate_amount: f64,
         rate_interval_in_seconds: u64,
@@ -266,7 +266,7 @@ impl Processor {
         stream.rate_cliff_in_seconds = rate_cliff_in_seconds;
         stream.cliff_vest_amount = cliff_vest_amount;
         stream.cliff_vest_percent = cliff_vest_percent;
-        stream.beneficiary_withdrawal_address = beneficiary_withdrawal_address;
+        stream.beneficiary_address = beneficiary_address;
         stream.treasury_address = *treasury_account_info.key;
         stream.treasury_estimated_depletion_utc = 0;
         stream.total_deposits = total_deposits;
@@ -359,27 +359,30 @@ impl Processor {
     ) -> ProgramResult {
 
         let account_info_iter = &mut accounts.iter();
-        let beneficiary_account_info = next_account_info(account_info_iter)?;
+        let beneficiary_atoken_account_info = next_account_info(account_info_iter)?;
+        let beneficiary_atoken_account_owner_info = next_account_info(account_info_iter)?;
 
-        if !beneficiary_account_info.is_signer {
+        if !beneficiary_atoken_account_owner_info.is_signer {
             return Err(StreamError::MissingInstructionSignature.into());
         }
 
+        // Check the treasury token account authority
+        let treasury_atoken_account_info = next_account_info(account_info_iter)?;
+        let treasury_atoken_account_owner_info = next_account_info(account_info_iter)?;
+
+        if treasury_atoken_account_info.owner != treasury_atoken_account_owner_info.key {
+            return Err(StreamError::NotAuthorizedToWithdraw.into());
+        }
+        
         let stream_account_info = next_account_info(account_info_iter)?;
+        let mut stream = Stream::unpack_from_slice(&stream_account_info.data.borrow())?;
 
         if stream_account_info.owner != program_id {
             return Err(StreamError::InstructionNotAuthorized.into());
         }
 
-        // Update stream account data
-        let mut stream = Stream::unpack_from_slice(&stream_account_info.data.borrow())?;
-
-        if stream.beneficiary_withdrawal_address.ne(beneficiary_account_info.key) {
-            return Err(StreamError::NotAuthorizedToWithdraw.into());
-        }
-
-        let clock = Clock::get()?; 
-        let rate = stream.rate_amount * ((LAMPORTS_PER_SOL / stream.rate_interval_in_seconds) as f64);
+        let clock = Clock::get()?;
+        let rate = stream.rate_amount * (stream.rate_interval_in_seconds as f64);
         let start_block_height = stream.start_utc + stream.rate_cliff_in_seconds;
         let escrow_vested_amount = rate * ((clock.slot - start_block_height) as f64);
 
@@ -387,15 +390,41 @@ impl Processor {
             return Err(StreamError::NotAllowedWithdrawalAmount.into());
         }
 
+        // Withdraw
+        let token_program_account_info = next_account_info(account_info_iter)?;
+        let beneficiary_token_address = stream.beneficiary_token_address;
+        let withdraw_ix = spl_token::instruction::transfer(
+            token_program_account_info.key,
+            treasury_atoken_account_info.key,
+            beneficiary_atoken_account_info.key,
+            treasury_atoken_account_owner_info.key,
+            &[],
+            withdrawal_amount as u64
+        )?;
+
+        invoke(&withdraw_ix, &[
+            token_program_account_info.clone(),
+            treasury_atoken_account_info.clone(),
+            beneficiary_atoken_account_info.clone(),
+            treasury_atoken_account_owner_info.clone()
+        ]);
+
+        // Update stream account data
+        
+
+        if stream.beneficiary_address.ne(beneficiary_atoken_account_info.key) {
+            return Err(StreamError::NotAuthorizedToWithdraw.into());
+        }        
+
         let treasury_account_info = next_account_info(account_info_iter)?;
 
         if treasury_account_info.owner != program_id {
             return Err(StreamError::InstructionNotAuthorized.into());
         }
 
-        // Cretit the beneficiary account
-        **treasury_account_info.lamports.borrow_mut() -= (withdrawal_amount as u64);
-        **beneficiary_account_info.lamports.borrow_mut() += (withdrawal_amount as u64);
+        // // Cretit the beneficiary account
+        // **treasury_account_info.lamports.borrow_mut() -= (withdrawal_amount as u64);
+        // **beneficiary_account_info.lamports.borrow_mut() += (withdrawal_amount as u64);
 
         // Update total withdrawal amount
         stream.total_withdrawals += withdrawal_amount;
@@ -413,8 +442,8 @@ impl Processor {
         stream_name: String,
         treasurer_address: Pubkey,
         treasury_address: Pubkey,
-        beneficiary_withdrawal_address: Pubkey,
-        escrow_token_address: Pubkey,
+        beneficiary_address: Pubkey,
+        beneficiary_token_address: Pubkey,
         rate_amount: f64,
         rate_interval_in_seconds: u64,
         start_utc: u64,
@@ -440,7 +469,7 @@ impl Processor {
         let stream = Stream::unpack_from_slice(&stream_account_info.data.borrow())?;
 
         if stream.treasurer_address.ne(&initializer_account_info.key) || 
-           stream.beneficiary_withdrawal_address.ne(&initializer_account_info.key) {
+           stream.beneficiary_address.ne(&initializer_account_info.key) {
 
             return Err(StreamError::InstructionNotAuthorized.into()); // Only the treasurer or the beneficiary of the stream can propose an update
         }
@@ -476,7 +505,7 @@ impl Processor {
         stream_terms.rate_interval_in_seconds = rate_interval_in_seconds;
         stream_terms.start_utc = start_utc;
         stream_terms.rate_cliff_in_seconds = rate_cliff_in_seconds;
-        stream_terms.beneficiary_withdrawal_address = beneficiary_withdrawal_address;
+        stream_terms.beneficiary_address = beneficiary_address;
         stream_terms.initialized = true;
 
         // Save
@@ -548,10 +577,16 @@ impl Processor {
                 stream.treasurer_address = stream_terms.treasurer_address;
             }
 
-            if stream_terms.beneficiary_withdrawal_address.ne(&Pubkey::default()) && 
-                stream_terms.beneficiary_withdrawal_address.ne(&stream.beneficiary_withdrawal_address) {
+            if stream_terms.beneficiary_address.ne(&Pubkey::default()) && 
+                stream_terms.beneficiary_address.ne(&stream.beneficiary_address) {
                     
-                stream.beneficiary_withdrawal_address = stream_terms.beneficiary_withdrawal_address;
+                stream.beneficiary_address = stream_terms.beneficiary_address;
+            }
+
+            if stream_terms.beneficiary_token_address.ne(&Pubkey::default()) && 
+                stream_terms.beneficiary_token_address.ne(&stream.beneficiary_token_address) {
+                    
+                stream.beneficiary_token_address = stream_terms.beneficiary_token_address;
             }
 
             if stream_terms.treasury_address.ne(&Pubkey::default()) && 
@@ -609,7 +644,7 @@ impl Processor {
         let mut stream = Stream::unpack_from_slice(&stream_account_info.data.borrow())?;
 
         if stream.treasurer_address.ne(&initializer_account_info.key) || 
-           stream.beneficiary_withdrawal_address.ne(&initializer_account_info.key) {
+           stream.beneficiary_address.ne(&initializer_account_info.key) {
 
             return Err(StreamError::InstructionNotAuthorized.into());
         }

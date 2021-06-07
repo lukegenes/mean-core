@@ -27,8 +27,8 @@ pub struct StreamTerms {
     pub proposed_by: Pubkey,
     pub stream_name: String,
     pub treasurer_address: Pubkey,
-    pub beneficiary_withdrawal_address: Pubkey,
-    pub escrow_token_address: Pubkey,
+    pub beneficiary_address: Pubkey,
+    pub beneficiary_token_address: Pubkey,
     pub treasury_address: Pubkey,
     pub rate_amount: f64,
     pub rate_interval_in_seconds: u64,
@@ -51,8 +51,8 @@ impl Default for StreamTerms {
             proposed_by: Pubkey::default(),
             stream_name: String::default(),
             treasurer_address: Pubkey::default(),
-            beneficiary_withdrawal_address: Pubkey::default(),
-            escrow_token_address: Pubkey::default(),
+            beneficiary_address: Pubkey::default(),
+            beneficiary_token_address: Pubkey::default(),
             treasury_address: Pubkey::default(),                 
             rate_amount: 0.0,
             rate_interval_in_seconds: 0,
@@ -72,8 +72,8 @@ impl Pack for StreamTerms {
             proposed_by_output,
             stream_name_output,
             treasurer_address_output,
-            beneficiary_withdrawal_address_output,
-            escrow_token_address_output,
+            beneficiary_address_output,
+            beneficiary_token_address_output,
             treasury_address_output,
             rate_amount_output,
             rate_interval_in_seconds_output,
@@ -87,8 +87,8 @@ impl Pack for StreamTerms {
             proposed_by,
             stream_name,
             treasurer_address,
-            beneficiary_withdrawal_address,
-            escrow_token_address,
+            beneficiary_address,
+            beneficiary_token_address,
             treasury_address,
             rate_amount,
             rate_interval_in_seconds,
@@ -101,8 +101,8 @@ impl Pack for StreamTerms {
         proposed_by_output.copy_from_slice(proposed_by.as_ref());
         stream_name_output.copy_from_slice(stream_name.as_ref());
         treasurer_address_output.copy_from_slice(treasurer_address.as_ref());
-        beneficiary_withdrawal_address_output.copy_from_slice(beneficiary_withdrawal_address.as_ref());
-        escrow_token_address_output.copy_from_slice(escrow_token_address.as_ref());
+        beneficiary_address_output.copy_from_slice(beneficiary_address.as_ref());
+        beneficiary_token_address_output.copy_from_slice(beneficiary_token_address.as_ref());
         treasury_address_output.copy_from_slice(treasury_address.as_ref());
         *rate_amount_output = rate_amount.to_le_bytes();
         *rate_interval_in_seconds_output = rate_interval_in_seconds.to_le_bytes();
@@ -117,8 +117,8 @@ impl Pack for StreamTerms {
             proposed_by,
             stream_name,
             treasurer_address,
-            beneficiary_withdrawal_address,
-            escrow_token_address,
+            beneficiary_address,
+            beneficiary_token_address,
             treasury_address,
             rate_amount,
             rate_interval_in_seconds,
@@ -138,8 +138,8 @@ impl Pack for StreamTerms {
             proposed_by: Pubkey::new_from_array(*proposed_by),
             stream_name: String::from_utf8_lossy(stream_name).to_string(),
             treasurer_address: Pubkey::new_from_array(*treasurer_address),
-            beneficiary_withdrawal_address: Pubkey::new_from_array(*beneficiary_withdrawal_address),
-            escrow_token_address: Pubkey::new_from_array(*escrow_token_address),
+            beneficiary_address: Pubkey::new_from_array(*beneficiary_address),
+            beneficiary_token_address: Pubkey::new_from_array(*beneficiary_token_address),
             treasury_address: Pubkey::new_from_array(*treasury_address),          
             rate_amount: f64::from_le_bytes(*rate_amount),
             rate_interval_in_seconds: u64::from_le_bytes(*rate_interval_in_seconds),
@@ -160,7 +160,8 @@ pub struct Stream {
     pub rate_cliff_in_seconds: u64,
     pub cliff_vest_amount: f64,
     pub cliff_vest_percent: f64,
-    pub beneficiary_withdrawal_address: Pubkey,
+    pub beneficiary_address: Pubkey,
+    pub beneficiary_token_address: Pubkey,
     pub treasury_address: Pubkey,
     pub treasury_estimated_depletion_utc: u64,
     pub total_deposits: f64,
@@ -187,7 +188,8 @@ impl Default for Stream {
             rate_cliff_in_seconds: 0,
             cliff_vest_amount: 0.0,
             cliff_vest_percent: 0.0,
-            beneficiary_withdrawal_address: Pubkey::default(),
+            beneficiary_address: Pubkey::default(),
+            beneficiary_token_address: Pubkey::default(),
             treasury_address: Pubkey::default(), 
             treasury_estimated_depletion_utc: 0,
             total_deposits: 0.0,
@@ -197,7 +199,7 @@ impl Default for Stream {
 }
 
 impl Pack for Stream {
-    const LEN: usize = 201;
+    const LEN: usize = 233;
 
     fn pack_into_slice(&self, output: &mut [u8]) {
         let output = array_mut_ref![output, 0, Stream::LEN];
@@ -211,13 +213,14 @@ impl Pack for Stream {
             rate_cliff_in_seconds_output,
             cliff_vest_amount_output,
             cliff_vest_percent_output,
-            beneficiary_withdrawal_address_output,
+            beneficiary_address_output,
+            beneficiary_token_address_output,
             treasury_address_output,
             treasury_estimated_depletion_utc_output,
             total_deposits_output,
             total_withdrawals_output
             
-        ) = mut_array_refs![output, 1, 32, 32, 8, 8, 8, 8, 8, 8, 32, 32, 8, 8, 8];
+        ) = mut_array_refs![output, 1, 32, 32, 8, 8, 8, 8, 8, 8, 32, 32, 32, 8, 8, 8];
 
         let Stream {
             initialized,
@@ -229,7 +232,8 @@ impl Pack for Stream {
             rate_cliff_in_seconds,
             cliff_vest_amount,
             cliff_vest_percent,
-            beneficiary_withdrawal_address,
+            beneficiary_address,
+            beneficiary_token_address,
             treasury_address,
             treasury_estimated_depletion_utc,
             total_deposits,
@@ -246,7 +250,8 @@ impl Pack for Stream {
         *rate_cliff_in_seconds_output = rate_cliff_in_seconds.to_le_bytes();
         *cliff_vest_amount_output = cliff_vest_amount.to_le_bytes();
         *cliff_vest_percent_output = cliff_vest_percent.to_le_bytes();
-        beneficiary_withdrawal_address_output.copy_from_slice(beneficiary_withdrawal_address.as_ref());
+        beneficiary_address_output.copy_from_slice(beneficiary_address.as_ref());
+        beneficiary_token_address_output.copy_from_slice(beneficiary_token_address.as_ref());
         treasury_address_output.copy_from_slice(treasury_address.as_ref());
         *treasury_estimated_depletion_utc_output = treasury_estimated_depletion_utc.to_le_bytes();
         *total_deposits_output = total_deposits.to_le_bytes();
@@ -265,13 +270,14 @@ impl Pack for Stream {
             rate_cliff_in_seconds,
             cliff_vest_amount,
             cliff_vest_percent,
-            beneficiary_withdrawal_address,
+            beneficiary_address,
+            beneficiary_token_address,
             treasury_address,
             treasury_estimated_depletion_utc,
             total_deposits,
             total_withdrawals
             
-        ) = array_refs![input, 1, 32, 32, 8, 8, 8, 8, 8, 8, 32, 32, 8, 8, 8];
+        ) = array_refs![input, 1, 32, 32, 8, 8, 8, 8, 8, 8, 32, 32, 32, 8, 8, 8];
 
         let initialized = match initialized {
             [0] => false,
@@ -289,7 +295,8 @@ impl Pack for Stream {
             rate_cliff_in_seconds: u64::from_le_bytes(*rate_cliff_in_seconds),
             cliff_vest_amount: f64::from_le_bytes(*cliff_vest_amount),
             cliff_vest_percent: f64::from_le_bytes(*cliff_vest_percent),
-            beneficiary_withdrawal_address: Pubkey::new_from_array(*beneficiary_withdrawal_address),
+            beneficiary_address: Pubkey::new_from_array(*beneficiary_address),
+            beneficiary_token_address: Pubkey::new_from_array(*beneficiary_token_address),
             treasury_address: Pubkey::new_from_array(*treasury_address), 
             treasury_estimated_depletion_utc: u64::from_le_bytes(*treasury_estimated_depletion_utc),
             total_deposits: f64::from_le_bytes(*total_deposits),
