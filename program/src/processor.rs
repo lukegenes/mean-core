@@ -2,8 +2,9 @@
 
 use solana_program::{
     msg,
+    system_program,
     system_instruction,
-    program::invoke,
+    program::{ invoke, invoke_signed },
     pubkey::Pubkey,
     entrypoint::ProgramResult,
     instruction::{ AccountMeta, Instruction },
@@ -11,6 +12,8 @@ use solana_program::{
     program_pack::{ IsInitialized, Pack },
     sysvar::{ clock::Clock, rent::Rent, Sysvar }    
 };
+
+use spl_token::instruction;
 
 use crate::{
     error::StreamError,
@@ -35,8 +38,9 @@ impl Processor {
 
             StreamInstruction::CreateStream {
                 stream_name,
+                treasury_address,
+                stream_address,
                 beneficiary_withdrawal_address,
-                escrow_token_address,
                 funding_amount,
                 rate_amount,
                 rate_interval_in_seconds,
@@ -53,8 +57,9 @@ impl Processor {
                     accounts, 
                     program_id,
                     stream_name,
+                    treasury_address,
+                    stream_address,
                     beneficiary_withdrawal_address,
-                    escrow_token_address,
                     funding_amount,
                     rate_amount,
                     rate_interval_in_seconds,
@@ -161,8 +166,9 @@ impl Processor {
         accounts: &[AccountInfo],
         program_id: &Pubkey,
         stream_name: String,
+        treasury_address: Pubkey,
+        stream_address: Pubkey,
         beneficiary_withdrawal_address: Pubkey,
-        escrow_token_address: Pubkey,
         funding_amount: f64,
         rate_amount: f64,
         rate_interval_in_seconds: u64,
@@ -175,65 +181,50 @@ impl Processor {
 
         let account_info_iter = &mut accounts.iter();
         let treasurer_account_info = next_account_info(account_info_iter)?;
+        let treasurer_atoken_account_info = next_account_info(account_info_iter)?;
 
         if !treasurer_account_info.is_signer {
             return Err(StreamError::MissingInstructionSignature.into());
         }
 
+        let treasurer_owner_account_info = next_account_info(account_info_iter)?;
+
+        if treasurer_account_info.owner != treasurer_owner_account_info.key {
+            return Err(StreamError::InvalidSignerAuthority.into());
+        }
+
+        let treasury_account_info = next_account_info(account_info_iter)?;
+        let treasury_atoken_account_info = next_account_info(account_info_iter)?;
+
+        if treasury_account_info.owner != program_id {
+            return Err(StreamError::InvalidStreamInstruction.into());
+        }
+
+        let stream_account_info = next_account_info(account_info_iter)?;
+
+        if stream_account_info.owner != program_id {
+            return Err(StreamError::InvalidStreamInstruction.into());
+        }
+
+        let money_streaming_program_account_info = next_account_info(account_info_iter)?;
         // Rent excemption checks
         let rent = Rent::get()?;
-        let treasury_account_info = next_account_info(account_info_iter)?;
 
         if !rent.is_exempt(treasury_account_info.lamports(), 0) {
             return Err(StreamError::InvalidRentException.into());
         }
 
-        let stream_account_info = next_account_info(account_info_iter)?;
-
         if !rent.is_exempt(stream_account_info.lamports(), Stream::LEN) {
             return Err(StreamError::InvalidRentException.into());
         }
 
-        let signer_authority_info = next_account_info(account_info_iter)?;
-
-        // Verify the treasurer's owner is valid and the stream owner is the money streming program
-        if treasurer_account_info.owner != signer_authority_info.key || stream_account_info.owner != program_id {
-            return Err(StreamError::InvalidStreamInstruction.into());
-        }
-
-        let mut stream = Stream::unpack_from_slice(&stream_account_info.data.borrow())?;
-
-        if stream.is_initialized() {
-            return Err(StreamError::StreamAlreadyInitialized.into()); // already initialized
-        }
-
+        // Debit Mean Fees from treasurer
+        let meanfi_account_info = next_account_info(account_info_iter)?;
+        let meanfi_owner_account_info = next_account_info(account_info_iter)?;
         let flat_fee = 0.025f64;
         let fees_lamports = flat_fee * (LAMPORTS_PER_SOL as f64);
-        let total_deposits = funding_amount * (LAMPORTS_PER_SOL as f64);
-        let treasurer_lamports = (treasurer_account_info.lamports() as f64);
+        let total_deposits = funding_amount;
 
-        if total_deposits > treasurer_lamports {
-            return Err(StreamError::InsufficientFunds.into());
-        }
-
-        if (total_deposits - fees_lamports) > 0.0 {
-
-            let transfer_ix = system_instruction::transfer(
-                treasurer_account_info.key,
-                treasury_account_info.key,
-                (total_deposits - fees_lamports) as u64
-            );
-
-            invoke(&transfer_ix, &[
-                treasurer_account_info.clone(),
-                treasury_account_info.clone(),
-                signer_authority_info.clone()
-            ]);
-        }
-
-        // Fees
-        let meanfi_account_info = next_account_info(account_info_iter)?;
-        let meanfi_auth_account_info = next_account_info(account_info_iter)?;
         let fees_transfer_ix = system_instruction::transfer(
             treasurer_account_info.key,
             meanfi_account_info.key,
@@ -243,10 +234,30 @@ impl Processor {
         invoke(&fees_transfer_ix, &[
             treasurer_account_info.clone(),
             meanfi_account_info.clone(),
-            meanfi_auth_account_info.clone()
+            meanfi_owner_account_info.clone()
+        ]);
+
+        // Transfer tokens
+        let token_program_account_info = next_account_info(account_info_iter)?;
+        let transfer_ix = spl_token::instruction::transfer(
+            token_program_account_info.key,
+            treasurer_atoken_account_info.key,
+            treasury_atoken_account_info.key,
+            treasurer_account_info.key,
+            &[],
+            funding_amount as u64
+        )?;
+
+        invoke(&transfer_ix, &[
+            token_program_account_info.clone(),
+            treasurer_atoken_account_info.clone(),
+            treasury_atoken_account_info.clone(),
+            treasurer_account_info.clone()
         ]);
 
         // Update stream contract terms
+        let mut stream = Stream::unpack_from_slice(&stream_account_info.data.borrow())?;
+
         stream.stream_name = stream_name;
         stream.treasurer_address = *treasurer_account_info.key;
         stream.rate_amount = rate_amount;
@@ -256,7 +267,6 @@ impl Processor {
         stream.cliff_vest_amount = cliff_vest_amount;
         stream.cliff_vest_percent = cliff_vest_percent;
         stream.beneficiary_withdrawal_address = beneficiary_withdrawal_address;
-        stream.escrow_token_address = escrow_token_address;
         stream.treasury_address = *treasury_account_info.key;
         stream.treasury_estimated_depletion_utc = 0;
         stream.total_deposits = total_deposits;
@@ -291,7 +301,7 @@ impl Processor {
 
         let treasury_account_info = next_account_info(account_info_iter)?;
         let contributor_account_authority_info = next_account_info(account_info_iter)?;
-        let flat_fee = 0.03f64 * (contribution_lamports as f64);
+        let flat_fee = 0.03f64 * contribution_lamports;
         let contributor_balance = (contributor_account_info.lamports() as f64);
 
         if contribution_lamports > contributor_balance {
@@ -354,7 +364,7 @@ impl Processor {
         if !beneficiary_account_info.is_signer {
             return Err(StreamError::MissingInstructionSignature.into());
         }
-        
+
         let stream_account_info = next_account_info(account_info_iter)?;
 
         if stream_account_info.owner != program_id {
@@ -363,16 +373,15 @@ impl Processor {
 
         // Update stream account data
         let mut stream = Stream::unpack_from_slice(&stream_account_info.data.borrow())?;
-        let clock = Clock::get()?; 
-        let rate = stream.rate_amount / (stream.rate_interval_in_seconds as f64);
-        let start_block_height = stream.start_utc + stream.rate_cliff_in_seconds;
 
-        if start_block_height > clock.slot {
-            return Err(StreamError::InvalidWithdrawalDate.into());
+        if stream.beneficiary_withdrawal_address.ne(beneficiary_account_info.key) {
+            return Err(StreamError::NotAuthorizedToWithdraw.into());
         }
 
+        let clock = Clock::get()?; 
+        let rate = stream.rate_amount * ((LAMPORTS_PER_SOL / stream.rate_interval_in_seconds) as f64);
+        let start_block_height = stream.start_utc + stream.rate_cliff_in_seconds;
         let escrow_vested_amount = rate * ((clock.slot - start_block_height) as f64);
-        let escrow_unvested_amount = stream.total_deposits - stream.total_withdrawals - escrow_vested_amount;
 
         if withdrawal_amount > escrow_vested_amount {
             return Err(StreamError::NotAllowedWithdrawalAmount.into());
@@ -380,17 +389,16 @@ impl Processor {
 
         let treasury_account_info = next_account_info(account_info_iter)?;
 
-        if stream.escrow_token_address.ne(&Pubkey::default()) {
-            // The beneficiary has a token account (escrow_token_address) to swap the withdrawals
-
-        } else { // TODO
-            // Cretit the beneficiary account
-            // **treasury_account_info.lamports.borrow_mut() -= escrow_vested_amount;
-            // **beneficiary_account_info.lamports.borrow_mut() += escrow_vested_amount;
+        if treasury_account_info.owner != program_id {
+            return Err(StreamError::InstructionNotAuthorized.into());
         }
 
+        // Cretit the beneficiary account
+        **treasury_account_info.lamports.borrow_mut() -= (withdrawal_amount as u64);
+        **beneficiary_account_info.lamports.borrow_mut() += (withdrawal_amount as u64);
+
+        // Update total withdrawal amount
         stream.total_withdrawals += withdrawal_amount;
-        // escrow_unvested_amount = stream.total_deposits - stream.total_withdrawals - escrow_vested_amount;
 
         // Save
         Stream::pack_into_slice(&stream, &mut stream_account_info.data.borrow_mut());
@@ -546,12 +554,6 @@ impl Processor {
                 stream.beneficiary_withdrawal_address = stream_terms.beneficiary_withdrawal_address;
             }
 
-            if stream_terms.escrow_token_address.ne(&Pubkey::default()) && 
-                stream_terms.escrow_token_address.ne(&stream.escrow_token_address) {
-                    
-                stream.escrow_token_address = stream_terms.escrow_token_address;
-            }
-
             if stream_terms.treasury_address.ne(&Pubkey::default()) && 
                 stream_terms.treasury_address.ne(&stream.treasury_address) {
                     
@@ -631,11 +633,6 @@ impl Processor {
 
         // Distributing escrow vested amount to the beneficiary
         let escrow_vested_amount_in_tokens = 0;
-
-        if stream.escrow_token_address.ne(&Pubkey::default()) { // swap lamports to the token and credit the token account
-            // posiblemente para hacer el transfer necesito tener los 2 account sender and recipients porq hay q pasarselos al token swap o token program
-        }
-
         let treasury_account_info = next_account_info(account_info_iter)?; // TODO 
 
         // **treasury_account_info.lamports.borrow_mut() -= escrow_vested_amount;
