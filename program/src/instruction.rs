@@ -32,6 +32,7 @@ pub enum StreamInstruction {
         treasury_address: Pubkey,
         stream_address: Pubkey,
         beneficiary_address: Pubkey,
+        stream_associated_token: Pubkey,
         funding_amount: f64, // OPTIONAL
         rate_amount: f64,
         rate_interval_in_seconds: u64,
@@ -73,7 +74,7 @@ pub enum StreamInstruction {
         stream_name: String,
         treasurer_address: Pubkey,
         beneficiary_address: Pubkey,
-        beneficiary_token_address: Pubkey, // OPTIONAL
+        stream_associated_token: Pubkey, // OPTIONAL
         treasury_address: Pubkey,
         rate_amount: f64,
         rate_interval_in_seconds: u64,
@@ -133,6 +134,7 @@ impl StreamInstruction {
                 treasury_address,
                 stream_address,
                 beneficiary_address,
+                stream_associated_token,
                 funding_amount,
                 rate_amount,
                 rate_interval_in_seconds,
@@ -149,6 +151,7 @@ impl StreamInstruction {
                 buf.extend_from_slice(treasury_address.as_ref());
                 buf.extend_from_slice(stream_address.as_ref());
                 buf.extend_from_slice(beneficiary_address.as_ref());
+                buf.extend_from_slice(stream_associated_token.as_ref());
                 buf.extend_from_slice(&funding_amount.to_le_bytes());
                 buf.extend_from_slice(&rate_amount.to_le_bytes());
                 buf.extend_from_slice(&rate_interval_in_seconds.to_le_bytes());
@@ -182,7 +185,7 @@ impl StreamInstruction {
                 treasurer_address,
                 treasury_address,
                 beneficiary_address,
-                beneficiary_token_address,
+                stream_associated_token,
                 rate_amount,
                 rate_interval_in_seconds,
                 start_utc,
@@ -196,7 +199,7 @@ impl StreamInstruction {
                 buf.extend_from_slice(treasurer_address.as_ref());
                 buf.extend_from_slice(treasury_address.as_ref());
                 buf.extend_from_slice(beneficiary_address.as_ref());
-                buf.extend_from_slice(beneficiary_token_address.as_ref());
+                buf.extend_from_slice(stream_associated_token.as_ref());
                 buf.extend_from_slice(&rate_amount.to_le_bytes());
                 buf.extend_from_slice(&rate_interval_in_seconds.to_le_bytes());
                 buf.extend_from_slice(&start_utc.to_le_bytes());
@@ -228,6 +231,7 @@ impl StreamInstruction {
         let (treasury_address, result) = Self::unpack_pubkey(result)?;
         let (stream_address, result) = Self::unpack_pubkey(result)?; 
         let (beneficiary_address, result) = Self::unpack_pubkey(result)?;
+        let (stream_associated_token, result) = Self::unpack_pubkey(result)?;
 
         let (funding_amount, result) = result.split_at(8);
         let funding_amount = Self::unpack_f64(funding_amount)?;
@@ -255,6 +259,7 @@ impl StreamInstruction {
             treasury_address,
             stream_address,
             beneficiary_address,
+            stream_associated_token,
             funding_amount,
             rate_amount,
             rate_interval_in_seconds,
@@ -289,7 +294,7 @@ impl StreamInstruction {
         let (treasurer_address, result) = Self::unpack_pubkey(result)?;
         let (treasury_address, result) = Self::unpack_pubkey(result)?;
         let (beneficiary_address, result) = Self::unpack_pubkey(result)?;
-        let (beneficiary_token_address, result) = Self::unpack_pubkey(result)?;
+        let (stream_associated_token, result) = Self::unpack_pubkey(result)?;
 
         let (rate_amount, result) = result.split_at(8);
         let rate_amount = Self::unpack_f64(rate_amount)?;
@@ -309,7 +314,7 @@ impl StreamInstruction {
             treasurer_address,
             treasury_address,
             beneficiary_address,
-            beneficiary_token_address,
+            stream_associated_token,
             rate_amount,
             rate_interval_in_seconds,
             start_utc,
@@ -379,6 +384,7 @@ impl StreamInstruction {
     treasury_address: Pubkey,
     stream_address: Pubkey,
     beneficiary_address: Pubkey,
+    stream_associated_token: Pubkey,
     funding_amount: f64,
     rate_amount: f64,
     rate_interval_in_seconds: u64,
@@ -396,6 +402,7 @@ impl StreamInstruction {
         treasury_address,
         stream_address,
         beneficiary_address,
+        stream_associated_token,
         funding_amount,
         rate_amount,
         rate_interval_in_seconds,
