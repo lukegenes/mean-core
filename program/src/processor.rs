@@ -41,6 +41,7 @@ impl Processor {
                 treasury_address,
                 stream_address,
                 beneficiary_address,
+                stream_associated_token,
                 funding_amount,
                 rate_amount,
                 rate_interval_in_seconds,
@@ -60,6 +61,7 @@ impl Processor {
                     treasury_address,
                     stream_address,
                     beneficiary_address,
+                    stream_associated_token,
                     funding_amount,
                     rate_amount,
                     rate_interval_in_seconds,
@@ -104,7 +106,7 @@ impl Processor {
                 treasurer_address,
                 treasury_address,
                 beneficiary_address,
-                beneficiary_token_address,
+                stream_associated_token,
                 rate_amount,
                 rate_interval_in_seconds,
                 start_utc,
@@ -122,7 +124,7 @@ impl Processor {
                     treasurer_address,
                     treasury_address,
                     beneficiary_address,
-                    beneficiary_token_address,
+                    stream_associated_token,
                     rate_amount,
                     rate_interval_in_seconds,
                     start_utc,
@@ -169,6 +171,7 @@ impl Processor {
         treasury_address: Pubkey,
         stream_address: Pubkey,
         beneficiary_address: Pubkey,
+        stream_associated_token: Pubkey,
         funding_amount: f64,
         rate_amount: f64,
         rate_interval_in_seconds: u64,
@@ -267,6 +270,7 @@ impl Processor {
         stream.cliff_vest_amount = cliff_vest_amount;
         stream.cliff_vest_percent = cliff_vest_percent;
         stream.beneficiary_address = beneficiary_address;
+        stream.stream_associated_token = stream_associated_token;
         stream.treasury_address = *treasury_account_info.key;
         stream.treasury_estimated_depletion_utc = 0;
         stream.total_deposits = total_deposits;
@@ -392,7 +396,7 @@ impl Processor {
 
         // Withdraw
         let token_program_account_info = next_account_info(account_info_iter)?;
-        let beneficiary_token_address = stream.beneficiary_token_address;
+        let stream_associated_token = stream.stream_associated_token;
         let withdraw_ix = spl_token::instruction::transfer(
             token_program_account_info.key,
             treasury_atoken_account_info.key,
@@ -443,7 +447,7 @@ impl Processor {
         treasurer_address: Pubkey,
         treasury_address: Pubkey,
         beneficiary_address: Pubkey,
-        beneficiary_token_address: Pubkey,
+        stream_associated_token: Pubkey,
         rate_amount: f64,
         rate_interval_in_seconds: u64,
         start_utc: u64,
@@ -583,10 +587,10 @@ impl Processor {
                 stream.beneficiary_address = stream_terms.beneficiary_address;
             }
 
-            if stream_terms.beneficiary_token_address.ne(&Pubkey::default()) && 
-                stream_terms.beneficiary_token_address.ne(&stream.beneficiary_token_address) {
+            if stream_terms.stream_associated_token.ne(&Pubkey::default()) && 
+                stream_terms.stream_associated_token.ne(&stream.stream_associated_token) {
                     
-                stream.beneficiary_token_address = stream_terms.beneficiary_token_address;
+                stream.stream_associated_token = stream_terms.stream_associated_token;
             }
 
             if stream_terms.treasury_address.ne(&Pubkey::default()) && 

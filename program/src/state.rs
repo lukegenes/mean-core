@@ -28,7 +28,7 @@ pub struct StreamTerms {
     pub stream_name: String,
     pub treasurer_address: Pubkey,
     pub beneficiary_address: Pubkey,
-    pub beneficiary_token_address: Pubkey,
+    pub stream_associated_token: Pubkey,
     pub treasury_address: Pubkey,
     pub rate_amount: f64,
     pub rate_interval_in_seconds: u64,
@@ -52,7 +52,7 @@ impl Default for StreamTerms {
             stream_name: String::default(),
             treasurer_address: Pubkey::default(),
             beneficiary_address: Pubkey::default(),
-            beneficiary_token_address: Pubkey::default(),
+            stream_associated_token: Pubkey::default(),
             treasury_address: Pubkey::default(),                 
             rate_amount: 0.0,
             rate_interval_in_seconds: 0,
@@ -73,7 +73,7 @@ impl Pack for StreamTerms {
             stream_name_output,
             treasurer_address_output,
             beneficiary_address_output,
-            beneficiary_token_address_output,
+            stream_associated_token_output,
             treasury_address_output,
             rate_amount_output,
             rate_interval_in_seconds_output,
@@ -88,7 +88,7 @@ impl Pack for StreamTerms {
             stream_name,
             treasurer_address,
             beneficiary_address,
-            beneficiary_token_address,
+            stream_associated_token,
             treasury_address,
             rate_amount,
             rate_interval_in_seconds,
@@ -102,7 +102,7 @@ impl Pack for StreamTerms {
         stream_name_output.copy_from_slice(stream_name.as_ref());
         treasurer_address_output.copy_from_slice(treasurer_address.as_ref());
         beneficiary_address_output.copy_from_slice(beneficiary_address.as_ref());
-        beneficiary_token_address_output.copy_from_slice(beneficiary_token_address.as_ref());
+        stream_associated_token_output.copy_from_slice(stream_associated_token.as_ref());
         treasury_address_output.copy_from_slice(treasury_address.as_ref());
         *rate_amount_output = rate_amount.to_le_bytes();
         *rate_interval_in_seconds_output = rate_interval_in_seconds.to_le_bytes();
@@ -118,7 +118,7 @@ impl Pack for StreamTerms {
             stream_name,
             treasurer_address,
             beneficiary_address,
-            beneficiary_token_address,
+            stream_associated_token,
             treasury_address,
             rate_amount,
             rate_interval_in_seconds,
@@ -139,7 +139,7 @@ impl Pack for StreamTerms {
             stream_name: String::from_utf8_lossy(stream_name).to_string(),
             treasurer_address: Pubkey::new_from_array(*treasurer_address),
             beneficiary_address: Pubkey::new_from_array(*beneficiary_address),
-            beneficiary_token_address: Pubkey::new_from_array(*beneficiary_token_address),
+            stream_associated_token: Pubkey::new_from_array(*stream_associated_token),
             treasury_address: Pubkey::new_from_array(*treasury_address),          
             rate_amount: f64::from_le_bytes(*rate_amount),
             rate_interval_in_seconds: u64::from_le_bytes(*rate_interval_in_seconds),
@@ -161,7 +161,7 @@ pub struct Stream {
     pub cliff_vest_amount: f64,
     pub cliff_vest_percent: f64,
     pub beneficiary_address: Pubkey,
-    pub beneficiary_token_address: Pubkey,
+    pub stream_associated_token: Pubkey,
     pub treasury_address: Pubkey,
     pub treasury_estimated_depletion_utc: u64,
     pub total_deposits: f64,
@@ -189,7 +189,7 @@ impl Default for Stream {
             cliff_vest_amount: 0.0,
             cliff_vest_percent: 0.0,
             beneficiary_address: Pubkey::default(),
-            beneficiary_token_address: Pubkey::default(),
+            stream_associated_token: Pubkey::default(),
             treasury_address: Pubkey::default(), 
             treasury_estimated_depletion_utc: 0,
             total_deposits: 0.0,
@@ -214,7 +214,7 @@ impl Pack for Stream {
             cliff_vest_amount_output,
             cliff_vest_percent_output,
             beneficiary_address_output,
-            beneficiary_token_address_output,
+            stream_associated_token_output,
             treasury_address_output,
             treasury_estimated_depletion_utc_output,
             total_deposits_output,
@@ -233,7 +233,7 @@ impl Pack for Stream {
             cliff_vest_amount,
             cliff_vest_percent,
             beneficiary_address,
-            beneficiary_token_address,
+            stream_associated_token,
             treasury_address,
             treasury_estimated_depletion_utc,
             total_deposits,
@@ -251,7 +251,7 @@ impl Pack for Stream {
         *cliff_vest_amount_output = cliff_vest_amount.to_le_bytes();
         *cliff_vest_percent_output = cliff_vest_percent.to_le_bytes();
         beneficiary_address_output.copy_from_slice(beneficiary_address.as_ref());
-        beneficiary_token_address_output.copy_from_slice(beneficiary_token_address.as_ref());
+        stream_associated_token_output.copy_from_slice(stream_associated_token.as_ref());
         treasury_address_output.copy_from_slice(treasury_address.as_ref());
         *treasury_estimated_depletion_utc_output = treasury_estimated_depletion_utc.to_le_bytes();
         *total_deposits_output = total_deposits.to_le_bytes();
@@ -271,7 +271,7 @@ impl Pack for Stream {
             cliff_vest_amount,
             cliff_vest_percent,
             beneficiary_address,
-            beneficiary_token_address,
+            stream_associated_token,
             treasury_address,
             treasury_estimated_depletion_utc,
             total_deposits,
@@ -296,7 +296,7 @@ impl Pack for Stream {
             cliff_vest_amount: f64::from_le_bytes(*cliff_vest_amount),
             cliff_vest_percent: f64::from_le_bytes(*cliff_vest_percent),
             beneficiary_address: Pubkey::new_from_array(*beneficiary_address),
-            beneficiary_token_address: Pubkey::new_from_array(*beneficiary_token_address),
+            stream_associated_token: Pubkey::new_from_array(*stream_associated_token),
             treasury_address: Pubkey::new_from_array(*treasury_address), 
             treasury_estimated_depletion_utc: u64::from_le_bytes(*treasury_estimated_depletion_utc),
             total_deposits: f64::from_le_bytes(*total_deposits),
