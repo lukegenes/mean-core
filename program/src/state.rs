@@ -1,10 +1,8 @@
 // Program objects, (de)serializing state
 
 use std::string::String;
-// use std::mem::size_of;
 
 use solana_program::{
-    // msg,
     pubkey::Pubkey,
     program_error::ProgramError,    
     program_pack::{ IsInitialized, Pack, Sealed }

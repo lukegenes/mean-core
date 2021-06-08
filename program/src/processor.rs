@@ -145,7 +145,7 @@ impl Processor {
             },
 
             StreamInstruction::CloseStream => {
-                msg!("Instruction: Close Stream");
+                msg!("Instruction: CloseStream");
 
                 Self::process_close_stream(
                     accounts, 
@@ -663,17 +663,38 @@ impl Processor {
             beneficiary_account_info = initializer_account_info;
         }
         
-        // Stoping the stream adn updating data
+        // Stoping the stream and updating data
         let clock = Clock::get()?; 
         let rate = stream.rate_amount / (stream.rate_interval_in_seconds as f64);
         let escrow_vested_amount = rate * ((clock.slot - stream.start_utc) as f64);        
         let escrow_unvested_amount = stream.total_deposits - stream.total_withdrawals - escrow_vested_amount;
+        let fees = 0.05f64;
         stream.rate_amount = 0.0;
 
         // Distributing escrow vested amount to the beneficiary
-        let escrow_vested_amount_in_tokens = 0;
-        let treasury_account_info = next_account_info(account_info_iter)?; // TODO 
+        let treasury_atoken_account_info = next_account_info(account_info_iter)?;
+        let treasury_atoken_owner_account_info = next_account_info(account_info_iter)?;
+        let beneficiary_atoken_account_info = next_account_info(account_info_iter)?;
 
+        // Let's transfer the escrow vested amounts to the beneficiary
+        let token_program_account_info = next_account_info(account_info_iter)?;
+        let transfer_ix = spl_token::instruction::transfer(
+            token_program_account_info.key,
+            treasury_atoken_account_info.key,
+            beneficiary_atoken_account_info.key,
+            treasury_atoken_owner_account_info.key,
+            &[],
+            (escrow_vested_amount - fees) as u64
+        )?;
+
+        invoke(&transfer_ix, &[
+            token_program_account_info.clone(),
+            treasury_atoken_account_info.clone(),
+            beneficiary_atoken_account_info.clone(),
+            treasury_atoken_owner_account_info.clone()
+        ]);
+
+        // FEES //TODO: Implement
         // **treasury_account_info.lamports.borrow_mut() -= escrow_vested_amount;
         // **beneficiary_account_info.lamports.borrow_mut() = escrow_vested_amount;
 

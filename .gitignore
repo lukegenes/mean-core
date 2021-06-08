@@ -18,3 +18,4 @@
 
 /js/package-lock.json
 /js/node_modules/*
+/js/main.ts
