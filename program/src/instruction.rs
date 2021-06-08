@@ -90,11 +90,15 @@ pub enum StreamInstruction {
         answer: bool
     },
 
-    /// 0. `[signer]` The initializer of the transaction (treasurer or beneficiary)
+    /// 0. `[]` The initializer of the transaction (treasurer or beneficiary)
     /// 1. `[writable]` The stream account (Money stream state account)
     /// 2. `[]` The counterparty's account (if the initializer is the treasurer then it would be the beneficiary or vice versa)
-    /// 3. `[]` The treasury account (Money stream treasury account).
-    /// 4. `[]` The MeanFi Operations account
+    /// 3. `[]` The treasury token account (Money Streaming treasury token account).
+    /// 4. `[]` The treasury authority account (The owner of the treasury token account)
+    /// 5. `[writable]` The beneficiary associated token account.
+    /// 6. `[]` The SPL Token Program account.
+    /// 7. `[writable]` MeanFi account (The Mean Operations account).
+    /// 8. `[]` The MeanFi authority account (The owner of the MeanFi account).
     CloseStream,
 
     /// 0. `[signer]` The treasurer account (the creator of the money stream)
