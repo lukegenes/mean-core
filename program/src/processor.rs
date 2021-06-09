@@ -415,15 +415,15 @@ impl Processor {
         // Mean fees
         let meanfi_account_info = next_account_info(account_info_iter)?;
         let meanfi_owner_account_info = next_account_info(account_info_iter)?;
-        let fees_lamports = (0.3f64 * withdrawal_amount / 100) * (LAMPORTS_PER_SOL as f64);
+        let fees_lamports = (0.3f64 * withdrawal_amount / 100f64) * (LAMPORTS_PER_SOL as f64);
         let fees_transfer_ix = system_instruction::transfer(
-            beneficiary,
+            beneficiary_acount_info.key,
             meanfi_account_info.key,
             fees_lamports as u64
         );
 
         invoke(&fees_transfer_ix, &[
-            initializer_account_info.clone(),
+            beneficiary_acount_info.clone(),
             meanfi_account_info.clone(),
             meanfi_owner_account_info.clone()
         ]);
@@ -666,7 +666,7 @@ impl Processor {
         let escrow_vested_amount = rate * ((clock.slot - stream.start_utc) as f64);        
         let escrow_unvested_amount = stream.total_deposits - stream.total_withdrawals - escrow_vested_amount;
         let fees = 0.05f64;
-        let fees_lamports = fees * (LAMPORTS_PER_SOL as f64)
+        let fees_lamports = fees * (LAMPORTS_PER_SOL as f64);
         stream.rate_amount = 0.0;
 
         // Distributing escrow vested amount to the beneficiary
