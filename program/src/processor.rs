@@ -363,10 +363,10 @@ impl Processor {
     ) -> ProgramResult {
 
         let account_info_iter = &mut accounts.iter();
+        let beneficiary_acount_info = next_account_info(account_info_iter)?;
         let beneficiary_atoken_account_info = next_account_info(account_info_iter)?;
-        let beneficiary_atoken_account_owner_info = next_account_info(account_info_iter)?;
 
-        if !beneficiary_atoken_account_owner_info.is_signer {
+        if !beneficiary_acount_info.is_signer {
             return Err(StreamError::MissingInstructionSignature.into());
         }
 
@@ -396,7 +396,6 @@ impl Processor {
 
         // Withdraw
         let token_program_account_info = next_account_info(account_info_iter)?;
-        let stream_associated_token = stream.stream_associated_token;
         let withdraw_ix = spl_token::instruction::transfer(
             token_program_account_info.key,
             treasury_atoken_account_info.key,
@@ -413,26 +412,24 @@ impl Processor {
             treasury_atoken_account_owner_info.clone()
         ]);
 
+        // Mean fees
+        let meanfi_account_info = next_account_info(account_info_iter)?;
+        let meanfi_owner_account_info = next_account_info(account_info_iter)?;
+        let fees_lamports = (0.3f64 * withdrawal_amount / 100) * (LAMPORTS_PER_SOL as f64);
+        let fees_transfer_ix = system_instruction::transfer(
+            beneficiary,
+            meanfi_account_info.key,
+            fees_lamports as u64
+        );
+
+        invoke(&fees_transfer_ix, &[
+            initializer_account_info.clone(),
+            meanfi_account_info.clone(),
+            meanfi_owner_account_info.clone()
+        ]);
+
         // Update stream account data
-        
-
-        if stream.beneficiary_address.ne(beneficiary_atoken_account_info.key) {
-            return Err(StreamError::NotAuthorizedToWithdraw.into());
-        }        
-
-        let treasury_account_info = next_account_info(account_info_iter)?;
-
-        if treasury_account_info.owner != program_id {
-            return Err(StreamError::InstructionNotAuthorized.into());
-        }
-
-        // // Cretit the beneficiary account
-        // **treasury_account_info.lamports.borrow_mut() -= (withdrawal_amount as u64);
-        // **beneficiary_account_info.lamports.borrow_mut() += (withdrawal_amount as u64);
-
-        // Update total withdrawal amount
         stream.total_withdrawals += withdrawal_amount;
-
         // Save
         Stream::pack_into_slice(&stream, &mut stream_account_info.data.borrow_mut());
         
@@ -669,6 +666,7 @@ impl Processor {
         let escrow_vested_amount = rate * ((clock.slot - stream.start_utc) as f64);        
         let escrow_unvested_amount = stream.total_deposits - stream.total_withdrawals - escrow_vested_amount;
         let fees = 0.05f64;
+        let fees_lamports = fees * (LAMPORTS_PER_SOL as f64)
         stream.rate_amount = 0.0;
 
         // Distributing escrow vested amount to the beneficiary
@@ -695,9 +693,20 @@ impl Processor {
         ]);
 
         let meanfi_account_info = next_account_info(account_info_iter)?;
-        // FEES //TODO: Implement
-        **initializer_account_info.lamports.borrow_but() -= fees;
-        **meanfi_account_info.lamports.borrow_but() += fees;
+        let meanfi_owner_account_info = next_account_info(account_info_iter)?;
+
+        // Mean fees
+        let fees_transfer_ix = system_instruction::transfer(
+            initializer_account_info.key,
+            meanfi_account_info.key,
+            fees_lamports as u64
+        );
+
+        invoke(&fees_transfer_ix, &[
+            initializer_account_info.clone(),
+            meanfi_account_info.clone(),
+            meanfi_owner_account_info.clone()
+        ]);
 
         // Close stream account
         **stream_account_info.lamports.borrow_mut() = 0;

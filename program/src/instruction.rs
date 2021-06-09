@@ -53,8 +53,8 @@ pub enum StreamInstruction {
         contribution_amount: f64
     },
 
-    /// 0. `[]` The beneficiary token account (the recipient of the money)
-    /// 1. `[Signer]` The beneficiary authority account (The owner of the beneficiary token account)
+    /// 0. `[signer]` The beneficiary account (the beneficiary account)
+    /// 1. `[]` The beneficiary token account (the recipient of the money)
     /// 2. `[]` The treasury token account
     /// 3. `[]` The treasury authority account (The owner of the treasury token account)
     /// 4. `[writable]` The stream account (Money stream state account).
