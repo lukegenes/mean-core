@@ -694,9 +694,10 @@ impl Processor {
             treasury_atoken_owner_account_info.clone()
         ]);
 
+        let meanfi_account_info = next_account_info(account_info_iter)?;
         // FEES //TODO: Implement
-        // **treasury_account_info.lamports.borrow_mut() -= escrow_vested_amount;
-        // **beneficiary_account_info.lamports.borrow_mut() = escrow_vested_amount;
+        **initializer_account_info.lamports.borrow_but() -= fees;
+        **meanfi_account_info.lamports.borrow_but() += fees;
 
         // Close stream account
         **stream_account_info.lamports.borrow_mut() = 0;

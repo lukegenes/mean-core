@@ -19,4 +19,5 @@
 
 /js/package-lock.json
 /js/node_modules/*
-/js/main.ts
+js/main.ts
+js/main-utils.ts
