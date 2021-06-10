@@ -13,7 +13,8 @@
 # These are custom exclusions
 /program/dist/
 /program/dist/*.so
-
+/program/keys/
+/program/dist/*.json
 /program/devnet-config.yml
 /program/testnet-config.yml
 
