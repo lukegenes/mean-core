@@ -6,8 +6,6 @@ pub mod state;
 
 #[cfg(not(feature = "no-entrypoint"))]
 pub mod entrypoint;
-
-// Export current sdk types for downstream users building with a different sdk version
 pub use solana_program;
 
 use solana_program::{
@@ -18,7 +16,7 @@ use solana_program::{
 
 use crate::error::StreamError;
 
-declare_id!("2HEkjrj21DX2ecNQjAEUPKwr2pEnwSBjgi9GUHWtKnhH");
+declare_id!("7GsGvccB8LMbVhbhB1Zo8erVC82xDpoEgrm4EBbxBWcj");
 
 pub fn check_program_account(program_id: &Pubkey) -> ProgramResult {
     if program_id != &id() {
