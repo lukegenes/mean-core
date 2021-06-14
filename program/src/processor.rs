@@ -767,8 +767,8 @@ impl Processor {
         let elapsed_time = ((clock.unix_timestamp - ((stream.start_utc / 1000) as i64)) as f64);
         let mut escrow_vested_amount = rate * elapsed_time;
         
-        if escrow_vested_amount > stream.total_deposits {
-            escrow_vested_amount = stream.total_deposits;
+        if escrow_vested_amount > stream.total_deposits - stream.total_withdrawals {
+            escrow_vested_amount = stream.total_deposits - stream.total_withdrawals;
         }
 
         let escrow_unvested_amount = stream.total_deposits - stream.total_withdrawals - escrow_vested_amount;
