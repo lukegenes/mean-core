@@ -13,26 +13,21 @@ use crate::{
     error::StreamError
 };
 
-/// 0. `[signer]` The treasurer account (the creator of the money stream) 
-/// 1. `[]` The treasury account (Money stream treasury account).
-/// 2. `[writable]` The stream account (Money stream state account).
-/// 3. `[]` The treasurer authority account (The owner of the treasurer account).
-/// 4. `[]` MeanFi account (The Mean Operations account).
-/// 5. `[]` The MeanFi authority account (The owner of the MeanFi account).
-
 pub enum StreamInstruction {
 
-    /// 0. `[signer]` The treasurer account (the creator of the money stream) 
-    /// 1. `[]` The treasurer authority account (The owner of the treasurer account).
-    /// 2. `[]` MeanFi account (The Mean Operations account).
-    /// 3. `[]` The MeanFi authority account (The owner of the MeanFi account).
-    /// 4. `[]` System Program account
+    //// Create Stream]
+    /// 0. `[signer]` The treasurer account (The creator of the money stream)
+    /// 1. `[writable]` The treasurer token account
+    /// 2. `[]` The treasurer token mint account
+    /// 3. `[]` The treasury account (The stream contract treasury account).
+    /// 4. `[writable]` The treasury token account.
+    /// 5. `[writable]` The stream account (The stream contract account).
+    /// 6. `[writable]` MeanFi account (The Mean Operations account)
+    /// 7. `[]` System Program account.
+    /// 8. `[]` The SPL Token Program account.
     CreateStream {
-        stream_name: String,
-        treasury_address: Pubkey,
-        stream_address: Pubkey,
         beneficiary_address: Pubkey,
-        stream_associated_token: Pubkey,
+        stream_name: String,        
         funding_amount: f64, // OPTIONAL
         rate_amount: f64,
         rate_interval_in_seconds: u64,
@@ -53,8 +48,8 @@ pub enum StreamInstruction {
         contribution_amount: f64
     },
 
-    /// 0. `[]` The beneficiary token account (the recipient of the money)
-    /// 1. `[Signer]` The beneficiary authority account (The owner of the beneficiary token account)
+    /// 0. `[signer]` The beneficiary account (the beneficiary account)
+    /// 1. `[]` The beneficiary token account (the recipient of the money)
     /// 2. `[]` The treasury token account
     /// 3. `[]` The treasury authority account (The owner of the treasury token account)
     /// 4. `[writable]` The stream account (Money stream state account).
@@ -90,15 +85,16 @@ pub enum StreamInstruction {
         answer: bool
     },
 
-    /// 0. `[]` The initializer of the transaction (treasurer or beneficiary)
-    /// 1. `[writable]` The stream account (Money stream state account)
-    /// 2. `[]` The counterparty's account (if the initializer is the treasurer then it would be the beneficiary or vice versa)
-    /// 3. `[]` The treasury token account (Money Streaming treasury token account).
-    /// 4. `[]` The treasury authority account (The owner of the treasury token account)
-    /// 5. `[writable]` The beneficiary associated token account.
-    /// 6. `[]` The SPL Token Program account.
-    /// 7. `[writable]` MeanFi account (The Mean Operations account).
-    /// 8. `[]` The MeanFi authority account (The owner of the MeanFi account).
+    /// 0. `[signer]` The initializer account (treasurer/beneficiary)
+    /// 1. `[]` The counterparty account (treasurer/beneficiary)
+    /// 2. `[writable]` The stream account (The stream contract account).
+    /// 3. `[writable]` The beneficiary token account.
+    /// 4. `[]` The beneficiary token mint account
+    /// 5. `[writable]` The treasury account (The stream contract treasury account)
+    /// 6. `[writable]` The treasury token account
+    /// 7. `[writable]` MeanFi account (The Mean Operations account)
+    /// 8. `[]` System Program account.
+    /// 9. `[]` The SPL Token Program account.
     CloseStream,
 
     /// 0. `[signer]` The treasurer account (the creator of the money stream)
@@ -134,11 +130,8 @@ impl StreamInstruction {
         match self {
 
             Self::CreateStream {
-                stream_name,
-                treasury_address,
-                stream_address,
                 beneficiary_address,
-                stream_associated_token,
+                stream_name,
                 funding_amount,
                 rate_amount,
                 rate_interval_in_seconds,
@@ -151,11 +144,8 @@ impl StreamInstruction {
 
                 buf.push(0);
 
-                buf.extend_from_slice(stream_name.as_ref());
-                buf.extend_from_slice(treasury_address.as_ref());
-                buf.extend_from_slice(stream_address.as_ref());
                 buf.extend_from_slice(beneficiary_address.as_ref());
-                buf.extend_from_slice(stream_associated_token.as_ref());
+                buf.extend_from_slice(stream_name.as_ref());
                 buf.extend_from_slice(&funding_amount.to_le_bytes());
                 buf.extend_from_slice(&rate_amount.to_le_bytes());
                 buf.extend_from_slice(&rate_interval_in_seconds.to_le_bytes());
@@ -231,11 +221,8 @@ impl StreamInstruction {
 
     fn unpack_create_stream(input: &[u8]) -> Result<Self, StreamError> {
 
-        let (stream_name, result) = Self::unpack_string(input)?;
-        let (treasury_address, result) = Self::unpack_pubkey(result)?;
-        let (stream_address, result) = Self::unpack_pubkey(result)?; 
-        let (beneficiary_address, result) = Self::unpack_pubkey(result)?;
-        let (stream_associated_token, result) = Self::unpack_pubkey(result)?;
+        let (beneficiary_address, result) = Self::unpack_pubkey(input)?;
+        let (stream_name, result) = Self::unpack_string(result)?;
 
         let (funding_amount, result) = result.split_at(8);
         let funding_amount = Self::unpack_f64(funding_amount)?;
@@ -259,11 +246,8 @@ impl StreamInstruction {
         let cliff_vest_percent = Self::unpack_f64(cliff_vest_percent)?;        
 
         Ok(Self::CreateStream {
-            stream_name,
-            treasury_address,
-            stream_address,
             beneficiary_address,
-            stream_associated_token,
+            stream_name,
             funding_amount,
             rate_amount,
             rate_interval_in_seconds,
@@ -380,15 +364,15 @@ impl StreamInstruction {
 
  pub fn create_stream(
     program_id: &Pubkey,
-    meanfi_address: Pubkey,
-    meanfi_auth_address: Pubkey,
-    stream_name: String,
     treasurer_address: Pubkey,
-    treasurer_auth_address: Pubkey,
+    treasurer_token_address: Pubkey,
+    treasurer_token_mint_address: Pubkey,
     treasury_address: Pubkey,
+    treasury_token_address: Pubkey,
     stream_address: Pubkey,
+    meanfi_address: Pubkey,
     beneficiary_address: Pubkey,
-    stream_associated_token: Pubkey,
+    stream_name: String,
     funding_amount: f64,
     rate_amount: f64,
     rate_interval_in_seconds: u64,
@@ -402,11 +386,8 @@ impl StreamInstruction {
     check_program_account(program_id);
 
     let data = StreamInstruction::CreateStream {
-        stream_name,
-        treasury_address,
-        stream_address,
         beneficiary_address,
-        stream_associated_token,
+        stream_name,
         funding_amount,
         rate_amount,
         rate_interval_in_seconds,
@@ -419,11 +400,14 @@ impl StreamInstruction {
 
     let accounts = vec![
         AccountMeta::new(treasurer_address, true),
+        AccountMeta::new(treasurer_token_address, true),
+        AccountMeta::new(treasurer_token_mint_address, true),
         AccountMeta::new_readonly(treasury_address, false),
-        AccountMeta::new(stream_address, false),
-        AccountMeta::new(treasurer_auth_address, false),
-        AccountMeta::new(meanfi_address, false),
-        AccountMeta::new(meanfi_auth_address, false),
+        AccountMeta::new(treasury_token_address, true),
+        AccountMeta::new(stream_address, true),
+        AccountMeta::new(meanfi_address, true),
+        AccountMeta::new(*program_id, false),
+        AccountMeta::new(spl_token::id(), false)
     ];
 
     Ok(Instruction { 
