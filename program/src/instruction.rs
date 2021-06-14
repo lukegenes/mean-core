@@ -15,16 +15,18 @@ use crate::{
 
 pub enum StreamInstruction {
 
-    //// Create Stream]
-    /// 0. `[signer]` The treasurer account (The creator of the money stream)
-    /// 1. `[writable]` The treasurer token account
-    /// 2. `[]` The treasurer token mint account
-    /// 3. `[]` The treasury account (The stream contract treasury account).
-    /// 4. `[writable]` The treasury token account.
-    /// 5. `[writable]` The stream account (The stream contract account).
-    /// 6. `[writable]` MeanFi account (The Mean Operations account)
-    /// 7. `[]` System Program account.
+    /// 0. `[signer]` The treasurer account (The creator of the money stream).
+    /// 1. `[writable]` The treasurer associated token account.
+    /// 2. `[]` The treasury account (The stream contract treasury account).
+    /// 3. `[writable]` The treasury associated token account.
+    /// 4. `[writable]` The stream account (The stream contract account).
+    /// 5. `[]` The associated token mint account    
+    /// 6.  [writable] The Money Streaming Protocol operating account.
+    /// 7.  [] The Money Streaming Program account.
     /// 8. `[]` The SPL Token Program account.
+    /// 9. `[]` The AToken Program account (The Associated Token Program account).
+    /// 10. `[]` System Program account.
+    /// 11. `[]` Rent Sysvar account.
     CreateStream {
         beneficiary_address: Pubkey,
         stream_name: String,        
@@ -41,21 +43,23 @@ pub enum StreamInstruction {
     /// 1. `[]` The treasury account (Money stream treasury account).
     /// 2. `[]` The contributor authority account (The owner of the contributor token account).
     /// 3. `[writable]` MeanFi account (The Mean Operations account).
-    /// 4. `[]` The MeanFi authority account (The owner of the MeanFi account).
+    /// 4. `[writable]` The Money Streaming Protocol operating account.
     /// 5. `[writable]` The stream account (Money stream state account).
     AddFunds {
         contribution_token_address: Pubkey,
         contribution_amount: f64
     },
 
-    /// 0. `[signer]` The beneficiary account (the beneficiary account)
-    /// 1. `[]` The beneficiary token account (the recipient of the money)
-    /// 2. `[]` The treasury token account
-    /// 3. `[]` The treasury authority account (The owner of the treasury token account)
-    /// 4. `[writable]` The stream account (Money stream state account).
-    /// 5. `[]` The Token Program account.
-    /// 6. `[writable]` MeanFi account (The Mean Operations account).
-    /// 7. `[]` The MeanFi authority account (The owner of the MeanFi account).
+    /// 0. `[signer]` The beneficiary account
+    /// 1. `[writable]` The beneficiary token account (the recipient of the money)
+    /// 2. `[]` The beneficiary token mint account
+    /// 3. `[]` The treasury account
+    /// 4. `[writable]` The treasury token account
+    /// 5. `[writable]` The stream account (Money stream state account).
+    /// 6. `[writable]` The Money Streaming Protocol operating account.
+    /// 7. `[]` The Money Streaming Program account.
+    /// 8. `[]` The SPL Token Program account.
+    /// 9. `[]` System Program account.
     Withdraw { 
         withdrawal_amount: f64
     },
@@ -64,6 +68,7 @@ pub enum StreamInstruction {
     /// 1. `[writable]` The stream terms account (Update proposal account).
     /// 2. `[]` The counterparty's account (if the initializer is the treasurer then it would be the beneficiary or vice versa)
     /// 3. `[writable]` The stream account
+    /// 4.  [writable] The Money Streaming Protocol operating account.
     ProposeUpdate {
         proposed_by: Pubkey,
         stream_name: String,
@@ -81,6 +86,7 @@ pub enum StreamInstruction {
     /// 1. `[writable]` The stream account.
     /// 2. `[]` The counterparty's account (if the initializer is the treasurer then it would be the beneficiary or vice versa)
     /// 3. `[writable]` The stream terms account (Update proposal account)
+    /// 4.  [writable] The Money Streaming Protocol operating account.
     AnswerUpdate {
         answer: bool
     },
@@ -90,15 +96,16 @@ pub enum StreamInstruction {
     /// 2. `[writable]` The stream account (The stream contract account).
     /// 3. `[writable]` The beneficiary token account.
     /// 4. `[]` The beneficiary token mint account
-    /// 5. `[writable]` The treasury account (The stream contract treasury account)
-    /// 6. `[writable]` The treasury token account
-    /// 7. `[writable]` MeanFi account (The Mean Operations account)
+    /// 5. `[writable]` The treasury token account
+    /// 6. `[writable]` The treasury token owner (The Money Streaming Program)
+    /// 7. `[writable]` The Money Streaming Protocol operating account.
     /// 8. `[]` System Program account.
     /// 9. `[]` The SPL Token Program account.
     CloseStream,
 
     /// 0. `[signer]` The treasurer account (the creator of the money stream)
     /// 1. `[writable]` The treasury account (Money stream treasury account).
+    /// 2.  [writable] The Money Streaming Protocol operating account.
     CloseTreasury,
 }
 
@@ -109,7 +116,7 @@ impl StreamInstruction {
         let (&tag, result) = instruction_data
             .split_first()
             .ok_or(StreamError::InvalidStreamInstruction.into())?;
-        
+                
         Ok(match tag {
 
             0 => Self::unpack_create_stream(result)?,

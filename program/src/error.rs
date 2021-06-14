@@ -49,7 +49,10 @@ pub enum StreamError {
     InvalidWithdrawalDate,
 
     #[error("InvalidSignerAuthority")]
-    InvalidSignerAuthority
+    InvalidSignerAuthority,
+
+    #[error("Overflow")]
+    Overflow
 }
 
 impl From<StreamError> for ProgramError {
@@ -79,7 +82,8 @@ impl PrintProgramError for StreamError {
             Self::NotAllowedWithdrawalAmount => msg!("Error: Can not withdraw more that the vested amount"),
             Self::NotAuthorizedToWithdraw => msg!("Error: Not authorized to withdraw from the stream"),
             Self::InvalidWithdrawalDate => msg!("Error: The date to withdraw your money has not been reached yet"),
-            Self::InvalidSignerAuthority => msg!("Error: InvalidSignerAuthority")
+            Self::InvalidSignerAuthority => msg!("Error: InvalidSignerAuthority"),
+            Self::Overflow => msg!("Error: Overflow")
         }
     }
 }
