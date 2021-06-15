@@ -39,14 +39,16 @@ pub enum StreamInstruction {
         cliff_vest_percent: f64, // OPTIONAL
     },
 
-    /// 0. `[signer]` The contributor token account
-    /// 1. `[]` The treasury account (Money stream treasury account).
-    /// 2. `[]` The contributor authority account (The owner of the contributor token account).
-    /// 3. `[writable]` MeanFi account (The Mean Operations account).
-    /// 4. `[writable]` The Money Streaming Protocol operating account.
-    /// 5. `[writable]` The stream account (Money stream state account).
+    /// 0. `[signer]` The contributor account
+    /// 1. `[writable]` The contributor token account
+    /// 2. `[]` The treasury account (Money stream treasury account).
+    /// 3. `[writable]` The treasury token account.
+    /// 4. `[]` The associated token mint account
+    /// 5. `[writable]` The stream account (The stream contract account).
+    /// 6.  [writable] The Money Streaming Protocol operating account.
+    /// 7.  [] The Money Streaming Program account.
+    /// 8. `[]` The SPL Token Program account.
     AddFunds {
-        contribution_token_address: Pubkey,
         contribution_amount: f64
     },
 
@@ -162,20 +164,12 @@ impl StreamInstruction {
                 buf.extend_from_slice(&cliff_vest_percent.to_le_bytes());
             },
 
-            &Self::AddFunds {
-                contribution_amount,
-                contribution_token_address
-
-            } => {
+            &Self::AddFunds { contribution_amount } => {
                 buf.push(1);
-
-                buf.extend_from_slice(contribution_token_address.as_ref());
                 buf.extend_from_slice(&contribution_amount.to_le_bytes());   
             },
 
-            &Self::Withdraw { 
-                withdrawal_amount
-            } => {
+            &Self::Withdraw { withdrawal_amount } => {
                 buf.push(2);
                 buf.extend_from_slice(&withdrawal_amount.to_le_bytes());
             },
@@ -266,12 +260,10 @@ impl StreamInstruction {
     }
 
     fn unpack_add_funds(input: &[u8]) -> Result<Self, StreamError> {
-        let (contribution_token_address, result) = Self::unpack_pubkey(input)?;
-        let (contribution_amount, _result) = result.split_at(8);
+        let (contribution_amount, _result) = input.split_at(8);
         let contribution_amount = Self::unpack_f64(contribution_amount)?;
 
         Ok(Self::AddFunds { 
-            contribution_token_address,
             contribution_amount
         })
     }
@@ -425,8 +417,8 @@ impl StreamInstruction {
  }
 
  pub fn add_funds(
-    stream_account_key: &Pubkey,
-    treasury_account_key: &Pubkey,
+    stream_address: &Pubkey,
+    treasury_address: &Pubkey,
     program_id: &Pubkey,
     contribution_token_address: Pubkey,
     contribution_amount: f64,
@@ -435,16 +427,12 @@ impl StreamInstruction {
 
     check_program_account(program_id);
 
-    let data = StreamInstruction::AddFunds {
-        contribution_token_address,
-        contribution_amount,
-
-    }.pack();
+    let data = StreamInstruction::AddFunds { contribution_amount }.pack();
 
     let accounts = vec![
         AccountMeta::new(contribution_token_address, true),
-        AccountMeta::new(*stream_account_key, false),
-        AccountMeta::new_readonly(*treasury_account_key, false)
+        AccountMeta::new(*stream_address, false),
+        AccountMeta::new_readonly(*treasury_address, false)
     ];
 
     Ok(Instruction { 

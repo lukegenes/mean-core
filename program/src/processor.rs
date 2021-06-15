@@ -69,25 +69,17 @@ impl Processor {
                 )
             },
 
-            StreamInstruction::AddFunds {
-                contribution_token_address,
-                contribution_amount
-
-            } => {
-
+            StreamInstruction::AddFunds { contribution_amount } => {
                 msg!("Instruction: AddFunds");
 
                 Self::process_add_funds(
                     accounts, 
                     program_id,
-                    contribution_token_address,
                     contribution_amount
                 )
             },
 
-            StreamInstruction::Withdraw {
-                withdrawal_amount
-            } => {
+            StreamInstruction::Withdraw { withdrawal_amount } => {
                 msg!("Instruction: Withdraw");
                 
                 Self::process_withdraw(
@@ -129,9 +121,7 @@ impl Processor {
                 )                
             },
 
-            StreamInstruction::AnswerUpdate {
-                answer
-            } => {
+            StreamInstruction::AnswerUpdate { answer } => {
                 msg!("Instruction: AnswerUpdate");
                 
                 Self::process_answer_update(
@@ -272,7 +262,7 @@ impl Processor {
             );
         }
 
-        // Debit Mean Fees from treasurer
+        // Debit Fees from treasurer
         let flat_fee = 0.025f64;
         let fees_lamports = flat_fee * (LAMPORTS_PER_SOL as f64);
         let fees_transfer_ix = system_instruction::transfer(
@@ -321,71 +311,83 @@ impl Processor {
     fn process_add_funds(
         accounts: &[AccountInfo],
         program_id: &Pubkey,
-        contribution_token_address: Pubkey,
         contribution_amount: f64
 
     ) -> ProgramResult {
 
         let account_info_iter = &mut accounts.iter();
         let contributor_account_info = next_account_info(account_info_iter)?;
+        let contributor_token_account_info = next_account_info(account_info_iter)?;
+        let treasury_account_info = next_account_info(account_info_iter)?;
+        let treasury_token_account_info = next_account_info(account_info_iter)?;
+        let mint_account_info = next_account_info(account_info_iter)?;
+        let stream_account_info = next_account_info(account_info_iter)?;
+        let msp_ops_account_info = next_account_info(account_info_iter)?;
+        let token_program_account_info = next_account_info(account_info_iter)?;
+        let system_account_info = next_account_info(account_info_iter)?;
 
         if !contributor_account_info.is_signer {
             return Err(StreamError::MissingInstructionSignature.into());
         }
 
-        let contribution_lamports = contribution_amount;
-
-        if contributor_account_info.owner == &spl_token::id() { // the contribution is in some token so need to swap those tokens to lamports
-
-        }
-
-        let treasury_account_info = next_account_info(account_info_iter)?;
-        let contributor_account_authority_info = next_account_info(account_info_iter)?;
-        let flat_fee = 0.03f64 * contribution_lamports;
-        let contributor_balance = (contributor_account_info.lamports() as f64);
-
-        if contribution_lamports > contributor_balance {
-            return Err(StreamError::InsufficientFunds.into());
-        }
-
-        // Credit the treasury account
-        let transfer_ix = system_instruction::transfer(
-            contributor_account_info.key,
-            treasury_account_info.key,
-            (contribution_lamports - flat_fee) as u64
-        );
-
-        invoke(&transfer_ix, &[
-            contributor_account_info.clone(),
-            treasury_account_info.clone(),
-            contributor_account_authority_info.clone()
-        ]);
-
-        let meanfi_account_info = next_account_info(account_info_iter)?;
-        let meanfi_auth_account_info = next_account_info(account_info_iter)?;
-
-        // Debit Mean fees from contributor and credit MeanFi account
-        let meanfi_transfer_ix = system_instruction::transfer(
-            contributor_account_info.key,
-            meanfi_account_info.key,
-            (flat_fee as u64)
-        );
-
-        invoke(&meanfi_transfer_ix, &[
-            contributor_account_info.clone(),
-            meanfi_account_info.clone(),
-            meanfi_auth_account_info.clone()
-        ]);
-
-        let stream_account_info = next_account_info(account_info_iter)?;
+        let mut stream = Stream::unpack_from_slice(&stream_account_info.data.borrow())?;
 
         if stream_account_info.owner != program_id {
             return Err(StreamError::InstructionNotAuthorized.into());
         }
 
-        // Update the stream data
+        let fees = 0.025f64;
+        let fees_lamports = fees * (LAMPORTS_PER_SOL as f64);
+        let mint = spl_token::state::Mint::unpack_from_slice(&mint_account_info.data.borrow())?;
+        let pow = num_traits::pow(10f64, mint.decimals.into());
+        let amount = contribution_amount * pow;
+
+        // Credit the treasury account
+        let transfer_ix = spl_token::instruction::transfer(
+            token_program_account_info.key,
+            contributor_token_account_info.key,
+            treasury_token_account_info.key,
+            contributor_account_info.key,
+            &[],
+            amount as u64
+        )?;
+
+        invoke(&transfer_ix, &[
+            token_program_account_info.clone(),
+            contributor_token_account_info.clone(),
+            treasury_token_account_info.clone(),
+            contributor_account_info.clone()
+        ]);
+
+        msg!("Transfer {:?} tokens to: {:?}", 
+            contribution_amount, 
+            (*treasury_account_info.key).to_string()
+        );
+
+        // Debit Fees from treasurer
+        let flat_fee = 0.025f64;
+        let fees_lamports = flat_fee * (LAMPORTS_PER_SOL as f64);
+        let fees_transfer_ix = system_instruction::transfer(
+            contributor_account_info.key,
+            msp_ops_account_info.key,
+            fees_lamports as u64
+        );
+
+        invoke(&fees_transfer_ix, &[
+            contributor_account_info.clone(),
+            msp_ops_account_info.clone(),
+            system_account_info.clone()
+        ]);
+
+        msg!("Transfer {:?} lamports of fee to: {:?}", 
+            fees_lamports, 
+            (*msp_ops_account_info.key).to_string()
+        );
+
+        // Update stream contract terms
         let mut stream = Stream::unpack_from_slice(&stream_account_info.data.borrow())?;
-        stream.total_deposits += contribution_lamports;
+        stream.total_deposits += contribution_amount;
+        // Save
         Stream::pack_into_slice(&stream, &mut stream_account_info.data.borrow_mut());
 
         Ok(())
