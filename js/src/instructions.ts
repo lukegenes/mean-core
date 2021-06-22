@@ -1,7 +1,7 @@
 import { Connection, PublicKey, SystemProgram, SYSVAR_RENT_PUBKEY, TransactionInstruction } from "@solana/web3.js";
 import { Constants } from "./constants";
 import { Layout } from "./layout";
-import { u64Number } from "./u64Number";
+import { u64Number } from "./u64n";
 import { Buffer } from 'buffer';
 import * as Utils from "./utils";
 import { StreamInfo } from "./money-streaming";
@@ -77,6 +77,7 @@ export module Instructions {
         programId: PublicKey,
         treasurer: PublicKey,
         treasurerToken: PublicKey,
+        beneficiaryToken: PublicKey,
         treasury: PublicKey,
         treasuryToken: PublicKey,
         stream: PublicKey,
@@ -99,6 +100,7 @@ export module Instructions {
         const keys = [
             { pubkey: treasurer, isSigner: true, isWritable: false },
             { pubkey: treasurerToken, isSigner: false, isWritable: true },
+            { pubkey: beneficiaryToken, isSigner: false, isWritable: true },
             { pubkey: treasury, isSigner: false, isWritable: true },
             { pubkey: treasuryToken, isSigner: false, isWritable: true },
             { pubkey: stream, isSigner: false, isWritable: true },
@@ -106,7 +108,6 @@ export module Instructions {
             { pubkey: mspOpsAccount, isSigner: false, isWritable: true },
             { pubkey: programId, isSigner: false, isWritable: false },
             { pubkey: splTokenProgramAccount, isSigner: false, isWritable: false },
-            { pubkey: aTokenProgramAccount, isSigner: false, isWritable: false },
             { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
             { pubkey: SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false }
         ];
@@ -192,6 +193,7 @@ export module Instructions {
     }
 
     export const apporveTokenDelegation = async (
+        programId: PublicKey,
         sourceToken: PublicKey,
         delegate: PublicKey,
         sourceTokenOwner: PublicKey,
@@ -199,7 +201,6 @@ export module Instructions {
 
     ): Promise<TransactionInstruction> => {
 
-        const programId = Constants.TOKEN_PROGRAM_ADDRESS.toPublicKey();
         const keys = [
             { pubkey: sourceToken, isSigner: false, isWritable: true },
             { pubkey: delegate, isSigner: false, isWritable: false },
@@ -263,6 +264,51 @@ export module Instructions {
             keys,
             programId,
             data
+        });
+    }
+
+    export const addFundsInstruction = async (
+        programId: PublicKey,
+        stream: PublicKey,
+        contributor: PublicKey,
+        contributorToken: PublicKey,
+        treasury: PublicKey,
+        treasuryToken: PublicKey,
+        mintToken: PublicKey,
+        amount: number
+
+    ): Promise<TransactionInstruction> => {
+
+        const mspOpsAccount = Constants.MSP_OPERATIONS_ADDRESS.toPublicKey();
+        const splTokenProgramAccount = Constants.TOKEN_PROGRAM_ADDRESS.toPublicKey();
+        const keys = [
+            { pubkey: contributor, isSigner: true, isWritable: false },
+            { pubkey: contributorToken, isSigner: false, isWritable: true },
+            { pubkey: treasury, isSigner: false, isWritable: false },
+            { pubkey: treasuryToken, isSigner: false, isWritable: true },
+            { pubkey: mintToken, isSigner: false, isWritable: false },
+            { pubkey: stream, isSigner: false, isWritable: true },
+            { pubkey: mspOpsAccount, isSigner: false, isWritable: true },
+            // { pubkey: programId, isSigner: false, isWritable: false },
+            { pubkey: splTokenProgramAccount, isSigner: false, isWritable: false },
+            { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }
+        ];
+
+        let data = Buffer.alloc(Layout.addFundsLayout.span)
+        {
+            const decodedData = {
+                tag: 1,
+                contribution_amount: amount
+            };
+
+            const encodeLength = Layout.addFundsLayout.encode(decodedData, data);
+            data = data.slice(0, encodeLength);
+        };
+
+        return new TransactionInstruction({
+            keys,
+            programId,
+            data,
         });
     }
 }

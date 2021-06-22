@@ -1,26 +1,58 @@
-import { BN } from "@project-serum/anchor";
-import { Connection, Keypair, PublicKey, SystemProgram } from "@solana/web3.js";
+import { BN, Provider, Wallet } from "@project-serum/anchor";
+import { Commitment, Connection, Finality, ParsedConfirmedTransaction, PartiallyDecodedInstruction, PublicKey, TransactionSignature } from "@solana/web3.js";
 import { Constants } from "./constants";
 import { Layout } from "./layout";
 import { StreamInfo } from "./money-streaming";
-import { u64Number } from "./u64Number";
+import { u64Number } from "./u64n";
+import { MintInfo, MintLayout, u64 } from '@solana/spl-token';
+import { TokenInfo, TokenListContainer, TokenListProvider } from "@solana/spl-token-registry";
+import { Swap } from "@project-serum/swap";
+import { MEAN_TOKEN_LIST } from "./token-list";
+import base64 from "base64-js";
+import base58 from "bs58";
 
-import {
-    MintInfo,
-    MintLayout,
-    u64
-
-} from '@solana/spl-token';
-import { getTokenDecimals } from "./token-list";
+var pathUtil = require('path');
 
 declare global {
     export interface String {
         toPublicKey(): PublicKey;
     }
+
+    export interface Array<T> {
+        getChainTokens(this: TokenInfo[], cluster: string): TokenInfo[];
+    }
 }
 
 String.prototype.toPublicKey = function (): PublicKey {
     return new PublicKey(this.toString());
+}
+
+Array.prototype.getChainTokens = function (cluster: string): TokenInfo[] {
+    let chainId = 0;
+
+    switch (cluster) {
+        case 'MAINNET' || 'Mainnet' || 'mainnet': {
+            chainId = 101;
+            break;
+        }
+        case 'TESTNET' || 'Testnet' || 'testnet': {
+            chainId = 102;
+            break;
+        }
+        case 'DEVNET' || 'Devnet' || 'devnet': {
+            chainId = 103;
+            break;
+        }
+        default: {
+            break;
+        }
+    }
+
+    if (chainId === 0) return [] as TokenInfo[];
+
+    return this.filter(function (t, _) {
+        return t.chainId === chainId;
+    });
 }
 
 let defaultStreamInfo: StreamInfo = {
@@ -217,6 +249,88 @@ export async function listStreams(
     return orderedStreams;
 }
 
+function parseActivityData(
+    tx: ParsedConfirmedTransaction,
+    tokens: TokenInfo[],
+    friendly: boolean = true
+
+): any {
+
+    let lastIxIndex = tx.transaction.message.instructions.length - 1;
+    let lastIx = tx.transaction.message.instructions[lastIxIndex] as PartiallyDecodedInstruction;
+    let buffer = base58.decode(lastIx.data);
+    let actionIndex = buffer.readUInt8(0);
+
+    if (actionIndex <= 2) {
+        let blockTime = (tx.blockTime as number) * 1000; // mult by 1000 to add milliseconds
+        let action = actionIndex === 2 ? 'withdraw' : 'deposit';
+        let layoutBuffer = Buffer.alloc(buffer.length, buffer);
+        let data: any,
+            amount = 0;
+
+        if (actionIndex === 0) {
+            data = Layout.createStreamLayout.decode(layoutBuffer);
+            amount = data.funding_amount;
+        } else if (actionIndex === 1) {
+            data = Layout.addFundsLayout.decode(layoutBuffer);
+            amount = data.contribution_amount;
+        } else {
+            data = Layout.withdrawLayout.decode(layoutBuffer);
+            amount = data.withdrawal_amount;
+        }
+
+        let mint: string;
+
+        if (tx.meta?.preTokenBalances?.length) {
+            mint = tx.meta.preTokenBalances[0].mint;
+        } else if (tx.meta?.postTokenBalances?.length) {
+            mint = tx.meta.postTokenBalances[0].mint;
+        } else {
+            mint = 'Unknown';
+        }
+
+        let tokenInfo = tokens.find((t) => t.address === mint);
+
+        return Object.assign({}, {
+            blockTime: blockTime,
+            utcDate: new Date(blockTime).toUTCString(),
+            action: action,
+            amount: amount,
+            mint: !tokenInfo ? mint : (friendly ? tokenInfo.symbol : tokenInfo.address),
+            type: action === 'withdraw' ? 'in' : 'out',
+        });
+    }
+}
+
+export async function listStreamActivity(
+    connection: Connection,
+    cluster: string | number,
+    streamId: PublicKey,
+    commitment?: Commitment | string,
+    friendly: boolean = true
+
+): Promise<any[]> {
+
+    let activity: any = [];
+    let commitmentValue = commitment !== undefined ? commitment as Finality : 'confirmed';
+    let signatures = await connection.getConfirmedSignaturesForAddress2(streamId, {}, commitmentValue);
+    let tokenList = await getTokenList(cluster);
+
+    for (let sign of signatures) {
+        let tx = await connection.getParsedConfirmedTransaction(sign.signature, commitmentValue);
+
+        if (tx !== null) {
+            activity.push(parseActivityData(
+                tx,
+                tokenList,
+                friendly
+            ));
+        }
+    }
+
+    return activity.sort((a: { blockTime: number; }, b: { blockTime: number; }) => (b.blockTime - a.blockTime));
+}
+
 export function getSeedBuffer(
     from: PublicKey,
     programId: PublicKey
@@ -296,12 +410,12 @@ export async function findATokenAddress(
     )[0];
 }
 
-export function toNative(amount: number) {
-    return new BN(amount * 10 ** Constants.DECIMALS);
+export function toNative(amount: number, decimals: number) {
+    return new BN(amount * 10 ** decimals);
 }
 
-export function fromNative(amount: BN) {
-    return amount.toNumber() / 10 ** Constants.DECIMALS;
+export function fromNative(amount: BN, decimals: number) {
+    return amount.toNumber() / 10 ** decimals;
 }
 
 export const getMintAccount = async (
@@ -357,4 +471,154 @@ export function convertLocalDateToUTCIgnoringTimezone(date: Date) {
     );
 
     return new Date(timestamp);
+}
+
+export async function getTokenList(
+    cluster: string | number
+
+): Promise<TokenInfo[]> {
+
+    let chainId = 0;
+
+    switch (cluster) {
+        case 'https://api.mainnet-beta.solana.com' || 101: {
+            chainId = 101;
+            break;
+        }
+        case 'https://api.testnet.solana.com' || 102: {
+            chainId = 102;
+            break;
+        }
+        case 'https://api.devnet.solana.com' || 103: {
+            chainId = 103;
+            break;
+        }
+        default: {
+            break;
+        }
+    }
+
+    if (chainId === 0) return [] as Array<TokenInfo>;
+
+    return MEAN_TOKEN_LIST.filter((t) => t.chainId === chainId);
+}
+
+export async function swapClient(
+    connection: Connection,
+    // cluster: string,
+    wallet: Wallet,
+    commitment: Commitment | string
+
+): Promise<Swap> {
+
+    let preflightCommitment = typeof commitment === 'string' ? commitment : 'finalized';
+    let provider = new Provider(
+        connection,
+        wallet,
+        {
+            commitment: preflightCommitment as Commitment,
+            preflightCommitment: preflightCommitment as Commitment
+        }
+    );
+
+    // let tokenList = getTokenList(cluster);
+    let tokenListContainer = await new TokenListProvider().resolve();
+    let tokenList = tokenListContainer.filterByChainId(101).getList();
+    let container = new TokenListContainer(tokenList);
+
+    return new Swap(provider, container);
+}
+
+// async function getMarketAddress(
+//     tokenList: TokenListContainer,
+//     usdxMint: PublicKey,
+//     baseMint: PublicKey
+
+// ): Promise<PublicKey> {
+
+//     const market = tokenList.filterByClusterSlug(Constants.DEVNET_CLUSTER)
+//         .getList()
+//         .filter((t) => {
+//             if (t.address !== baseMint?.toString()) {
+//                 return false;
+//             }
+//             if (usdxMint.equals(USDC_PUBKEY)) {
+//                 return t.extensions?.serumV3Usdc !== undefined;
+//             } else if (usdxMint.equals(USDT_PUBKEY)) {
+//                 return t.extensions?.serumV3Usdt !== undefined;
+//             } else {
+//                 return false;
+//             }
+//         })
+//         .map((t) => {
+//             if (usdxMint!.equals(USDC_PUBKEY)) {
+//                 return new PublicKey(t.extensions!.serumV3Usdc as string);
+//             } else {
+//                 return new PublicKey(t.extensions!.serumV3Usdt as string);
+//             }
+//         })[0];
+
+//     if (market === undefined) {
+//         return null;
+//     }
+
+//     return market;
+// }
+
+export async function swapTokens(
+    connection: Connection,
+    client: Swap,
+    fromWallet: PublicKey,
+    fromMint: PublicKey,
+    toWallet: PublicKey,
+    toMint: PublicKey,
+    amount: number
+
+): Promise<Array<TransactionSignature>> {
+
+    // const serumDexKey = Constants.SERUM_DEX_ADDRESS.toPublicKey();
+    // const fromMarket = await Market.load(
+    //     connection,
+    //     fromMint,
+    //     { commitment: connection.commitment },
+    //     Constants.TOKEN_PROGRAM_ADDRESS.toPublicKey()
+    // );
+
+    // const toMarket = await Market.load(
+    //     connection,
+    //     toMint,
+    //     { commitment: connection.commitment },
+    //     Constants.TOKEN_PROGRAM_ADDRESS.toPublicKey()
+    // );
+
+    // const fromMintAccount = await getMintAccount(connection, fromMint);
+    // const toMintAccount = await getMintAccount(connection, toMint);
+    const bn = toNative(amount, 9);
+    const minExpectedExRate = {
+        rate: bn.mul(new BN(99)).div(new BN(100)), // 0.1%
+        fromDecimals: 9,
+        quoteDecimals: 6,
+        strict: false
+    };
+
+    const txs = client.swap({
+        fromMint: fromMint,
+        toMint: toMint,
+        // fromWallet,
+        // toWallet,
+        // fromMarket,
+        // toMarket,
+        amount: bn,
+        minExchangeRate: minExpectedExRate
+    });
+
+    return txs;
+}
+
+export function encode(data: Buffer): string {
+    return base64.fromByteArray(data);
+}
+
+export function decode(data: string): Buffer {
+    return Buffer.from(base64.toByteArray(data));
 }
