@@ -48,7 +48,8 @@ impl Processor {
                 start_utc,
                 rate_cliff_in_seconds,
                 cliff_vest_amount,
-                cliff_vest_percent
+                cliff_vest_percent,
+                auto_off_clock_in_seconds
 
             } => {
 
@@ -65,7 +66,8 @@ impl Processor {
                     start_utc,
                     rate_cliff_in_seconds,
                     cliff_vest_amount,
-                    cliff_vest_percent
+                    cliff_vest_percent,
+                    auto_off_clock_in_seconds
                 )
             },
 
@@ -86,6 +88,24 @@ impl Processor {
                     accounts, 
                     program_id, 
                     withdrawal_amount
+                )
+            },
+
+            StreamInstruction::PauseStream => {
+                msg!("Instruction: PauseStream");
+
+                Self::process_pause_stream(
+                    accounts, 
+                    program_id
+                )
+            },
+
+            StreamInstruction::ResumeStream => {
+                msg!("Instruction: ResumeStream");
+
+                Self::process_resume_stream(
+                    accounts, 
+                    program_id
                 )
             },
 
@@ -162,7 +182,8 @@ impl Processor {
         start_utc: u64,
         rate_cliff_in_seconds: u64,
         cliff_vest_amount: f64,
-        cliff_vest_percent: f64
+        cliff_vest_percent: f64,
+        auto_off_clock_in_seconds: u64
         
     ) -> ProgramResult {
 
@@ -308,6 +329,10 @@ impl Processor {
             stream.treasury_estimated_depletion_utc = 0;
             stream.total_deposits = funding_amount;
             stream.total_withdrawals = 0.0;
+            stream.escrow_vested_amount_snap = 0.0;
+            stream.escrow_vested_amount_snap_block_height = start_utc / 1000;
+            stream.auto_off_clock_in_seconds = auto_off_clock_in_seconds;
+            stream.on_clock = true;
             stream.initialized = true;
                     
             Stream::pack_into_slice(&stream, &mut stream_account_info.data.borrow_mut());
@@ -451,10 +476,17 @@ impl Processor {
             return Err(StreamError::InstructionNotAuthorized.into());
         }
 
+        let clock_state = match stream.on_clock {
+            false => 0,
+            true => 1,
+            _ => return Err(StreamError::InvalidStreamData.into()),
+        };
+
         let clock = Clock::get()?;
-        let rate = stream.rate_amount / (stream.rate_interval_in_seconds as f64);
-        let elapsed_time = ((clock.unix_timestamp - ((stream.start_utc / 1000) as i64)) as f64);
-        let mut escrow_vested_amount = rate * elapsed_time;
+        let current_block_height = clock.unix_timestamp as u64;
+        let rate = stream.rate_amount / (stream.rate_interval_in_seconds as f64) * (clock_state as f64);
+        let elapsed_time = ((current_block_height - stream.escrow_vested_amount_snap_block_height) as f64);
+        let mut escrow_vested_amount = stream.escrow_vested_amount_snap + rate * elapsed_time;
         
         if escrow_vested_amount > stream.total_deposits - stream.total_withdrawals {
             escrow_vested_amount = stream.total_deposits - stream.total_withdrawals;
@@ -465,68 +497,68 @@ impl Processor {
         }
 
         let escrow_unvested_amount = stream.total_deposits - stream.total_withdrawals - escrow_vested_amount;
-        let fees = 0.025f64;
-        let fees_lamports = fees * (LAMPORTS_PER_SOL as f64);
 
         if withdrawal_amount > escrow_vested_amount {
             return Err(StreamError::NotAllowedWithdrawalAmount.into());
         }
 
         // Withdraw
-        if withdrawal_amount > 0.0
-        {
-            let msp_seed = String::from("MoneyStreamingProgram");
-            let treasury_seed: &[&[_]] = &[
-                &stream_account_info.key.to_bytes(),
-                &msp_account_info.key.to_bytes(),
-                &msp_seed.as_bytes()
-            ];
+        let msp_seed = String::from("MoneyStreamingProgram");
+        let treasury_seed: &[&[_]] = &[
+            &stream_account_info.key.to_bytes(),
+            &msp_account_info.key.to_bytes(),
+            &msp_seed.as_bytes()
+        ];
 
-            let (treasury_address, treasury_bump_seed) = Pubkey::find_program_address(
-                treasury_seed,
-                program_id
-            );
+        let (treasury_address, treasury_bump_seed) = Pubkey::find_program_address(
+            treasury_seed,
+            program_id
+        );
 
-            if treasury_address != *treasury_account_info.key {
-                msg!("Error: Treasury address does not match seed derivation");
-                return Err(StreamError::InvalidStreamInstruction.into());
-            }
-
-            let treasury_signer_seed: &[&[_]] = &[
-                &stream_account_info.key.to_bytes(),
-                &msp_account_info.key.to_bytes(),
-                &msp_seed.as_bytes(),
-                &[treasury_bump_seed]
-            ];
-
-            let mint = spl_token::state::Mint::unpack_from_slice(&mint_account_info.data.borrow())?;
-            let pow = num_traits::pow(10f64, mint.decimals.into());
-            let amount = withdrawal_amount * pow;
-            let withdraw_ix = spl_token::instruction::transfer(
-                token_program_account_info.key,
-                treasury_token_account_info.key,
-                beneficiary_token_account_info.key,
-                treasury_account_info.key,
-                &[],
-                amount as u64
-            )?;
-
-            invoke_signed(&withdraw_ix, 
-                &[
-                    token_program_account_info.clone(),
-                    treasury_token_account_info.clone(),
-                    beneficiary_token_account_info.clone(),
-                    treasury_account_info.clone(),
-                    msp_account_info.clone()
-                ],
-                &[treasury_signer_seed]
-            );
-
-            msg!("Transfer {:?} tokens to: {:?}", 
-                amount, 
-                (*beneficiary_token_account_info.key).to_string()
-            );
+        if treasury_address != *treasury_account_info.key {
+            msg!("Error: Treasury address does not match seed derivation");
+            return Err(StreamError::InvalidStreamInstruction.into());
         }
+
+        let treasury_signer_seed: &[&[_]] = &[
+            &stream_account_info.key.to_bytes(),
+            &msp_account_info.key.to_bytes(),
+            &msp_seed.as_bytes(),
+            &[treasury_bump_seed]
+        ];
+
+        let mint = spl_token::state::Mint::unpack_from_slice(&mint_account_info.data.borrow())?;
+        let pow = num_traits::pow(10f64, mint.decimals.into());
+        let amount = withdrawal_amount * pow;
+        let withdraw_ix = spl_token::instruction::transfer(
+            token_program_account_info.key,
+            treasury_token_account_info.key,
+            beneficiary_token_account_info.key,
+            treasury_account_info.key,
+            &[],
+            amount as u64
+        )?;
+
+        invoke_signed(&withdraw_ix, 
+            &[
+                token_program_account_info.clone(),
+                treasury_token_account_info.clone(),
+                beneficiary_token_account_info.clone(),
+                treasury_account_info.clone(),
+                msp_account_info.clone()
+            ],
+            &[treasury_signer_seed]
+        );
+
+        msg!("Transfer {:?} tokens to: {:?}", 
+            amount, 
+            (*beneficiary_token_account_info.key).to_string()
+        );
+
+        // Update stream account data
+        stream.total_withdrawals += withdrawal_amount;
+        // Save
+        Stream::pack_into_slice(&stream, &mut stream_account_info.data.borrow_mut());
 
         // Fees
         let fees = 0.025f64;
@@ -547,12 +579,141 @@ impl Processor {
             fees_lamports, 
             (*msp_ops_account_info.key).to_string()
         );
+        
+        Ok(())
+    }
 
-        // Update stream account data
-        stream.total_withdrawals += withdrawal_amount;
+    fn process_pause_stream(
+        accounts: &[AccountInfo],
+        program_id: &Pubkey
+
+    ) -> ProgramResult {
+
+        let account_info_iter = &mut accounts.iter();
+        let initializer_account_info = next_account_info(account_info_iter)?;
+        let stream_account_info = next_account_info(account_info_iter)?;
+        let msp_ops_account_info = next_account_info(account_info_iter)?;
+        let system_account_info = next_account_info(account_info_iter)?;
+
+        if !initializer_account_info.is_signer {
+            return Err(StreamError::MissingInstructionSignature.into());
+        }
+
+        let mut stream = Stream::unpack_from_slice(&stream_account_info.data.borrow())?;
+
+        if stream_account_info.owner != program_id ||
+           (*initializer_account_info.key != stream.treasurer_address &&
+            *initializer_account_info.key != stream.beneficiary_address &&
+            initializer_account_info.key != program_id) // if auto pause then the MSP will be the initializer
+        {
+            return Err(StreamError::InstructionNotAuthorized.into());
+        }
+
+        // Pausing the stream and updating data
+        let clock_state = match stream.on_clock {
+            false => 0,
+            true => 1,
+            _ => return Err(StreamError::InvalidStreamData.into()),
+        };
+
+        let clock = Clock::get()?;
+        let current_block_height = clock.unix_timestamp as u64;
+        let rate = stream.rate_amount / (stream.rate_interval_in_seconds as f64) * (clock_state as f64);
+        let elapsed_time = ((current_block_height - stream.escrow_vested_amount_snap_block_height) as f64);
+        let mut escrow_vested_amount = stream.escrow_vested_amount_snap + rate * elapsed_time;
+        
+        if escrow_vested_amount > stream.total_deposits - stream.total_withdrawals {
+            escrow_vested_amount = stream.total_deposits - stream.total_withdrawals;
+        }
+
+        stream.escrow_vested_amount_snap = escrow_vested_amount;
+        stream.escrow_vested_amount_snap_block_height = current_block_height;
+        stream.on_clock = false;
         // Save
         Stream::pack_into_slice(&stream, &mut stream_account_info.data.borrow_mut());
-        
+        msg!("Pausing the stream");
+
+        if initializer_account_info.key != program_id
+        {
+            // Debit fees if the initializer of the instruction is not the MSP (auto pause)
+            let fees = 0.025f64;
+            let fees_lamports = fees * (LAMPORTS_PER_SOL as f64);
+            let fees_transfer_ix = system_instruction::transfer(
+                initializer_account_info.key,
+                msp_ops_account_info.key,
+                fees_lamports as u64
+            );
+
+            invoke(&fees_transfer_ix, &[
+                initializer_account_info.clone(),
+                msp_ops_account_info.clone(),
+                system_account_info.clone()
+            ]);
+
+            msg!("Transfer {:?} lamports of fee to: {:?}", 
+                fees_lamports, 
+                (*msp_ops_account_info.key).to_string()
+            );
+        }
+
+        Ok(())
+    }
+
+    fn process_resume_stream(
+        accounts: &[AccountInfo],
+        program_id: &Pubkey
+
+    ) -> ProgramResult {
+
+        let account_info_iter = &mut accounts.iter();
+        let initializer_account_info = next_account_info(account_info_iter)?;
+        let stream_account_info = next_account_info(account_info_iter)?;
+        let msp_ops_account_info = next_account_info(account_info_iter)?;
+        let system_account_info = next_account_info(account_info_iter)?;
+
+        if !initializer_account_info.is_signer {
+            return Err(StreamError::MissingInstructionSignature.into());
+        }
+
+        let mut stream = Stream::unpack_from_slice(&stream_account_info.data.borrow())?;
+
+        if stream_account_info.owner != program_id || 
+           (*initializer_account_info.key != stream.treasurer_address &&
+            *initializer_account_info.key != stream.beneficiary_address &&
+            initializer_account_info.key != program_id) // if auto resume then the MSP will be the initializer
+        {
+            return Err(StreamError::InstructionNotAuthorized.into());
+        }
+
+        // Resuming the stream and updating data
+        stream.on_clock = true;
+        // Save
+        Stream::pack_into_slice(&stream, &mut stream_account_info.data.borrow_mut());
+        msg!("Resuming the stream");
+
+        if initializer_account_info.key != program_id
+        {
+            // Debit fees if the initializer of the instruction is not the MSP (auto pause)
+            let fees = 0.025f64;
+            let fees_lamports = fees * (LAMPORTS_PER_SOL as f64);
+            let fees_transfer_ix = system_instruction::transfer(
+                initializer_account_info.key,
+                msp_ops_account_info.key,
+                fees_lamports as u64
+            );
+
+            invoke(&fees_transfer_ix, &[
+                initializer_account_info.clone(),
+                msp_ops_account_info.clone(),
+                system_account_info.clone()
+            ]);
+
+            msg!("Transfer {:?} lamports of fee to: {:?}", 
+                fees_lamports, 
+                (*msp_ops_account_info.key).to_string()
+            );
+        }
+
         Ok(())
     }
 
@@ -793,21 +954,27 @@ impl Processor {
         
         // Stoping the stream and updating data
         msg!("Stopping the stream");
+
+        let clock_state = match stream.on_clock {
+            false => 0,
+            true => 1,
+            _ => return Err(StreamError::InvalidStreamData.into()),
+        };
+
         let clock = Clock::get()?;
-        let rate = stream.rate_amount / (stream.rate_interval_in_seconds as f64);
-        let elapsed_time = ((clock.unix_timestamp - ((stream.start_utc / 1000) as i64)) as f64);
-        let mut escrow_vested_amount = rate * elapsed_time;
+        let current_block_height = clock.unix_timestamp as u64;
+        let rate = stream.rate_amount / (stream.rate_interval_in_seconds as f64) * (clock_state as f64);
+        let elapsed_time = ((current_block_height - stream.escrow_vested_amount_snap_block_height) as f64);
+        let mut escrow_vested_amount = stream.escrow_vested_amount_snap + rate * elapsed_time;
         
         if escrow_vested_amount > stream.total_deposits - stream.total_withdrawals {
             escrow_vested_amount = stream.total_deposits - stream.total_withdrawals;
         }
 
         let escrow_unvested_amount = stream.total_deposits - stream.total_withdrawals - escrow_vested_amount;
-        let fees = 0.05f64;
-        let fees_lamports = fees * (LAMPORTS_PER_SOL as f64);
-        stream.rate_amount = 0.0;
+        stream.on_clock = false;
         
-        // Creting escrow vested amount to the beneficiary
+        // Crediting escrow vested amount to the beneficiary
         if escrow_vested_amount > 0.0 
         {
             let msp_seed = String::from("MoneyStreamingProgram");
@@ -871,26 +1038,6 @@ impl Processor {
             // credit each amount
         }
 
-        // Debit fees from the initializer of the instruction
-        let fees = 0.05f64;
-        let fees_lamports = fees * (LAMPORTS_PER_SOL as f64);
-        let fees_transfer_ix = system_instruction::transfer(
-            initializer_account_info.key,
-            msp_ops_account_info.key,
-            fees_lamports as u64
-        );
-
-        invoke(&fees_transfer_ix, &[
-            initializer_account_info.clone(),
-            msp_ops_account_info.clone(),
-            system_account_info.clone()
-        ]);
-
-        msg!("Transfer {:?} lamports of fee to: {:?}", 
-            fees_lamports, 
-            (*msp_ops_account_info.key).to_string()
-        );
-
         // Close stream account
         let treasurer_lamports = treasurer_account_info.lamports();
         **treasurer_account_info.lamports.borrow_mut() = treasurer_lamports
@@ -916,6 +1063,26 @@ impl Processor {
         // Save
         Stream::pack_into_slice(&stream, &mut stream_account_info.data.borrow_mut());
         msg!("Closing the stream");
+
+        // Debit fees from the initializer of the instruction
+        let fees = 0.05f64;
+        let fees_lamports = fees * (LAMPORTS_PER_SOL as f64);
+        let fees_transfer_ix = system_instruction::transfer(
+            initializer_account_info.key,
+            msp_ops_account_info.key,
+            fees_lamports as u64
+        );
+
+        invoke(&fees_transfer_ix, &[
+            initializer_account_info.clone(),
+            msp_ops_account_info.clone(),
+            system_account_info.clone()
+        ]);
+
+        msg!("Transfer {:?} lamports of fee to: {:?}", 
+            fees_lamports, 
+            (*msp_ops_account_info.key).to_string()
+        );
 
         Ok(())
     }

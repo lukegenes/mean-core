@@ -163,7 +163,11 @@ pub struct Stream {
     pub treasury_address: Pubkey,
     pub treasury_estimated_depletion_utc: u64,
     pub total_deposits: f64,
-    pub total_withdrawals: f64
+    pub total_withdrawals: f64,
+    pub escrow_vested_amount_snap: f64,
+    pub escrow_vested_amount_snap_block_height: u64,
+    pub auto_off_clock_in_seconds: u64,
+    pub on_clock: bool
 }
 
 impl Sealed for Stream {}
@@ -191,13 +195,17 @@ impl Default for Stream {
             treasury_address: Pubkey::default(), 
             treasury_estimated_depletion_utc: 0,
             total_deposits: 0.0,
-            total_withdrawals: 0.0
+            total_withdrawals: 0.0,
+            escrow_vested_amount_snap: 0.0,
+            escrow_vested_amount_snap_block_height: 0,
+            auto_off_clock_in_seconds: 0,
+            on_clock: true
         }
     }
 }
 
 impl Pack for Stream {
-    const LEN: usize = 233;
+    const LEN: usize = 258;
 
     fn pack_into_slice(&self, output: &mut [u8]) {
         let output = array_mut_ref![output, 0, Stream::LEN];
@@ -216,9 +224,13 @@ impl Pack for Stream {
             treasury_address_output,
             treasury_estimated_depletion_utc_output,
             total_deposits_output,
-            total_withdrawals_output
+            total_withdrawals_output,
+            escrow_vested_amount_snap_output,
+            escrow_vested_amount_snap_block_height_output,
+            auto_off_clock_in_seconds_output,
+            on_clock_output,
             
-        ) = mut_array_refs![output, 1, 32, 32, 8, 8, 8, 8, 8, 8, 32, 32, 32, 8, 8, 8];
+        ) = mut_array_refs![output, 1, 32, 32, 8, 8, 8, 8, 8, 8, 32, 32, 32, 8, 8, 8, 8, 8, 8, 1];
 
         let Stream {
             initialized,
@@ -235,7 +247,11 @@ impl Pack for Stream {
             treasury_address,
             treasury_estimated_depletion_utc,
             total_deposits,
-            total_withdrawals
+            total_withdrawals,
+            escrow_vested_amount_snap,
+            escrow_vested_amount_snap_block_height,
+            auto_off_clock_in_seconds,
+            on_clock
 
         } = self;
 
@@ -254,6 +270,10 @@ impl Pack for Stream {
         *treasury_estimated_depletion_utc_output = treasury_estimated_depletion_utc.to_le_bytes();
         *total_deposits_output = total_deposits.to_le_bytes();
         *total_withdrawals_output = total_withdrawals.to_le_bytes();
+        *escrow_vested_amount_snap_output = escrow_vested_amount_snap.to_le_bytes();
+        *escrow_vested_amount_snap_block_height_output = escrow_vested_amount_snap_block_height.to_le_bytes();
+        *auto_off_clock_in_seconds_output = auto_off_clock_in_seconds.to_le_bytes();
+        on_clock_output[0] = *on_clock as u8;
     }
     
     fn unpack_from_slice(input: &[u8]) -> Result<Self, ProgramError> {
@@ -273,11 +293,21 @@ impl Pack for Stream {
             treasury_address,
             treasury_estimated_depletion_utc,
             total_deposits,
-            total_withdrawals
+            total_withdrawals,
+            escrow_vested_amount_snap,
+            escrow_vested_amount_snap_block_height,
+            auto_off_clock_in_seconds,
+            on_clock
             
-        ) = array_refs![input, 1, 32, 32, 8, 8, 8, 8, 8, 8, 32, 32, 32, 8, 8, 8];
+        ) = array_refs![input, 1, 32, 32, 8, 8, 8, 8, 8, 8, 32, 32, 32, 8, 8, 8, 8, 8, 8, 1];
 
         let initialized = match initialized {
+            [0] => false,
+            [1] => true,
+            _ => return Err(StreamError::InvalidStreamData.into()),
+        };
+
+        let on_clock = match on_clock {
             [0] => false,
             [1] => true,
             _ => return Err(StreamError::InvalidStreamData.into()),
@@ -299,6 +329,10 @@ impl Pack for Stream {
             treasury_estimated_depletion_utc: u64::from_le_bytes(*treasury_estimated_depletion_utc),
             total_deposits: f64::from_le_bytes(*total_deposits),
             total_withdrawals: f64::from_le_bytes(*total_withdrawals),
+            escrow_vested_amount_snap: f64::from_le_bytes(*escrow_vested_amount_snap),
+            escrow_vested_amount_snap_block_height: u64::from_le_bytes(*escrow_vested_amount_snap_block_height),
+            auto_off_clock_in_seconds: u64::from_le_bytes(*auto_off_clock_in_seconds),
+            on_clock
         })
     }
 }

@@ -37,6 +37,7 @@ pub enum StreamInstruction {
         rate_cliff_in_seconds: u64,
         cliff_vest_amount: f64, // OPTIONAL
         cliff_vest_percent: f64, // OPTIONAL
+        auto_off_clock_in_seconds: u64
     },
 
     /// 0. `[signer]` The contributor account
@@ -65,6 +66,18 @@ pub enum StreamInstruction {
     Withdraw { 
         withdrawal_amount: f64
     },
+
+    /// 0. `[signer]` The initializer of the transaction (msp => `auto pause`, treasurer or beneficiary)
+    /// 1. `[writable]` The stream account (Money stream state account).
+    /// 2. `[writable]` The Money Streaming Protocol operating account.
+    /// 3. `[]` System Program account.
+    PauseStream,
+
+    /// 0. `[signer]` The initializer of the transaction (msp => `auto resume`, treasurer or beneficiary)
+    /// 1. `[writable]` The stream account (Money stream state account).
+    /// 2. `[writable]` The Money Streaming Protocol operating account.
+    /// 3. `[]` System Program account.
+    ResumeStream,
 
     /// 0. `[signer]` The initializer of the transaction (treasurer or beneficiary)
     /// 1. `[writable]` The stream terms account (Update proposal account).
@@ -124,10 +137,12 @@ impl StreamInstruction {
             0 => Self::unpack_create_stream(result)?,
             1 => Self::unpack_add_funds(result)?,
             2 => Self::unpack_withdraw(result)?,
-            3 => Self::unpack_propose_update(result)?,
-            4 => Self::unpack_answer_update(result)?,
-            5 => Ok(Self::CloseStream)?,
-            6 => Ok(Self::CloseTreasury)?,
+            3 => Ok(Self::PauseStream)?,
+            4 => Ok(Self::ResumeStream)?,
+            5 => Self::unpack_propose_update(result)?,
+            6 => Self::unpack_answer_update(result)?,
+            7 => Ok(Self::CloseStream)?,
+            8 => Ok(Self::CloseTreasury)?,
 
             _ => return Err(StreamError::InvalidStreamInstruction.into()),
         })
@@ -147,7 +162,8 @@ impl StreamInstruction {
                 start_utc,
                 rate_cliff_in_seconds,
                 cliff_vest_amount,
-                cliff_vest_percent
+                cliff_vest_percent,
+                auto_off_clock_in_seconds
 
             } => {
 
@@ -162,6 +178,7 @@ impl StreamInstruction {
                 buf.extend_from_slice(&rate_cliff_in_seconds.to_le_bytes());
                 buf.extend_from_slice(&cliff_vest_amount.to_le_bytes());
                 buf.extend_from_slice(&cliff_vest_percent.to_le_bytes());
+                buf.extend_from_slice(&auto_off_clock_in_seconds.to_le_bytes());
             },
 
             &Self::AddFunds { contribution_amount } => {
@@ -173,6 +190,10 @@ impl StreamInstruction {
                 buf.push(2);
                 buf.extend_from_slice(&withdrawal_amount.to_le_bytes());
             },
+
+            &Self::PauseStream => buf.push(3),
+
+            &Self::ResumeStream => buf.push(4),
 
             Self::ProposeUpdate {
                 proposed_by,
@@ -187,7 +208,7 @@ impl StreamInstruction {
                 rate_cliff_in_seconds
 
             } => {
-                buf.push(3);
+                buf.push(5);
 
                 buf.extend_from_slice(proposed_by.as_ref());
                 buf.extend_from_slice(stream_name.as_ref());
@@ -202,7 +223,7 @@ impl StreamInstruction {
             },
 
             &Self::AnswerUpdate { answer } => { 
-                buf.push(4);
+                buf.push(6);
 
                 let answer = match answer {
                     false => [0],
@@ -212,9 +233,9 @@ impl StreamInstruction {
                 buf.push(answer[0] as u8);
             },
 
-            &Self::CloseStream  => buf.push(5),
+            &Self::CloseStream => buf.push(7),
 
-            &Self::CloseTreasury => buf.push(6),
+            &Self::CloseTreasury => buf.push(8),
         };
 
         buf
@@ -243,8 +264,11 @@ impl StreamInstruction {
         let (cliff_vest_amount, result) = result.split_at(8);
         let cliff_vest_amount = Self::unpack_f64(cliff_vest_amount)?;
 
-        let (cliff_vest_percent, _result) = result.split_at(8);
-        let cliff_vest_percent = Self::unpack_f64(cliff_vest_percent)?;        
+        let (cliff_vest_percent, result) = result.split_at(8);
+        let cliff_vest_percent = Self::unpack_f64(cliff_vest_percent)?;
+
+        let (auto_off_clock_in_seconds, _result) = result.split_at(8);
+        let auto_off_clock_in_seconds = Self::unpack_u64(auto_off_clock_in_seconds)?;
 
         Ok(Self::CreateStream {
             beneficiary_address,
@@ -255,7 +279,8 @@ impl StreamInstruction {
             start_utc,
             rate_cliff_in_seconds,
             cliff_vest_amount,
-            cliff_vest_percent
+            cliff_vest_percent,
+            auto_off_clock_in_seconds
         })
     }
 
@@ -380,6 +405,7 @@ impl StreamInstruction {
     rate_cliff_in_seconds: u64,
     cliff_vest_amount: f64,
     cliff_vest_percent: f64,
+    auto_off_clock_in_seconds: u64
 
  ) -> Result<Instruction, StreamError> {
 
@@ -395,6 +421,7 @@ impl StreamInstruction {
         rate_cliff_in_seconds,
         cliff_vest_amount,
         cliff_vest_percent,
+        auto_off_clock_in_seconds
 
     }.pack();
 
