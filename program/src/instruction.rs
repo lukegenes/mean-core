@@ -37,7 +37,7 @@ pub enum StreamInstruction {
         rate_cliff_in_seconds: u64,
         cliff_vest_amount: f64, // OPTIONAL
         cliff_vest_percent: f64, // OPTIONAL
-        auto_off_clock_in_seconds: u64
+        auto_pause_in_seconds: u64
     },
 
     /// 0. `[signer]` The contributor account
@@ -50,7 +50,8 @@ pub enum StreamInstruction {
     /// 7.  [] The Money Streaming Program account.
     /// 8. `[]` The SPL Token Program account.
     AddFunds {
-        contribution_amount: f64
+        contribution_amount: f64,
+        resume: bool
     },
 
     /// 0. `[signer]` The beneficiary account
@@ -163,7 +164,7 @@ impl StreamInstruction {
                 rate_cliff_in_seconds,
                 cliff_vest_amount,
                 cliff_vest_percent,
-                auto_off_clock_in_seconds
+                auto_pause_in_seconds
 
             } => {
 
@@ -178,12 +179,24 @@ impl StreamInstruction {
                 buf.extend_from_slice(&rate_cliff_in_seconds.to_le_bytes());
                 buf.extend_from_slice(&cliff_vest_amount.to_le_bytes());
                 buf.extend_from_slice(&cliff_vest_percent.to_le_bytes());
-                buf.extend_from_slice(&auto_off_clock_in_seconds.to_le_bytes());
+                buf.extend_from_slice(&auto_pause_in_seconds.to_le_bytes());
             },
 
-            &Self::AddFunds { contribution_amount } => {
+            &Self::AddFunds { 
+                contribution_amount,
+                resume
+
+            } => {
                 buf.push(1);
-                buf.extend_from_slice(&contribution_amount.to_le_bytes());   
+
+                buf.extend_from_slice(&contribution_amount.to_le_bytes());
+                
+                let resume = match resume {
+                    false => [0],
+                    true => [1]
+                };
+
+                buf.push(resume[0] as u8);
             },
 
             &Self::Withdraw { withdrawal_amount } => {
@@ -267,8 +280,8 @@ impl StreamInstruction {
         let (cliff_vest_percent, result) = result.split_at(8);
         let cliff_vest_percent = Self::unpack_f64(cliff_vest_percent)?;
 
-        let (auto_off_clock_in_seconds, _result) = result.split_at(8);
-        let auto_off_clock_in_seconds = Self::unpack_u64(auto_off_clock_in_seconds)?;
+        let (auto_pause_in_seconds, _result) = result.split_at(8);
+        let auto_pause_in_seconds = Self::unpack_u64(auto_pause_in_seconds)?;
 
         Ok(Self::CreateStream {
             beneficiary_address,
@@ -280,16 +293,24 @@ impl StreamInstruction {
             rate_cliff_in_seconds,
             cliff_vest_amount,
             cliff_vest_percent,
-            auto_off_clock_in_seconds
+            auto_pause_in_seconds
         })
     }
 
     fn unpack_add_funds(input: &[u8]) -> Result<Self, StreamError> {
-        let (contribution_amount, _result) = input.split_at(8);
+        let (contribution_amount, result) = input.split_at(8);
         let contribution_amount = Self::unpack_f64(contribution_amount)?;
 
+        let (resume, _result) = result.split_at(1);
+        let resume = match resume {
+            [0] => false,
+            [1] => true,
+            _ => false
+        };
+
         Ok(Self::AddFunds { 
-            contribution_amount
+            contribution_amount,
+            resume
         })
     }
 
@@ -405,7 +426,7 @@ impl StreamInstruction {
     rate_cliff_in_seconds: u64,
     cliff_vest_amount: f64,
     cliff_vest_percent: f64,
-    auto_off_clock_in_seconds: u64
+    auto_pause_in_seconds: u64
 
  ) -> Result<Instruction, StreamError> {
 
@@ -421,7 +442,7 @@ impl StreamInstruction {
         rate_cliff_in_seconds,
         cliff_vest_amount,
         cliff_vest_percent,
-        auto_off_clock_in_seconds
+        auto_pause_in_seconds
 
     }.pack();
 
@@ -453,12 +474,17 @@ impl StreamInstruction {
     program_id: &Pubkey,
     contribution_token_address: Pubkey,
     contribution_amount: f64,
+    resume: bool
 
  ) -> Result<Instruction, StreamError> {
 
     check_program_account(program_id);
 
-    let data = StreamInstruction::AddFunds { contribution_amount }.pack();
+    let data = StreamInstruction::AddFunds { 
+        contribution_amount,
+        resume
+
+    }.pack();
 
     let accounts = vec![
         AccountMeta::new(contribution_token_address, true),

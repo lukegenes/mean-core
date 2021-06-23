@@ -49,7 +49,7 @@ impl Processor {
                 rate_cliff_in_seconds,
                 cliff_vest_amount,
                 cliff_vest_percent,
-                auto_off_clock_in_seconds
+                auto_pause_in_seconds
 
             } => {
 
@@ -67,17 +67,22 @@ impl Processor {
                     rate_cliff_in_seconds,
                     cliff_vest_amount,
                     cliff_vest_percent,
-                    auto_off_clock_in_seconds
+                    auto_pause_in_seconds
                 )
             },
 
-            StreamInstruction::AddFunds { contribution_amount } => {
+            StreamInstruction::AddFunds { 
+                contribution_amount,
+                resume
+                
+            } => {
                 msg!("Instruction: AddFunds");
 
                 Self::process_add_funds(
                     accounts, 
                     program_id,
-                    contribution_amount
+                    contribution_amount,
+                    resume,
                 )
             },
 
@@ -183,7 +188,7 @@ impl Processor {
         rate_cliff_in_seconds: u64,
         cliff_vest_amount: f64,
         cliff_vest_percent: f64,
-        auto_off_clock_in_seconds: u64
+        auto_pause_in_seconds: u64
         
     ) -> ProgramResult {
 
@@ -331,8 +336,8 @@ impl Processor {
             stream.total_withdrawals = 0.0;
             stream.escrow_vested_amount_snap = 0.0;
             stream.escrow_vested_amount_snap_block_height = start_utc / 1000;
-            stream.auto_off_clock_in_seconds = auto_off_clock_in_seconds;
-            stream.on_clock = true;
+            stream.auto_pause_in_seconds = auto_pause_in_seconds;
+            stream.is_streaming = true;
             stream.initialized = true;
                     
             Stream::pack_into_slice(&stream, &mut stream_account_info.data.borrow_mut());
@@ -365,7 +370,8 @@ impl Processor {
     fn process_add_funds(
         accounts: &[AccountInfo],
         program_id: &Pubkey,
-        contribution_amount: f64
+        contribution_amount: f64,
+        resume: bool
 
     ) -> ProgramResult {
 
@@ -380,13 +386,15 @@ impl Processor {
         let token_program_account_info = next_account_info(account_info_iter)?;
         let system_account_info = next_account_info(account_info_iter)?;
 
-        if !contributor_account_info.is_signer {
+        if !contributor_account_info.is_signer 
+        {
             return Err(StreamError::MissingInstructionSignature.into());
         }
 
         let mut stream = Stream::unpack_from_slice(&stream_account_info.data.borrow())?;
 
-        if stream_account_info.owner != program_id {
+        if stream_account_info.owner != program_id 
+        {
             return Err(StreamError::InstructionNotAuthorized.into());
         }
 
@@ -440,7 +448,37 @@ impl Processor {
 
         // Update stream contract terms
         let mut stream = Stream::unpack_from_slice(&stream_account_info.data.borrow())?;
+
         stream.total_deposits += contribution_amount;
+
+        if !stream.is_streaming && resume == true 
+        {
+            let is_streaming = match stream.is_streaming 
+            {
+                false => 0,
+                true => 1,
+                _ => return Err(StreamError::InvalidStreamData.into()),
+            };
+
+            let clock = Clock::get()?;
+            let current_block_height = clock.unix_timestamp as u64;
+            let rate = stream.rate_amount / (stream.rate_interval_in_seconds as f64) * (is_streaming as f64);
+            let elapsed_time = ((current_block_height - stream.escrow_vested_amount_snap_block_height) as f64);
+            let mut escrow_vested_amount = stream.escrow_vested_amount_snap + rate * elapsed_time;
+            
+            if escrow_vested_amount > stream.total_deposits - stream.total_withdrawals 
+            {
+                escrow_vested_amount = stream.total_deposits - stream.total_withdrawals;
+                stream.escrow_vested_amount_snap = escrow_vested_amount;
+                stream.escrow_vested_amount_snap_block_height = current_block_height;
+                stream.is_streaming = false;
+            } 
+            else 
+            {
+                stream.is_streaming = true
+            }
+        }
+
         // Save
         Stream::pack_into_slice(&stream, &mut stream_account_info.data.borrow_mut());
 
@@ -466,17 +504,20 @@ impl Processor {
         let token_program_account_info = next_account_info(account_info_iter)?;
         let system_account_info = next_account_info(account_info_iter)?;
 
-        if !beneficiary_account_info.is_signer {
+        if !beneficiary_account_info.is_signer 
+        {
             return Err(StreamError::MissingInstructionSignature.into());
         }
 
         let mut stream = Stream::unpack_from_slice(&stream_account_info.data.borrow())?;
 
-        if stream_account_info.owner != program_id {
+        if stream_account_info.owner != program_id 
+        {
             return Err(StreamError::InstructionNotAuthorized.into());
         }
 
-        let clock_state = match stream.on_clock {
+        let is_streaming = match stream.is_streaming 
+        {
             false => 0,
             true => 1,
             _ => return Err(StreamError::InvalidStreamData.into()),
@@ -484,21 +525,24 @@ impl Processor {
 
         let clock = Clock::get()?;
         let current_block_height = clock.unix_timestamp as u64;
-        let rate = stream.rate_amount / (stream.rate_interval_in_seconds as f64) * (clock_state as f64);
+        let rate = stream.rate_amount / (stream.rate_interval_in_seconds as f64) * (is_streaming as f64);
         let elapsed_time = ((current_block_height - stream.escrow_vested_amount_snap_block_height) as f64);
         let mut escrow_vested_amount = stream.escrow_vested_amount_snap + rate * elapsed_time;
         
-        if escrow_vested_amount > stream.total_deposits - stream.total_withdrawals {
+        if escrow_vested_amount > stream.total_deposits - stream.total_withdrawals 
+        {
             escrow_vested_amount = stream.total_deposits - stream.total_withdrawals;
         }
 
-        if withdrawal_amount > escrow_vested_amount {
+        if withdrawal_amount > escrow_vested_amount 
+        {
             return Err(StreamError::NotAllowedWithdrawalAmount.into());
         }
 
         let escrow_unvested_amount = stream.total_deposits - stream.total_withdrawals - escrow_vested_amount;
 
-        if withdrawal_amount > escrow_vested_amount {
+        if withdrawal_amount > escrow_vested_amount 
+        {
             return Err(StreamError::NotAllowedWithdrawalAmount.into());
         }
 
@@ -515,7 +559,8 @@ impl Processor {
             program_id
         );
 
-        if treasury_address != *treasury_account_info.key {
+        if treasury_address != *treasury_account_info.key 
+        {
             msg!("Error: Treasury address does not match seed derivation");
             return Err(StreamError::InvalidStreamInstruction.into());
         }
@@ -595,7 +640,8 @@ impl Processor {
         let msp_ops_account_info = next_account_info(account_info_iter)?;
         let system_account_info = next_account_info(account_info_iter)?;
 
-        if !initializer_account_info.is_signer {
+        if !initializer_account_info.is_signer 
+        {
             return Err(StreamError::MissingInstructionSignature.into());
         }
 
@@ -610,7 +656,8 @@ impl Processor {
         }
 
         // Pausing the stream and updating data
-        let clock_state = match stream.on_clock {
+        let is_streaming = match stream.is_streaming 
+        {
             false => 0,
             true => 1,
             _ => return Err(StreamError::InvalidStreamData.into()),
@@ -618,17 +665,18 @@ impl Processor {
 
         let clock = Clock::get()?;
         let current_block_height = clock.unix_timestamp as u64;
-        let rate = stream.rate_amount / (stream.rate_interval_in_seconds as f64) * (clock_state as f64);
+        let rate = stream.rate_amount / (stream.rate_interval_in_seconds as f64) * (is_streaming as f64);
         let elapsed_time = ((current_block_height - stream.escrow_vested_amount_snap_block_height) as f64);
         let mut escrow_vested_amount = stream.escrow_vested_amount_snap + rate * elapsed_time;
         
-        if escrow_vested_amount > stream.total_deposits - stream.total_withdrawals {
+        if escrow_vested_amount > stream.total_deposits - stream.total_withdrawals 
+        {
             escrow_vested_amount = stream.total_deposits - stream.total_withdrawals;
         }
 
         stream.escrow_vested_amount_snap = escrow_vested_amount;
         stream.escrow_vested_amount_snap_block_height = current_block_height;
-        stream.on_clock = false;
+        stream.is_streaming = false;
         // Save
         Stream::pack_into_slice(&stream, &mut stream_account_info.data.borrow_mut());
         msg!("Pausing the stream");
@@ -671,7 +719,8 @@ impl Processor {
         let msp_ops_account_info = next_account_info(account_info_iter)?;
         let system_account_info = next_account_info(account_info_iter)?;
 
-        if !initializer_account_info.is_signer {
+        if !initializer_account_info.is_signer 
+        {
             return Err(StreamError::MissingInstructionSignature.into());
         }
 
@@ -686,7 +735,7 @@ impl Processor {
         }
 
         // Resuming the stream and updating data
-        stream.on_clock = true;
+        stream.is_streaming = true;
         // Save
         Stream::pack_into_slice(&stream, &mut stream_account_info.data.borrow_mut());
         msg!("Resuming the stream");
@@ -738,21 +787,23 @@ impl Processor {
         let account_info_iter = &mut accounts.iter();
         let initializer_account_info = next_account_info(account_info_iter)?;
 
-        if !initializer_account_info.is_signer {
+        if !initializer_account_info.is_signer 
+        {
             return Err(StreamError::MissingInstructionSignature.into());
         }
         
         let stream_account_info = next_account_info(account_info_iter)?;
 
-        if stream_account_info.owner != program_id {
+        if stream_account_info.owner != program_id 
+        {
             return Err(StreamError::InstructionNotAuthorized.into());
         }
 
         let stream = Stream::unpack_from_slice(&stream_account_info.data.borrow())?;
 
         if stream.treasurer_address.ne(&initializer_account_info.key) || 
-           stream.beneficiary_address.ne(&initializer_account_info.key) {
-
+           stream.beneficiary_address.ne(&initializer_account_info.key) 
+        {
             return Err(StreamError::InstructionNotAuthorized.into()); // Only the treasurer or the beneficiary of the stream can propose an update
         }
 
@@ -770,13 +821,15 @@ impl Processor {
 
         let stream_terms_account_info = next_account_info(account_info_iter)?;
 
-        if stream_terms_account_info.owner != program_id {
+        if stream_terms_account_info.owner != program_id 
+        {
             return Err(StreamError::InstructionNotAuthorized.into()); // The stream terms' account should be owned by the streaming program
         }
 
         let mut stream_terms = StreamTerms::unpack_from_slice(&stream_terms_account_info.data.borrow())?;
 
-        if stream_terms.is_initialized() {
+        if stream_terms.is_initialized() 
+        {
             return Err(StreamError::StreamAlreadyInitialized.into());
         }
 
@@ -808,92 +861,105 @@ impl Processor {
         let account_info_iter = &mut accounts.iter();
         let initializer_account_info = next_account_info(account_info_iter)?;
 
-        if !initializer_account_info.is_signer {
+        if !initializer_account_info.is_signer 
+        {
             return Err(StreamError::MissingInstructionSignature.into());
         }
 
         let stream_terms_account_info = next_account_info(account_info_iter)?;
 
-        if stream_terms_account_info.owner != program_id {
+        if stream_terms_account_info.owner != program_id 
+        {
             return Err(StreamError::InstructionNotAuthorized.into()); // The stream terms' account should be owned by the streaming program
         }
         
         let mut stream_terms = StreamTerms::unpack_from_slice(&stream_terms_account_info.data.borrow())?;
 
-        if stream_terms.proposed_by.eq(&initializer_account_info.key) && answer == true {
+        if stream_terms.proposed_by.eq(&initializer_account_info.key) && answer == true 
+        {
             return Err(StreamError::InstructionNotAuthorized.into()); // Only the counterparty of a previous of the stream terms can approve it
         }
 
         let counterparty_account_info = next_account_info(account_info_iter)?;
         let stream_account_info = next_account_info(account_info_iter)?;
 
-        if stream_account_info.owner != program_id {
+        if stream_account_info.owner != program_id 
+        {
             return Err(StreamError::InstructionNotAuthorized.into());
         }
 
         let mut stream = Stream::unpack_from_slice(&stream_account_info.data.borrow())?;
         
-        if stream.treasurer_address == *initializer_account_info.key {
+        if stream.treasurer_address == *initializer_account_info.key 
+        {
             treasurer_account_info = initializer_account_info;
             beneficiary_account_info = counterparty_account_info;
-        } else if stream.treasurer_address == *counterparty_account_info.key {
+        } 
+        else if stream.treasurer_address == *counterparty_account_info.key 
+        {
             treasurer_account_info = counterparty_account_info;
             beneficiary_account_info = initializer_account_info;
-        } else {
+        } 
+        else 
+        {
             return Err(StreamError::InstructionNotAuthorized.into());
         }
 
-        if answer == false { // Rejected: Close stream terms account
+        if answer == false // Rejected: Close stream terms account 
+        {
             **stream_terms_account_info.lamports.borrow_mut() = 0;
             stream_terms = StreamTerms::default();
-
-        } else { // Approved: Update stream data and close stream terms account
-
-            if stream_terms.stream_name.ne(&stream.stream_name) {
+        } 
+        else // Approved: Update stream data and close stream terms account
+        {
+            if stream_terms.stream_name.ne(&stream.stream_name) 
+            {
                 stream.stream_name = stream.stream_name
             }
 
             if stream_terms.treasurer_address.ne(&Pubkey::default()) && 
-                stream_terms.treasurer_address.ne(&stream.treasurer_address) {
-
+                stream_terms.treasurer_address.ne(&stream.treasurer_address) 
+            {
                 stream.treasurer_address = stream_terms.treasurer_address;
             }
 
             if stream_terms.beneficiary_address.ne(&Pubkey::default()) && 
-                stream_terms.beneficiary_address.ne(&stream.beneficiary_address) {
-                    
+                stream_terms.beneficiary_address.ne(&stream.beneficiary_address) 
+            {        
                 stream.beneficiary_address = stream_terms.beneficiary_address;
             }
 
             if stream_terms.stream_associated_token.ne(&Pubkey::default()) && 
-                stream_terms.stream_associated_token.ne(&stream.stream_associated_token) {
-                    
+                stream_terms.stream_associated_token.ne(&stream.stream_associated_token) 
+            {       
                 stream.stream_associated_token = stream_terms.stream_associated_token;
             }
 
             if stream_terms.treasury_address.ne(&Pubkey::default()) && 
-                stream_terms.treasury_address.ne(&stream.treasury_address) {
-                    
+                stream_terms.treasury_address.ne(&stream.treasury_address) 
+            {       
                 stream.treasury_address = stream_terms.treasury_address;
             }
 
-            if stream_terms.rate_amount != 0.0 && stream_terms.rate_amount != stream.rate_amount {       
+            if stream_terms.rate_amount != 0.0 && stream_terms.rate_amount != stream.rate_amount 
+            {       
                 stream.rate_amount = stream_terms.rate_amount;
             }
 
             if stream_terms.rate_interval_in_seconds != 0 && 
-               stream.rate_interval_in_seconds != stream_terms.rate_interval_in_seconds { 
-
+               stream.rate_interval_in_seconds != stream_terms.rate_interval_in_seconds 
+            {
                 stream.rate_interval_in_seconds = stream_terms.rate_interval_in_seconds;
             }
 
-            if stream_terms.start_utc != 0 && stream_terms.start_utc != stream.start_utc {
+            if stream_terms.start_utc != 0 && stream_terms.start_utc != stream.start_utc 
+            {
                 stream.start_utc = stream_terms.start_utc;
             }
 
             if stream_terms.rate_cliff_in_seconds != 0 && 
-                stream_terms.rate_cliff_in_seconds != stream.rate_cliff_in_seconds {
-
+                stream_terms.rate_cliff_in_seconds != stream.rate_cliff_in_seconds 
+            {
                 stream.rate_cliff_in_seconds = stream_terms.rate_cliff_in_seconds;
             }
 
@@ -955,7 +1021,8 @@ impl Processor {
         // Stoping the stream and updating data
         msg!("Stopping the stream");
 
-        let clock_state = match stream.on_clock {
+        let is_streaming = match stream.is_streaming 
+        {
             false => 0,
             true => 1,
             _ => return Err(StreamError::InvalidStreamData.into()),
@@ -963,16 +1030,17 @@ impl Processor {
 
         let clock = Clock::get()?;
         let current_block_height = clock.unix_timestamp as u64;
-        let rate = stream.rate_amount / (stream.rate_interval_in_seconds as f64) * (clock_state as f64);
+        let rate = stream.rate_amount / (stream.rate_interval_in_seconds as f64) * (is_streaming as f64);
         let elapsed_time = ((current_block_height - stream.escrow_vested_amount_snap_block_height) as f64);
         let mut escrow_vested_amount = stream.escrow_vested_amount_snap + rate * elapsed_time;
         
-        if escrow_vested_amount > stream.total_deposits - stream.total_withdrawals {
+        if escrow_vested_amount > stream.total_deposits - stream.total_withdrawals 
+        {
             escrow_vested_amount = stream.total_deposits - stream.total_withdrawals;
         }
 
         let escrow_unvested_amount = stream.total_deposits - stream.total_withdrawals - escrow_vested_amount;
-        stream.on_clock = false;
+        stream.is_streaming = false;
         
         // Crediting escrow vested amount to the beneficiary
         if escrow_vested_amount > 0.0 
@@ -989,7 +1057,8 @@ impl Processor {
                 program_id
             );
 
-            if treasury_address != *treasury_account_info.key {
+            if treasury_address != *treasury_account_info.key 
+            {
                 msg!("Error: Treasury address does not match seed derivation");
                 return Err(StreamError::InvalidStreamInstruction.into());
             }
