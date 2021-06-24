@@ -166,8 +166,10 @@ pub struct Stream {
     pub total_withdrawals: f64,
     pub escrow_vested_amount_snap: f64,
     pub escrow_vested_amount_snap_block_height: u64,
-    pub auto_pause_in_seconds: u64,
-    pub is_streaming: bool
+    pub escrow_vested_amount_snap_block_time: u64,
+    pub stream_resumed_block_height: u64,
+    pub stream_resumed_block_time: u64,
+    pub auto_pause_in_seconds: u64
 }
 
 impl Sealed for Stream {}
@@ -198,14 +200,16 @@ impl Default for Stream {
             total_withdrawals: 0.0,
             escrow_vested_amount_snap: 0.0,
             escrow_vested_amount_snap_block_height: 0,
-            auto_pause_in_seconds: 0,
-            is_streaming: true
+            escrow_vested_amount_snap_block_time: 0,
+            stream_resumed_block_height: 0,
+            stream_resumed_block_time: 0,
+            auto_pause_in_seconds: 0
         }
     }
 }
 
 impl Pack for Stream {
-    const LEN: usize = 258;
+    const LEN: usize = 281;
 
     fn pack_into_slice(&self, output: &mut [u8]) {
         let output = array_mut_ref![output, 0, Stream::LEN];
@@ -227,10 +231,12 @@ impl Pack for Stream {
             total_withdrawals_output,
             escrow_vested_amount_snap_output,
             escrow_vested_amount_snap_block_height_output,
-            auto_pause_in_seconds_output,
-            is_streaming_output,
+            escrow_vested_amount_snap_block_time_output,
+            stream_resumed_block_height_output,
+            stream_resumed_block_time_output,
+            auto_pause_in_seconds_output
             
-        ) = mut_array_refs![output, 1, 32, 32, 8, 8, 8, 8, 8, 8, 32, 32, 32, 8, 8, 8, 8, 8, 8, 1];
+        ) = mut_array_refs![output, 1, 32, 32, 8, 8, 8, 8, 8, 8, 32, 32, 32, 8, 8, 8, 8, 8, 8, 8, 8, 8];
 
         let Stream {
             initialized,
@@ -250,8 +256,10 @@ impl Pack for Stream {
             total_withdrawals,
             escrow_vested_amount_snap,
             escrow_vested_amount_snap_block_height,
-            auto_pause_in_seconds,
-            is_streaming
+            escrow_vested_amount_snap_block_time,
+            stream_resumed_block_height,
+            stream_resumed_block_time,
+            auto_pause_in_seconds
 
         } = self;
 
@@ -272,8 +280,10 @@ impl Pack for Stream {
         *total_withdrawals_output = total_withdrawals.to_le_bytes();
         *escrow_vested_amount_snap_output = escrow_vested_amount_snap.to_le_bytes();
         *escrow_vested_amount_snap_block_height_output = escrow_vested_amount_snap_block_height.to_le_bytes();
+        *escrow_vested_amount_snap_block_time_output = escrow_vested_amount_snap_block_time.to_le_bytes();
+        *stream_resumed_block_height_output = stream_resumed_block_height.to_le_bytes();
+        *stream_resumed_block_time_output = stream_resumed_block_time.to_le_bytes();
         *auto_pause_in_seconds_output = auto_pause_in_seconds.to_le_bytes();
-        is_streaming_output[0] = *is_streaming as u8;
     }
     
     fn unpack_from_slice(input: &[u8]) -> Result<Self, ProgramError> {
@@ -296,18 +306,14 @@ impl Pack for Stream {
             total_withdrawals,
             escrow_vested_amount_snap,
             escrow_vested_amount_snap_block_height,
-            auto_pause_in_seconds,
-            is_streaming
+            escrow_vested_amount_snap_block_time,
+            stream_resumed_block_height,
+            stream_resumed_block_time,
+            auto_pause_in_seconds
             
-        ) = array_refs![input, 1, 32, 32, 8, 8, 8, 8, 8, 8, 32, 32, 32, 8, 8, 8, 8, 8, 8, 1];
+        ) = array_refs![input, 1, 32, 32, 8, 8, 8, 8, 8, 8, 32, 32, 32, 8, 8, 8, 8, 8, 8, 8, 8, 8];
 
         let initialized = match initialized {
-            [0] => false,
-            [1] => true,
-            _ => return Err(StreamError::InvalidStreamData.into()),
-        };
-
-        let is_streaming = match is_streaming {
             [0] => false,
             [1] => true,
             _ => return Err(StreamError::InvalidStreamData.into()),
@@ -331,8 +337,10 @@ impl Pack for Stream {
             total_withdrawals: f64::from_le_bytes(*total_withdrawals),
             escrow_vested_amount_snap: f64::from_le_bytes(*escrow_vested_amount_snap),
             escrow_vested_amount_snap_block_height: u64::from_le_bytes(*escrow_vested_amount_snap_block_height),
-            auto_pause_in_seconds: u64::from_le_bytes(*auto_pause_in_seconds),
-            is_streaming
+            escrow_vested_amount_snap_block_time: u64::from_le_bytes(*escrow_vested_amount_snap_block_time),
+            stream_resumed_block_height: u64::from_le_bytes(*stream_resumed_block_height),
+            stream_resumed_block_time: u64::from_le_bytes(*stream_resumed_block_time),
+            auto_pause_in_seconds: u64::from_le_bytes(*auto_pause_in_seconds)
         })
     }
 }

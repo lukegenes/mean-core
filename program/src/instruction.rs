@@ -37,7 +37,6 @@ pub enum StreamInstruction {
         rate_cliff_in_seconds: u64,
         cliff_vest_amount: f64, // OPTIONAL
         cliff_vest_percent: f64, // OPTIONAL
-        auto_pause_in_seconds: u64
     },
 
     /// 0. `[signer]` The contributor account
@@ -163,8 +162,7 @@ impl StreamInstruction {
                 start_utc,
                 rate_cliff_in_seconds,
                 cliff_vest_amount,
-                cliff_vest_percent,
-                auto_pause_in_seconds
+                cliff_vest_percent
 
             } => {
 
@@ -179,7 +177,6 @@ impl StreamInstruction {
                 buf.extend_from_slice(&rate_cliff_in_seconds.to_le_bytes());
                 buf.extend_from_slice(&cliff_vest_amount.to_le_bytes());
                 buf.extend_from_slice(&cliff_vest_percent.to_le_bytes());
-                buf.extend_from_slice(&auto_pause_in_seconds.to_le_bytes());
             },
 
             &Self::AddFunds { 
@@ -277,11 +274,8 @@ impl StreamInstruction {
         let (cliff_vest_amount, result) = result.split_at(8);
         let cliff_vest_amount = Self::unpack_f64(cliff_vest_amount)?;
 
-        let (cliff_vest_percent, result) = result.split_at(8);
+        let (cliff_vest_percent, _result) = result.split_at(8);
         let cliff_vest_percent = Self::unpack_f64(cliff_vest_percent)?;
-
-        let (auto_pause_in_seconds, _result) = result.split_at(8);
-        let auto_pause_in_seconds = Self::unpack_u64(auto_pause_in_seconds)?;
 
         Ok(Self::CreateStream {
             beneficiary_address,
@@ -292,8 +286,7 @@ impl StreamInstruction {
             start_utc,
             rate_cliff_in_seconds,
             cliff_vest_amount,
-            cliff_vest_percent,
-            auto_pause_in_seconds
+            cliff_vest_percent
         })
     }
 
@@ -425,8 +418,7 @@ impl StreamInstruction {
     start_utc: u64,
     rate_cliff_in_seconds: u64,
     cliff_vest_amount: f64,
-    cliff_vest_percent: f64,
-    auto_pause_in_seconds: u64
+    cliff_vest_percent: f64
 
  ) -> Result<Instruction, StreamError> {
 
@@ -441,8 +433,7 @@ impl StreamInstruction {
         start_utc,
         rate_cliff_in_seconds,
         cliff_vest_amount,
-        cliff_vest_percent,
-        auto_pause_in_seconds
+        cliff_vest_percent
 
     }.pack();
 

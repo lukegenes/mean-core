@@ -48,8 +48,7 @@ impl Processor {
                 start_utc,
                 rate_cliff_in_seconds,
                 cliff_vest_amount,
-                cliff_vest_percent,
-                auto_pause_in_seconds
+                cliff_vest_percent
 
             } => {
 
@@ -66,15 +65,14 @@ impl Processor {
                     start_utc,
                     rate_cliff_in_seconds,
                     cliff_vest_amount,
-                    cliff_vest_percent,
-                    auto_pause_in_seconds
+                    cliff_vest_percent
                 )
             },
 
             StreamInstruction::AddFunds { 
                 contribution_amount,
                 resume
-                
+
             } => {
                 msg!("Instruction: AddFunds");
 
@@ -187,8 +185,7 @@ impl Processor {
         start_utc: u64,
         rate_cliff_in_seconds: u64,
         cliff_vest_amount: f64,
-        cliff_vest_percent: f64,
-        auto_pause_in_seconds: u64
+        cliff_vest_percent: f64
         
     ) -> ProgramResult {
 
@@ -335,9 +332,11 @@ impl Processor {
             stream.total_deposits = funding_amount;
             stream.total_withdrawals = 0.0;
             stream.escrow_vested_amount_snap = 0.0;
-            stream.escrow_vested_amount_snap_block_height = start_utc / 1000;
-            stream.auto_pause_in_seconds = auto_pause_in_seconds;
-            stream.is_streaming = true;
+            stream.escrow_vested_amount_snap_block_height = 0;
+            stream.escrow_vested_amount_snap_block_time = 0;
+            stream.stream_resumed_block_height = clock.slot as u64;
+            stream.stream_resumed_block_time = clock.unix_timestamp as u64;
+            stream.auto_pause_in_seconds = (funding_amount * (rate_interval_in_seconds as f64) / rate_amount ) as u64;
             stream.initialized = true;
                     
             Stream::pack_into_slice(&stream, &mut stream_account_info.data.borrow_mut());
@@ -446,39 +445,19 @@ impl Processor {
             (*msp_ops_account_info.key).to_string()
         );
 
-        // Update stream contract terms
+        // Resume stream
         let mut stream = Stream::unpack_from_slice(&stream_account_info.data.borrow())?;
+        let clock = Clock::get()?;
+        let current_block_height = clock.slot as u64;
+        let current_block_time = clock.unix_timestamp as u64;
 
-        stream.total_deposits += contribution_amount;
-
-        if !stream.is_streaming && resume == true 
+        if resume == true 
         {
-            let is_streaming = match stream.is_streaming 
-            {
-                false => 0,
-                true => 1,
-                _ => return Err(StreamError::InvalidStreamData.into()),
-            };
-
-            let clock = Clock::get()?;
-            let current_block_height = clock.unix_timestamp as u64;
-            let rate = stream.rate_amount / (stream.rate_interval_in_seconds as f64) * (is_streaming as f64);
-            let elapsed_time = ((current_block_height - stream.escrow_vested_amount_snap_block_height) as f64);
-            let mut escrow_vested_amount = stream.escrow_vested_amount_snap + rate * elapsed_time;
-            
-            if escrow_vested_amount > stream.total_deposits - stream.total_withdrawals 
-            {
-                escrow_vested_amount = stream.total_deposits - stream.total_withdrawals;
-                stream.escrow_vested_amount_snap = escrow_vested_amount;
-                stream.escrow_vested_amount_snap_block_height = current_block_height;
-                stream.is_streaming = false;
-            } 
-            else 
-            {
-                stream.is_streaming = true
-            }
+            stream.stream_resumed_block_height = current_block_height;
+            stream.stream_resumed_block_time = current_block_time;
         }
 
+        stream.total_deposits += contribution_amount;
         // Save
         Stream::pack_into_slice(&stream, &mut stream_account_info.data.borrow_mut());
 
@@ -516,18 +495,11 @@ impl Processor {
             return Err(StreamError::InstructionNotAuthorized.into());
         }
 
-        let is_streaming = match stream.is_streaming 
-        {
-            false => 0,
-            true => 1,
-            _ => return Err(StreamError::InvalidStreamData.into()),
-        };
-
         let clock = Clock::get()?;
-        let current_block_height = clock.unix_timestamp as u64;
-        let rate = stream.rate_amount / (stream.rate_interval_in_seconds as f64) * (is_streaming as f64);
-        let elapsed_time = ((current_block_height - stream.escrow_vested_amount_snap_block_height) as f64);
-        let mut escrow_vested_amount = stream.escrow_vested_amount_snap + rate * elapsed_time;
+        let current_block_time = clock.unix_timestamp as u64;
+        let rate = stream.rate_amount / (stream.rate_interval_in_seconds as f64);
+        let elapsed_time = current_block_time - stream.escrow_vested_amount_snap_block_time;
+        let mut escrow_vested_amount = stream.escrow_vested_amount_snap + rate * (elapsed_time as f64);
         
         if escrow_vested_amount > stream.total_deposits - stream.total_withdrawals 
         {
@@ -655,19 +627,12 @@ impl Processor {
             return Err(StreamError::InstructionNotAuthorized.into());
         }
 
-        // Pausing the stream and updating data
-        let is_streaming = match stream.is_streaming 
-        {
-            false => 0,
-            true => 1,
-            _ => return Err(StreamError::InvalidStreamData.into()),
-        };
-
         let clock = Clock::get()?;
-        let current_block_height = clock.unix_timestamp as u64;
-        let rate = stream.rate_amount / (stream.rate_interval_in_seconds as f64) * (is_streaming as f64);
-        let elapsed_time = ((current_block_height - stream.escrow_vested_amount_snap_block_height) as f64);
-        let mut escrow_vested_amount = stream.escrow_vested_amount_snap + rate * elapsed_time;
+        let current_block_height = clock.slot as u64;
+        let current_block_time = clock.unix_timestamp as u64;
+        let rate = stream.rate_amount / (stream.rate_interval_in_seconds as f64);
+        let elapsed_time = current_block_time - stream.stream_resumed_block_time;
+        let mut escrow_vested_amount = stream.escrow_vested_amount_snap + rate * (elapsed_time as f64);
         
         if escrow_vested_amount > stream.total_deposits - stream.total_withdrawals 
         {
@@ -676,7 +641,7 @@ impl Processor {
 
         stream.escrow_vested_amount_snap = escrow_vested_amount;
         stream.escrow_vested_amount_snap_block_height = current_block_height;
-        stream.is_streaming = false;
+        stream.escrow_vested_amount_snap_block_time = current_block_time;
         // Save
         Stream::pack_into_slice(&stream, &mut stream_account_info.data.borrow_mut());
         msg!("Pausing the stream");
@@ -735,7 +700,10 @@ impl Processor {
         }
 
         // Resuming the stream and updating data
-        stream.is_streaming = true;
+        let clock = Clock::get()?;
+
+        stream.stream_resumed_block_height = clock.slot as u64;
+        stream.stream_resumed_block_time = clock.unix_timestamp as u64;
         // Save
         Stream::pack_into_slice(&stream, &mut stream_account_info.data.borrow_mut());
         msg!("Resuming the stream");
@@ -1019,28 +987,32 @@ impl Processor {
         }
         
         // Stoping the stream and updating data
-        msg!("Stopping the stream");
-
-        let is_streaming = match stream.is_streaming 
-        {
-            false => 0,
-            true => 1,
-            _ => return Err(StreamError::InvalidStreamData.into()),
-        };
-
         let clock = Clock::get()?;
-        let current_block_height = clock.unix_timestamp as u64;
-        let rate = stream.rate_amount / (stream.rate_interval_in_seconds as f64) * (is_streaming as f64);
-        let elapsed_time = ((current_block_height - stream.escrow_vested_amount_snap_block_height) as f64);
-        let mut escrow_vested_amount = stream.escrow_vested_amount_snap + rate * elapsed_time;
+        let current_block_height = clock.slot as u64;
+        let current_block_time = clock.unix_timestamp as u64;
+        let rate = stream.rate_amount / (stream.rate_interval_in_seconds as f64);
+        let is_streaming = current_block_time < stream.stream_resumed_block_time + stream.auto_pause_in_seconds;
+        let mut elapsed_time = current_block_time - stream.escrow_vested_amount_snap_block_time;
+
+        if is_streaming
+        {
+            elapsed_time = current_block_time - stream.stream_resumed_block_time;
+        }
+
+        let mut escrow_vested_amount = stream.escrow_vested_amount_snap + rate * (elapsed_time as f64);
         
         if escrow_vested_amount > stream.total_deposits - stream.total_withdrawals 
         {
             escrow_vested_amount = stream.total_deposits - stream.total_withdrawals;
         }
 
+        stream.escrow_vested_amount_snap = escrow_vested_amount;
+        stream.escrow_vested_amount_snap_block_height = current_block_height;
+        stream.escrow_vested_amount_snap_block_time = current_block_time;
+
+        msg!("Stopping the stream");
+
         let escrow_unvested_amount = stream.total_deposits - stream.total_withdrawals - escrow_vested_amount;
-        stream.is_streaming = false;
         
         // Crediting escrow vested amount to the beneficiary
         if escrow_vested_amount > 0.0 
@@ -1128,6 +1100,11 @@ impl Processor {
         stream.treasury_estimated_depletion_utc = 0;
         stream.total_deposits = 0.0;
         stream.total_withdrawals = 0.0;
+        stream.escrow_vested_amount_snap = 0.0;
+        stream.escrow_vested_amount_snap_block_height = 0;
+        stream.stream_resumed_block_height = 0;
+        stream.stream_resumed_block_time = 0;
+        stream.auto_pause_in_seconds = 0;
         stream.initialized = false;
         // Save
         Stream::pack_into_slice(&stream, &mut stream_account_info.data.borrow_mut());
