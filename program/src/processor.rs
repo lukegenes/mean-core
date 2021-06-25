@@ -48,7 +48,8 @@ impl Processor {
                 start_utc,
                 rate_cliff_in_seconds,
                 cliff_vest_amount,
-                cliff_vest_percent
+                cliff_vest_percent,
+                auto_pause_in_seconds
 
             } => {
 
@@ -65,7 +66,8 @@ impl Processor {
                     start_utc,
                     rate_cliff_in_seconds,
                     cliff_vest_amount,
-                    cliff_vest_percent
+                    cliff_vest_percent,
+                    auto_pause_in_seconds
                 )
             },
 
@@ -116,13 +118,14 @@ impl Processor {
                 proposed_by,
                 stream_name,
                 treasurer_address,
-                treasury_address,
                 beneficiary_address,
-                stream_associated_token,
+                associated_token_address,
                 rate_amount,
                 rate_interval_in_seconds,
-                start_utc,
-                rate_cliff_in_seconds
+                rate_cliff_in_seconds,
+                cliff_vest_amount,
+                cliff_vest_percent,
+                auto_pause_in_seconds
 
             } => {
 
@@ -134,23 +137,24 @@ impl Processor {
                     proposed_by,
                     stream_name,
                     treasurer_address,
-                    treasury_address,
                     beneficiary_address,
-                    stream_associated_token,
+                    associated_token_address,
                     rate_amount,
                     rate_interval_in_seconds,
-                    start_utc,
-                    rate_cliff_in_seconds
+                    rate_cliff_in_seconds,
+                    cliff_vest_amount,
+                    cliff_vest_percent,
+                    auto_pause_in_seconds
                 )                
             },
 
-            StreamInstruction::AnswerUpdate { answer } => {
+            StreamInstruction::AnswerUpdate { approve } => {
                 msg!("Instruction: AnswerUpdate");
                 
                 Self::process_answer_update(
                     accounts, 
                     program_id, 
-                    answer
+                    approve
                 )
             },
 
@@ -185,7 +189,8 @@ impl Processor {
         start_utc: u64,
         rate_cliff_in_seconds: u64,
         cliff_vest_amount: f64,
-        cliff_vest_percent: f64
+        cliff_vest_percent: f64,
+        auto_pause_in_seconds: u64
         
     ) -> ProgramResult {
 
@@ -336,7 +341,16 @@ impl Processor {
             stream.escrow_vested_amount_snap_block_time = 0;
             stream.stream_resumed_block_height = clock.slot as u64;
             stream.stream_resumed_block_time = clock.unix_timestamp as u64;
-            stream.auto_pause_in_seconds = (funding_amount * (rate_interval_in_seconds as f64) / rate_amount ) as u64;
+
+            if auto_pause_in_seconds != 0 
+            {
+                stream.auto_pause_in_seconds = auto_pause_in_seconds;
+            }
+            else 
+            {
+                stream.auto_pause_in_seconds = (funding_amount * (rate_interval_in_seconds as f64) / rate_amount ) as u64;
+            }
+
             stream.initialized = true;
                     
             Stream::pack_into_slice(&stream, &mut stream_account_info.data.borrow_mut());
@@ -740,13 +754,14 @@ impl Processor {
         proposed_by: Pubkey,
         stream_name: String,
         treasurer_address: Pubkey,
-        treasury_address: Pubkey,
         beneficiary_address: Pubkey,
-        stream_associated_token: Pubkey,
+        associated_token_address: Pubkey,
         rate_amount: f64,
         rate_interval_in_seconds: u64,
-        start_utc: u64,
-        rate_cliff_in_seconds: u64
+        rate_cliff_in_seconds: u64,
+        cliff_vest_amount: f64,
+        cliff_vest_percent: f64,
+        auto_pause_in_seconds: u64
 
     ) -> ProgramResult {
 
@@ -754,15 +769,18 @@ impl Processor {
         let beneficiary_account_info: &AccountInfo;
         let account_info_iter = &mut accounts.iter();
         let initializer_account_info = next_account_info(account_info_iter)?;
+        let stream_terms_account_info = next_account_info(account_info_iter)?;
+        let counterparty_account_info = next_account_info(account_info_iter)?;
+        let stream_account_info = next_account_info(account_info_iter)?;
+        let msp_ops_account_info = next_account_info(account_info_iter)?;
+        let system_account_info = next_account_info(account_info_iter)?;
 
         if !initializer_account_info.is_signer 
         {
             return Err(StreamError::MissingInstructionSignature.into());
-        }
-        
-        let stream_account_info = next_account_info(account_info_iter)?;
+        }    
 
-        if stream_account_info.owner != program_id 
+        if stream_terms_account_info.owner != program_id || stream_account_info.owner != program_id
         {
             return Err(StreamError::InstructionNotAuthorized.into());
         }
@@ -775,25 +793,6 @@ impl Processor {
             return Err(StreamError::InstructionNotAuthorized.into()); // Only the treasurer or the beneficiary of the stream can propose an update
         }
 
-        let counterparty_account_info = next_account_info(account_info_iter)?;
-        
-        // if stream.treasurer_address == *initializer_account_info.key {
-        //     treasurer_account_info = initializer_account_info;
-        //     beneficiary_account_info = counterparty_account_info;
-        // } else if stream.treasurer_address == *counterparty_account_info.key {
-        //     treasurer_account_info = counterparty_account_info;
-        //     beneficiary_account_info = initializer_account_info;
-        // } else {
-        //     return Err(StreamError::InstructionNotAuthorized.into());
-        // }
-
-        let stream_terms_account_info = next_account_info(account_info_iter)?;
-
-        if stream_terms_account_info.owner != program_id 
-        {
-            return Err(StreamError::InstructionNotAuthorized.into()); // The stream terms' account should be owned by the streaming program
-        }
-
         let mut stream_terms = StreamTerms::unpack_from_slice(&stream_terms_account_info.data.borrow())?;
 
         if stream_terms.is_initialized() 
@@ -802,17 +801,51 @@ impl Processor {
         }
 
         stream_terms.proposed_by = *initializer_account_info.key;
+        stream_terms.stream_id = *stream_account_info.key;
         stream_terms.stream_name = stream_name;
         stream_terms.treasurer_address = treasurer_address;
+        stream_terms.beneficiary_address = beneficiary_address;
+        stream_terms.associated_token_address = associated_token_address;
         stream_terms.rate_amount = rate_amount;
         stream_terms.rate_interval_in_seconds = rate_interval_in_seconds;
-        stream_terms.start_utc = start_utc;
         stream_terms.rate_cliff_in_seconds = rate_cliff_in_seconds;
-        stream_terms.beneficiary_address = beneficiary_address;
+        stream_terms.cliff_vest_amount = cliff_vest_amount;
+        stream_terms.cliff_vest_percent = cliff_vest_percent;
+
+        if auto_pause_in_seconds != 0 
+        {
+            stream_terms.auto_pause_in_seconds = auto_pause_in_seconds;
+        }
+        else 
+        {
+            let funding_amount = stream.total_deposits - stream.total_withdrawals;
+            stream_terms.auto_pause_in_seconds = (funding_amount * (rate_interval_in_seconds as f64) / rate_amount ) as u64;
+        }
+
         stream_terms.initialized = true;
 
         // Save
         StreamTerms::pack_into_slice(&stream_terms, &mut stream_terms_account_info.data.borrow_mut());
+
+        // Debit fees from the initializer of the instruction
+        let fees = 0.05f64;
+        let fees_lamports = fees * (LAMPORTS_PER_SOL as f64);
+        let fees_transfer_ix = system_instruction::transfer(
+            initializer_account_info.key,
+            msp_ops_account_info.key,
+            fees_lamports as u64
+        );
+
+        invoke(&fees_transfer_ix, &[
+            initializer_account_info.clone(),
+            msp_ops_account_info.clone(),
+            system_account_info.clone()
+        ]);
+
+        msg!("Transfer {:?} lamports of fee to: {:?}", 
+            fees_lamports, 
+            (*msp_ops_account_info.key).to_string()
+        );
 
         Ok(())
     }
@@ -820,61 +853,63 @@ impl Processor {
     fn process_answer_update(
         accounts: &[AccountInfo], 
         program_id: &Pubkey,
-        answer: bool
+        approve: bool
 
     ) -> ProgramResult {
 
         let treasurer_account_info: &AccountInfo;
-        let beneficiary_account_info: &AccountInfo;
         let account_info_iter = &mut accounts.iter();
         let initializer_account_info = next_account_info(account_info_iter)?;
+        let stream_terms_account_info = next_account_info(account_info_iter)?;
+        let counterparty_account_info = next_account_info(account_info_iter)?;
+        let stream_account_info = next_account_info(account_info_iter)?;
+        let msp_ops_account_info = next_account_info(account_info_iter)?;
+        let system_account_info = next_account_info(account_info_iter)?;
 
         if !initializer_account_info.is_signer 
         {
             return Err(StreamError::MissingInstructionSignature.into());
         }
 
-        let stream_terms_account_info = next_account_info(account_info_iter)?;
-
-        if stream_terms_account_info.owner != program_id 
+        if stream_terms_account_info.owner != program_id || stream_account_info.owner != program_id
         {
             return Err(StreamError::InstructionNotAuthorized.into()); // The stream terms' account should be owned by the streaming program
         }
         
         let mut stream_terms = StreamTerms::unpack_from_slice(&stream_terms_account_info.data.borrow())?;
 
-        if stream_terms.proposed_by.eq(&initializer_account_info.key) && answer == true 
+        if stream_terms.proposed_by.eq(&initializer_account_info.key) && approve == true 
         {
             return Err(StreamError::InstructionNotAuthorized.into()); // Only the counterparty of a previous of the stream terms can approve it
         }
 
-        let counterparty_account_info = next_account_info(account_info_iter)?;
-        let stream_account_info = next_account_info(account_info_iter)?;
-
-        if stream_account_info.owner != program_id 
-        {
-            return Err(StreamError::InstructionNotAuthorized.into());
-        }
-
         let mut stream = Stream::unpack_from_slice(&stream_account_info.data.borrow())?;
+
+        if stream_terms.stream_id.ne(&stream_account_info.key) 
+        {
+            return Err(StreamError::InvalidStreamData.into());
+        }
         
         if stream.treasurer_address == *initializer_account_info.key 
         {
             treasurer_account_info = initializer_account_info;
-            beneficiary_account_info = counterparty_account_info;
         } 
         else if stream.treasurer_address == *counterparty_account_info.key 
         {
             treasurer_account_info = counterparty_account_info;
-            beneficiary_account_info = initializer_account_info;
         } 
         else 
         {
             return Err(StreamError::InstructionNotAuthorized.into());
         }
 
-        if answer == false // Rejected: Close stream terms account 
+        if approve == false // Rejected: Close stream terms account 
         {
+            let treasurer_lamports = treasurer_account_info.lamports();
+            **treasurer_account_info.lamports.borrow_mut() = treasurer_lamports
+                .checked_add(stream_terms_account_info.lamports())
+                .ok_or(StreamError::Overflow)?;
+
             **stream_terms_account_info.lamports.borrow_mut() = 0;
             stream_terms = StreamTerms::default();
         } 
@@ -897,16 +932,10 @@ impl Processor {
                 stream.beneficiary_address = stream_terms.beneficiary_address;
             }
 
-            if stream_terms.stream_associated_token.ne(&Pubkey::default()) && 
-                stream_terms.stream_associated_token.ne(&stream.stream_associated_token) 
+            if stream_terms.associated_token_address.ne(&Pubkey::default()) && 
+                stream_terms.associated_token_address.ne(&stream.stream_associated_token) 
             {       
-                stream.stream_associated_token = stream_terms.stream_associated_token;
-            }
-
-            if stream_terms.treasury_address.ne(&Pubkey::default()) && 
-                stream_terms.treasury_address.ne(&stream.treasury_address) 
-            {       
-                stream.treasury_address = stream_terms.treasury_address;
+                stream.stream_associated_token = stream_terms.associated_token_address;
             }
 
             if stream_terms.rate_amount != 0.0 && stream_terms.rate_amount != stream.rate_amount 
@@ -920,23 +949,56 @@ impl Processor {
                 stream.rate_interval_in_seconds = stream_terms.rate_interval_in_seconds;
             }
 
-            if stream_terms.start_utc != 0 && stream_terms.start_utc != stream.start_utc 
-            {
-                stream.start_utc = stream_terms.start_utc;
-            }
-
             if stream_terms.rate_cliff_in_seconds != 0 && 
                 stream_terms.rate_cliff_in_seconds != stream.rate_cliff_in_seconds 
             {
                 stream.rate_cliff_in_seconds = stream_terms.rate_cliff_in_seconds;
             }
 
+            if stream_terms.cliff_vest_amount != 0.0 && 
+                stream_terms.cliff_vest_amount != stream.cliff_vest_amount 
+            {
+                stream.cliff_vest_amount = stream_terms.cliff_vest_amount;
+            }
+
+            if stream_terms.cliff_vest_percent != 100 as f64 && 
+                stream_terms.cliff_vest_percent != stream.cliff_vest_percent 
+            {
+                stream.cliff_vest_percent = stream_terms.cliff_vest_percent;
+            }
+
+            if stream_terms.auto_pause_in_seconds != 0 && 
+                stream_terms.auto_pause_in_seconds != stream.auto_pause_in_seconds 
+            {
+                stream.auto_pause_in_seconds = stream_terms.auto_pause_in_seconds;
+            }
+
             // Save stream
             Stream::pack_into_slice(&stream, &mut stream_account_info.data.borrow_mut());
         }
 
-        // Save
+        // Save stream terms
         StreamTerms::pack_into_slice(&stream_terms, &mut stream_terms_account_info.data.borrow_mut());
+
+        // Debit fees from the initializer of the instruction
+        let fees = 0.05f64;
+        let fees_lamports = fees * (LAMPORTS_PER_SOL as f64);
+        let fees_transfer_ix = system_instruction::transfer(
+            initializer_account_info.key,
+            msp_ops_account_info.key,
+            fees_lamports as u64
+        );
+
+        invoke(&fees_transfer_ix, &[
+            initializer_account_info.clone(),
+            msp_ops_account_info.clone(),
+            system_account_info.clone()
+        ]);
+
+        msg!("Transfer {:?} lamports of fee to: {:?}", 
+            fees_lamports, 
+            (*msp_ops_account_info.key).to_string()
+        );
 
         Ok(())
     }
