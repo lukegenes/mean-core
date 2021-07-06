@@ -15,9 +15,10 @@ use arrayref::{
     array_refs, 
 };
 
-use crate::error::StreamError;
+use crate::error::{ StreamError, TreasuryError };
 
 pub const LAMPORTS_PER_SOL: u64 = 1000000000;
+pub const TREASURY_MINT_DECIMALS: u8 = 10;
 
 #[derive(Clone, Debug)]
 pub struct StreamTerms {
@@ -355,6 +356,80 @@ impl Pack for Stream {
             stream_resumed_block_height: u64::from_le_bytes(*stream_resumed_block_height),
             stream_resumed_block_time: u64::from_le_bytes(*stream_resumed_block_time),
             auto_pause_in_seconds: u64::from_le_bytes(*auto_pause_in_seconds)
+        })
+    }
+}
+
+/// Treasury
+
+#[derive(Clone, Debug)]
+pub struct Treasury {
+    pub initialized: bool,
+    pub mint: Pubkey,
+    pub nounce: u8
+}
+
+impl Sealed for Treasury {}
+
+impl IsInitialized for Treasury {
+    fn is_initialized(&self) -> bool {
+        self.initialized
+    }
+}
+
+impl Default for Treasury {
+    fn default() -> Self {
+        Self {
+            initialized: false,
+            mint: Pubkey::default(),
+            nounce: 0
+        }
+    }
+}
+
+impl Pack for Treasury {
+    const LEN: usize = 34;
+
+    fn pack_into_slice(&self, output: &mut [u8]) {
+        let output = array_mut_ref![output, 0, Treasury::LEN];
+        let (
+            initialized_output,
+            mint_output,
+            nounce_output
+            
+        ) = mut_array_refs![output, 1, 32, 1];
+
+        let Treasury {
+            initialized,
+            mint,
+            nounce
+
+        } = self;
+
+        initialized_output[0] = *initialized as u8;
+        mint_output.copy_from_slice(mint.as_ref());
+        *nounce_output = nounce.to_le_bytes();
+    }
+    
+    fn unpack_from_slice(input: &[u8]) -> Result<Self, ProgramError> {
+        let input = array_ref![input, 0, Treasury::LEN];
+        let (
+            initialized,
+            mint,
+            nounce
+
+        ) = array_refs![input, 1, 32, 1];
+
+        let initialized = match initialized {
+            [0] => false,
+            [1] => true,
+            _ => return Err(TreasuryError::InvalidTreasuryData.into()),
+        };
+
+        Ok(Treasury {
+            initialized, 
+            mint: Pubkey::new_from_array(*mint),                   
+            nounce: u8::from_le_bytes(*nounce)
         })
     }
 }

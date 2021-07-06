@@ -15,6 +15,8 @@ use crate::{
 
 pub enum StreamInstruction {
 
+    /// Initialize a new stream contract
+    ///
     /// 0. `[signer]` The treasurer account (The creator of the money stream).
     /// 1. `[writable]` The treasurer associated token account.
     /// 2. `[writable]` The beneficiary associated token account.
@@ -30,7 +32,7 @@ pub enum StreamInstruction {
     CreateStream {
         beneficiary_address: Pubkey,
         stream_name: String,        
-        funding_amount: f64, // OPTIONAL
+        // funding_amount: f64, // OPTIONAL
         rate_amount: f64,
         rate_interval_in_seconds: u64,
         start_utc: u64,
@@ -40,11 +42,15 @@ pub enum StreamInstruction {
         auto_pause_in_seconds: u64
     },
 
+    /// Adds a specific amount of funds to a stream
+    ///
     /// 0. `[signer]` The contributor account
     /// 1. `[writable]` The contributor token account
     /// 2. `[]` The treasury account (Money stream treasury account).
     /// 3. `[writable]` The treasury token account.
-    /// 4. `[]` The associated token mint account
+    /// 4. `[]` The beneficiary mint account
+    /// 5. `[writable]` The contributor treasury token account (the account of the token issued by the treasury and owned by the contributor)
+    /// 6. `[]` The treasury mint account (the mint of the treasury pool token)
     /// 5. `[writable]` The stream account (The stream contract account).
     /// 6.  [writable] The Money Streaming Protocol operating account.
     /// 7.  [] The Money Streaming Program account.
@@ -54,12 +60,29 @@ pub enum StreamInstruction {
         resume: bool
     },
 
+    /// Recovers a specific amount of funds from a previously funded stream
+    ///
+    /// 0. `[signer]` The contributor account
+    /// 1. `[writable]` The contributor token account
+    /// 2. `[]` The treasury account (Money streaming treasury account).
+    /// 3. `[writable]` The treasury token account.
+    /// 4. `[]` The contributor mint account
+    /// 5. `[writable]` The contributor treasury token account (the account of the token issued by the treasury and owned by the contributor)
+    /// 6. `[]` The treasury mint account (the mint of the treasury pool token)
+    /// 5. `[writable]` The stream account (The stream contract account).
+    /// 6.  [writable] The Money Streaming Protocol operating account.
+    /// 7.  [] The Money Streaming Program account.
+    /// 8. `[]` The SPL Token Program account.
+    RecoverFunds {
+        recover_amount: f64
+    },
+
     /// 0. `[signer]` The beneficiary account
     /// 1. `[writable]` The beneficiary token account (the recipient of the money)
     /// 2. `[]` The beneficiary token mint account
     /// 3. `[]` The treasury account
     /// 4. `[writable]` The treasury token account
-    /// 5. `[writable]` The stream account (Money stream state account).
+    /// 5. `[writable]` The stream account (Money streaming state account).
     /// 6. `[writable]` The Money Streaming Protocol operating account.
     /// 7. `[]` The Money Streaming Program account.
     /// 8. `[]` The SPL Token Program account.
@@ -122,10 +145,32 @@ pub enum StreamInstruction {
     /// 9. `[]` The SPL Token Program account.
     CloseStream,
 
+    /// 0. `[signer]` The treasurer account (the creator of the treasury)
+    /// 1. `[writable]` The treasury account
+    /// 2. `[writable]` The treasury pool mint account
+    /// 3. `[writable]` The Money Streaming Protocol operating account.
+    /// 4. `[]` The SPL Token Program account.
+    /// 5. `[]` System Program account.
+    CreateTreasury {
+        nounce: u8
+    },
+
     /// 0. `[signer]` The treasurer account (the creator of the money stream)
-    /// 1. `[writable]` The treasury account (Money stream treasury account).
+    /// 1. `[writable]` The treasury account
     /// 2.  [writable] The Money Streaming Protocol operating account.
     CloseTreasury,
+
+    /// Transfers a specific amount of tokens between 2 accounts
+    ///
+    /// 0. `[signer]` The source account
+    /// 1. `[writable]` The source token account
+    /// 2. `[writable]` The destination token account.
+    /// 3. `[]` The associated token mint account
+    /// 4.  [writable] The Money Streaming Protocol operating account.
+    /// 5. `[]` The SPL Token Program account.
+    Transfer {
+        amount: f64
+    }
 }
 
 impl StreamInstruction {
@@ -140,13 +185,16 @@ impl StreamInstruction {
 
             0 => Self::unpack_create_stream(result)?,
             1 => Self::unpack_add_funds(result)?,
-            2 => Self::unpack_withdraw(result)?,
-            3 => Ok(Self::PauseStream)?,
-            4 => Ok(Self::ResumeStream)?,
-            5 => Self::unpack_propose_update(result)?,
-            6 => Self::unpack_answer_update(result)?,
-            7 => Ok(Self::CloseStream)?,
-            8 => Ok(Self::CloseTreasury)?,
+            2 => Self::unpack_recover_funds(result)?,
+            3 => Self::unpack_withdraw(result)?,
+            4 => Ok(Self::PauseStream)?,
+            5 => Ok(Self::ResumeStream)?,
+            6 => Self::unpack_propose_update(result)?,
+            7 => Self::unpack_answer_update(result)?,
+            8 => Ok(Self::CloseStream)?,
+            9 => Self::unpack_create_treasury(result)?,
+            10 => Ok(Self::CloseTreasury)?,
+            11 => Self::unpack_transfer(result)?,
 
             _ => return Err(StreamError::InvalidStreamInstruction.into()),
         })
@@ -160,7 +208,7 @@ impl StreamInstruction {
             Self::CreateStream {
                 beneficiary_address,
                 stream_name,
-                funding_amount,
+                // funding_amount,
                 rate_amount,
                 rate_interval_in_seconds,
                 start_utc,
@@ -175,7 +223,7 @@ impl StreamInstruction {
 
                 buf.extend_from_slice(beneficiary_address.as_ref());
                 buf.extend_from_slice(stream_name.as_ref());
-                buf.extend_from_slice(&funding_amount.to_le_bytes());
+                // buf.extend_from_slice(&funding_amount.to_le_bytes());
                 buf.extend_from_slice(&rate_amount.to_le_bytes());
                 buf.extend_from_slice(&rate_interval_in_seconds.to_le_bytes());
                 buf.extend_from_slice(&start_utc.to_le_bytes());
@@ -202,14 +250,19 @@ impl StreamInstruction {
                 buf.push(resume[0] as u8);
             },
 
-            &Self::Withdraw { withdrawal_amount } => {
+            &Self::RecoverFunds { recover_amount } => {
                 buf.push(2);
+                buf.extend_from_slice(&recover_amount.to_le_bytes());
+            },
+
+            &Self::Withdraw { withdrawal_amount } => {
+                buf.push(3);
                 buf.extend_from_slice(&withdrawal_amount.to_le_bytes());
             },
 
-            &Self::PauseStream => buf.push(3),
+            &Self::PauseStream => buf.push(4),
 
-            &Self::ResumeStream => buf.push(4),
+            &Self::ResumeStream => buf.push(5),
 
             Self::ProposeUpdate {
                 proposed_by,
@@ -225,7 +278,7 @@ impl StreamInstruction {
                 auto_pause_in_seconds
 
             } => {
-                buf.push(5);
+                buf.push(6);
 
                 buf.extend_from_slice(proposed_by.as_ref());
                 buf.extend_from_slice(stream_name.as_ref());
@@ -241,7 +294,7 @@ impl StreamInstruction {
             },
 
             &Self::AnswerUpdate { approve } => { 
-                buf.push(6);
+                buf.push(7);
 
                 let approve = match approve {
                     false => [0],
@@ -251,9 +304,19 @@ impl StreamInstruction {
                 buf.push(approve[0] as u8);
             },
 
-            &Self::CloseStream => buf.push(7),
+            &Self::CloseStream => buf.push(8),
+            
+            &Self::CreateTreasury { nounce } => {
+                buf.push(9);
+                buf.extend_from_slice(&nounce.to_le_bytes());
+            },
 
-            &Self::CloseTreasury => buf.push(8),
+            &Self::CloseTreasury => buf.push(10),
+
+            &Self::Transfer { amount } => {
+                buf.push(11);
+                buf.extend_from_slice(&amount.to_le_bytes());
+            }
         };
 
         buf
@@ -264,8 +327,8 @@ impl StreamInstruction {
         let (beneficiary_address, result) = Self::unpack_pubkey(input)?;
         let (stream_name, result) = Self::unpack_string(result)?;
 
-        let (funding_amount, result) = result.split_at(8);
-        let funding_amount = Self::unpack_f64(funding_amount)?;
+        // let (funding_amount, result) = result.split_at(8);
+        // let funding_amount = Self::unpack_f64(funding_amount)?;
 
         let (rate_amount, result) = result.split_at(8);
         let rate_amount = Self::unpack_f64(rate_amount)?;
@@ -291,7 +354,7 @@ impl StreamInstruction {
         Ok(Self::CreateStream {
             beneficiary_address,
             stream_name,
-            funding_amount,
+            // funding_amount,
             rate_amount,
             rate_interval_in_seconds,
             start_utc,
@@ -317,6 +380,13 @@ impl StreamInstruction {
             contribution_amount,
             resume
         })
+    }
+
+    fn unpack_recover_funds(input: &[u8]) -> Result<Self, StreamError> {
+        let (recover_amount, result) = input.split_at(8);
+        let recover_amount = Self::unpack_f64(recover_amount)?;
+
+        Ok(Self::RecoverFunds { recover_amount })
     }
 
     fn unpack_withdraw(input: &[u8]) -> Result<Self, StreamError> {
@@ -377,6 +447,23 @@ impl StreamInstruction {
         Ok(Self::AnswerUpdate { approve })
     }
 
+    fn unpack_create_treasury(input: &[u8]) -> Result<Self, StreamError> {
+
+        let (&nounce, _result) = input
+            .split_first()
+            .ok_or(StreamError::InvalidStreamInstruction.into())?;
+
+        Ok(Self::CreateTreasury { nounce })
+    }
+
+    fn unpack_transfer(input: &[u8]) -> Result<Self, StreamError> {
+
+        let (amount, result) = input.split_at(8);
+        let amount = Self::unpack_f64(amount)?;
+
+        Ok(Self::Transfer { amount })
+    }
+
     fn unpack_pubkey(input: &[u8]) -> Result<(Pubkey, &[u8]), StreamError> {
         if input.len() >= 32 {
             let (key, rest) = input.split_at(32);
@@ -430,7 +517,7 @@ impl StreamInstruction {
     msp_ops_address: Pubkey,
     beneficiary_address: Pubkey,
     stream_name: String,
-    funding_amount: f64,
+    // funding_amount: f64,
     rate_amount: f64,
     rate_interval_in_seconds: u64,
     start_utc: u64,
@@ -446,7 +533,7 @@ impl StreamInstruction {
     let data = StreamInstruction::CreateStream {
         beneficiary_address,
         stream_name,
-        funding_amount,
+        // funding_amount,
         rate_amount,
         rate_interval_in_seconds,
         start_utc,
@@ -480,9 +567,9 @@ impl StreamInstruction {
  }
 
  pub fn add_funds(
+    program_id: &Pubkey,
     stream_address: &Pubkey,
     treasury_address: &Pubkey,
-    program_id: &Pubkey,
     contribution_token_address: Pubkey,
     contribution_amount: f64,
     resume: bool
@@ -555,4 +642,36 @@ impl StreamInstruction {
     ];
 
     Ok(Instruction { program_id: *program_id, accounts, data })
+ }
+
+ pub fn transfer(
+     source_address: Pubkey,
+     source_token_address: Pubkey,
+     destination_token_address: Pubkey,
+     mint_address: Pubkey,
+    //  msp_ops_address: Pubkey,
+     program_id: &Pubkey,
+     amount: f64
+
+ ) -> Result<Instruction, StreamError> {
+
+    check_program_account(program_id);
+
+    let data = StreamInstruction::Transfer { amount }.pack();
+    let accounts = vec![
+        AccountMeta::new_readonly(source_address, true),
+        AccountMeta::new(source_token_address, false),
+        AccountMeta::new(destination_token_address, false),
+        AccountMeta::new(mint_address, false),
+        // AccountMeta::new(msp_ops_address, false),
+        // AccountMeta::new_readonly(*program_id, false),
+        AccountMeta::new_readonly(spl_token::id(), false),
+        // AccountMeta::new_readonly(solana_program::system_program::id(), false)
+    ];
+
+    Ok(Instruction { 
+        program_id: *program_id, 
+        accounts, 
+        data 
+    })
  }
