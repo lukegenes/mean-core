@@ -189,15 +189,6 @@ impl Processor {
                 )
             },
 
-            StreamInstruction::CloseTreasury => {
-                msg!("Instruction: CloseTreasury");
-
-                Self::process_close_treasury(
-                    accounts, 
-                    program_id
-                )
-            },
-
             StreamInstruction::Transfer { amount } => {
                 msg!("Instruction: Transfer");
 
@@ -310,10 +301,10 @@ impl Processor {
         let account_info_iter = &mut accounts.iter();
         let contributor_account_info = next_account_info(account_info_iter)?;
         let contributor_token_account_info = next_account_info(account_info_iter)?;
-        let treasury_account_info = next_account_info(account_info_iter)?;
-        let treasury_token_account_info = next_account_info(account_info_iter)?;
-        let beneficiary_mint_account_info = next_account_info(account_info_iter)?;
         let contributor_treasury_token_account_info = next_account_info(account_info_iter)?;
+        let beneficiary_mint_account_info = next_account_info(account_info_iter)?;
+        let treasury_account_info = next_account_info(account_info_iter)?;
+        let treasury_token_account_info = next_account_info(account_info_iter)?;        
         let treasury_mint_account_info = next_account_info(account_info_iter)?;
         let stream_account_info = next_account_info(account_info_iter)?;
         let msp_ops_account_info = next_account_info(account_info_iter)?;
@@ -421,10 +412,10 @@ impl Processor {
         let account_info_iter = &mut accounts.iter();
         let contributor_account_info = next_account_info(account_info_iter)?;
         let contributor_token_account_info = next_account_info(account_info_iter)?;
+        let contributor_treasury_token_account_info = next_account_info(account_info_iter)?;
+        let contributor_mint_account_info = next_account_info(account_info_iter)?;
         let treasury_account_info = next_account_info(account_info_iter)?;
         let treasury_token_account_info = next_account_info(account_info_iter)?;
-        let contributor_mint_account_info = next_account_info(account_info_iter)?;
-        let contributor_treasury_token_account_info = next_account_info(account_info_iter)?;
         let treasury_mint_account_info = next_account_info(account_info_iter)?;
         let stream_account_info = next_account_info(account_info_iter)?;
         let msp_ops_account_info = next_account_info(account_info_iter)?;
@@ -463,10 +454,29 @@ impl Processor {
             return Err(StreamError::NotAllowedRecoverableAmount.into());
         }
 
-        // Burn treasury tokens from the contributor treasury token account
         let mint = spl_token::state::Mint::unpack_from_slice(&treasury_mint_account_info.data.borrow())?;
+        let amount = (escrow_vested_amount * recover_amount / (mint.supply as f64));
+
+        // Transfer tokens to contributor
+        let transfer_ix = transfer(    
+            *treasury_account_info.key,
+            *treasury_token_account_info.key,
+            *contributor_token_account_info.key,
+            *contributor_mint_account_info.key,
+            program_id,
+            amount
+        )?;
+
+        invoke(&transfer_ix, &[
+            contributor_account_info.clone(),
+            contributor_token_account_info.clone(),
+            treasury_token_account_info.clone(),
+            contributor_mint_account_info.clone()
+        ]);
+
+        // Burn treasury tokens from the contributor treasury token account
         let pow = num_traits::pow(10f64, mint.decimals.into());
-        let burn_amount = (escrow_vested_amount * recover_amount / (mint.supply as f64)) * pow;
+        let burn_amount = amount * pow;
         let burn_ix = spl_token::instruction::burn(
             token_program_account_info.key,
             contributor_treasury_token_account_info.key,
@@ -484,31 +494,34 @@ impl Processor {
         ]);
 
         msg!("Burning {:?} treasury tokens from: {:?}", 
-            burn_amount, 
+            amount, 
             (*contributor_treasury_token_account_info.key).to_string()
         );
-
-        // Transfer tokens to contributor
-        let transfer_ix = transfer(    
-            *treasury_account_info.key,
-            *treasury_token_account_info.key,
-            *contributor_token_account_info.key,
-            *contributor_mint_account_info.key,
-            program_id,
-            burn_amount
-        )?;
-
-        invoke(&transfer_ix, &[
-            contributor_account_info.clone(),
-            contributor_token_account_info.clone(),
-            treasury_token_account_info.clone(),
-            contributor_mint_account_info.clone()
-        ]);
 
         // Update the stream
         stream.total_deposits -= recover_amount;
         // Save
         Stream::pack_into_slice(&stream, &mut stream_account_info.data.borrow_mut());
+
+        // Check the total supply of the treasury
+        if mint.supply == 0
+        {
+            // Close the treasury
+            let mut treasury = Treasury::unpack_from_slice(&treasury_account_info.data.borrow())?;
+            let msp_ops_lamports = msp_ops_account_info.lamports();
+
+            **msp_ops_account_info.lamports.borrow_mut() = msp_ops_lamports
+                .checked_add(treasury_account_info.lamports())
+                .ok_or(StreamError::Overflow)?;
+
+            **treasury_account_info.lamports.borrow_mut() = 0;
+
+            treasury.mint = Pubkey::default();
+            treasury.nounce = 0;
+            treasury.initialized = false;
+
+            Treasury::pack_into_slice(&treasury, &mut treasury_account_info.data.borrow_mut());
+        }
 
         // Debit Fees from treasurer
         let flat_fee = 0.025f64;
@@ -1265,41 +1278,6 @@ impl Processor {
         Ok(())
     }
 
-    fn process_close_treasury(
-        accounts: &[AccountInfo], 
-        program_id: &Pubkey,
-
-    ) -> ProgramResult {
-        
-        // let account_info_iter = &mut accounts.iter();
-        // let treasurer_account_info = next_account_info(account_info_iter)?;
-
-        // if !treasurer_account_info.is_signer {
-        //     return Err(StreamError::MissingInstructionSignature.into());
-        // }
-
-        // let treasury_account_info = next_account_info(account_info_iter)?;
-        // // From here all accounts passed through the accounts iterator are the stream accounts to be closed
-
-        // while let some_stream_account_info = account_info_iter.next() {
-        //     let stream_account_info = some_stream_account_info.unwrap();
-        //     let stream = Stream::unpack_from_slice(&stream_account_info.data.borrow())?;
-        //     let instruction = close_stream(
-        //         initializer_account_info.key,
-        //         stream_account_info.key,
-        //         &stream.beneficiary_withdrawal_address,
-        //         treasurer_account_info.key,
-        //         program_id
-        //     );
-
-        //     invoke(&instruction)?;
-        // }
-
-        // All streams should be closed now
-        
-        Ok(())
-    }
-
     fn process_transfer(
         accounts: &[AccountInfo],
         program_id: &Pubkey,
@@ -1340,7 +1318,7 @@ impl Processor {
             token_program_account_info.clone()
         ]);
 
-        msg!("Transfer {:?} tokens to: {:?}", 
+        msg!("Transfer {:?} tokens to: {:?}",
             amount, 
             (*destination_token_account_info.key).to_string()
         );

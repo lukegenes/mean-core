@@ -46,15 +46,15 @@ pub enum StreamInstruction {
     ///
     /// 0. `[signer]` The contributor account
     /// 1. `[writable]` The contributor token account
-    /// 2. `[]` The treasury account (Money stream treasury account).
-    /// 3. `[writable]` The treasury token account.
-    /// 4. `[]` The beneficiary mint account
-    /// 5. `[writable]` The contributor treasury token account (the account of the token issued by the treasury and owned by the contributor)
+    /// 2. `[writable]` The contributor treasury token account (the account of the token issued by the treasury and owned by the contributor)
+    /// 3. `[]` The beneficiary mint account
+    /// 4. `[]` The treasury account (Money stream treasury account).
+    /// 5. `[writable]` The treasury token account.    
     /// 6. `[]` The treasury mint account (the mint of the treasury pool token)
-    /// 5. `[writable]` The stream account (The stream contract account).
-    /// 6.  [writable] The Money Streaming Protocol operating account.
-    /// 7.  [] The Money Streaming Program account.
-    /// 8. `[]` The SPL Token Program account.
+    /// 7. `[writable]` The stream account (The stream contract account).
+    /// 8.  [writable] The Money Streaming Protocol operating account.
+    /// 9.  [] The Money Streaming Program account.
+    /// 10. `[]` The SPL Token Program account.
     AddFunds {
         contribution_amount: f64,
         resume: bool
@@ -64,15 +64,15 @@ pub enum StreamInstruction {
     ///
     /// 0. `[signer]` The contributor account
     /// 1. `[writable]` The contributor token account
-    /// 2. `[]` The treasury account (Money streaming treasury account).
-    /// 3. `[writable]` The treasury token account.
-    /// 4. `[]` The contributor mint account
-    /// 5. `[writable]` The contributor treasury token account (the account of the token issued by the treasury and owned by the contributor)
+    /// 2. `[writable]` The contributor treasury token account (the account of the token issued by the treasury and owned by the contributor)
+    /// 3. `[]` The contributor mint account
+    /// 4. `[]` The treasury account (Money streaming treasury account).
+    /// 5. `[writable]` The treasury token account.    
     /// 6. `[]` The treasury mint account (the mint of the treasury pool token)
-    /// 5. `[writable]` The stream account (The stream contract account).
-    /// 6.  [writable] The Money Streaming Protocol operating account.
-    /// 7.  [] The Money Streaming Program account.
-    /// 8. `[]` The SPL Token Program account.
+    /// 7. `[writable]` The stream account (The stream contract account).
+    /// 8.  [writable] The Money Streaming Protocol operating account.
+    /// 9.  [] The Money Streaming Program account.
+    /// 10. `[]` The SPL Token Program account.
     RecoverFunds {
         recover_amount: f64
     },
@@ -155,11 +155,6 @@ pub enum StreamInstruction {
         nounce: u8
     },
 
-    /// 0. `[signer]` The treasurer account (the creator of the money stream)
-    /// 1. `[writable]` The treasury account
-    /// 2.  [writable] The Money Streaming Protocol operating account.
-    CloseTreasury,
-
     /// Transfers a specific amount of tokens between 2 accounts
     ///
     /// 0. `[signer]` The source account
@@ -193,8 +188,7 @@ impl StreamInstruction {
             7 => Self::unpack_answer_update(result)?,
             8 => Ok(Self::CloseStream)?,
             9 => Self::unpack_create_treasury(result)?,
-            10 => Ok(Self::CloseTreasury)?,
-            11 => Self::unpack_transfer(result)?,
+            10 => Self::unpack_transfer(result)?,
 
             _ => return Err(StreamError::InvalidStreamInstruction.into()),
         })
@@ -311,10 +305,8 @@ impl StreamInstruction {
                 buf.extend_from_slice(&nounce.to_le_bytes());
             },
 
-            &Self::CloseTreasury => buf.push(10),
-
             &Self::Transfer { amount } => {
-                buf.push(11);
+                buf.push(10);
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
         };
