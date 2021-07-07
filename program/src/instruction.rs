@@ -18,21 +18,19 @@ pub enum StreamInstruction {
     /// Initialize a new stream contract
     ///
     /// 0. `[signer]` The treasurer account (The creator of the money stream).
-    /// 1. `[writable]` The treasurer associated token account.
-    /// 2. `[writable]` The beneficiary associated token account.
+    /// 1. `[writable]` The treasurer token account.
+    /// 2. `[writable]` The beneficiary token account.
     /// 3. `[]` The treasury account (The stream contract treasury account).
-    /// 4. `[writable]` The treasury associated token account.
+    /// 4. `[]` The treasury token account.
     /// 5. `[writable]` The stream account (The stream contract account).
     /// 6. `[]` The associated token mint account    
-    /// 7.  [writable] The Money Streaming Protocol operating account.
-    /// 8.  [] The Money Streaming Program account.
-    /// 9. `[]` The SPL Token Program account.
-    /// 10. `[]` System Program account.
-    /// 11. `[]` Rent Sysvar account.
+    /// 7.  [] The Money Streaming Program account.
+    /// 8. `[]` The SPL Token Program account.
+    /// 9. `[]` System Account.
     CreateStream {
         beneficiary_address: Pubkey,
         stream_name: String,        
-        // funding_amount: f64, // OPTIONAL
+        funding_amount: f64, // OPTIONAL
         rate_amount: f64,
         rate_interval_in_seconds: u64,
         start_utc: u64,
@@ -52,9 +50,10 @@ pub enum StreamInstruction {
     /// 5. `[writable]` The treasury token account.    
     /// 6. `[]` The treasury mint account (the mint of the treasury pool token)
     /// 7. `[writable]` The stream account (The stream contract account).
-    /// 8.  [writable] The Money Streaming Protocol operating account.
-    /// 9.  [] The Money Streaming Program account.
-    /// 10. `[]` The SPL Token Program account.
+    /// 8.  [writable] The Money Streaming Protocol account.
+    /// 9.  [writable] The Money Streaming Protocol operating token account.
+    /// 10.  [] The Money Streaming Program account.
+    /// 11. `[]` The SPL Token Program account.
     AddFunds {
         contribution_amount: f64,
         resume: bool
@@ -70,9 +69,10 @@ pub enum StreamInstruction {
     /// 5. `[writable]` The treasury token account.    
     /// 6. `[]` The treasury mint account (the mint of the treasury pool token)
     /// 7. `[writable]` The stream account (The stream contract account).
-    /// 8.  [writable] The Money Streaming Protocol operating account.
-    /// 9.  [] The Money Streaming Program account.
-    /// 10. `[]` The SPL Token Program account.
+    /// 8.  [writable] The Money Streaming Protocol account.
+    /// 9.  [writable] The Money Streaming Protocol operating token account.
+    /// 10.  [] The Money Streaming Program account.
+    /// 11. `[]` The SPL Token Program account.
     RecoverFunds {
         recover_amount: f64
     },
@@ -83,7 +83,7 @@ pub enum StreamInstruction {
     /// 3. `[]` The treasury account
     /// 4. `[writable]` The treasury token account
     /// 5. `[writable]` The stream account (Money streaming state account).
-    /// 6. `[writable]` The Money Streaming Protocol operating account.
+    /// 6. `[writable]` The Money Streaming Protocol operating token account.
     /// 7. `[]` The Money Streaming Program account.
     /// 8. `[]` The SPL Token Program account.
     /// 9. `[]` System Program account.
@@ -99,7 +99,7 @@ pub enum StreamInstruction {
 
     /// 0. `[signer]` The initializer of the transaction (msp => `auto resume`, treasurer or beneficiary)
     /// 1. `[writable]` The stream account (Money stream state account).
-    /// 2. `[writable]` The Money Streaming Protocol operating account.
+    /// 2. `[writable]` The Money Streaming Protocol operating token account.
     /// 3. `[]` System Program account.
     ResumeStream,
 
@@ -107,7 +107,7 @@ pub enum StreamInstruction {
     /// 1. `[writable]` The stream terms account (Update proposal account).
     /// 2. `[]` The counterparty's account (if the initializer is the treasurer then it would be the beneficiary or vice versa)
     /// 3. `[writable]` The stream account
-    /// 4.  [writable] The Money Streaming Protocol operating account.
+    /// 4.  [writable] The Money Streaming Protocol operating token account.
     /// 5. `[]` System Program account.
     ProposeUpdate {
         proposed_by: Pubkey,
@@ -127,7 +127,7 @@ pub enum StreamInstruction {
     /// 1. `[writable]` The stream terms account (Update proposal account).
     /// 2. `[]` The counterparty's account (if the initializer is the treasurer then it would be the beneficiary or vice versa)
     /// 3. `[writable]` The stream account
-    /// 4.  [writable] The Money Streaming Protocol operating account.
+    /// 4.  [writable] The Money Streaming Protocol operating token account.
     /// 5. `[]` System Program account.
     AnswerUpdate {
         approve: bool
@@ -140,15 +140,16 @@ pub enum StreamInstruction {
     /// 4. `[]` The beneficiary token mint account
     /// 5. `[writable]` The treasury token account
     /// 6. `[writable]` The treasury token owner (The Money Streaming Program)
-    /// 7. `[writable]` The Money Streaming Protocol operating account.
-    /// 8. `[]` System Program account.
-    /// 9. `[]` The SPL Token Program account.
+    /// 7. `[writable]` The Money Streaming Protocol ccount.
+    /// 8. `[writable]` The Money Streaming Protocol operating token account.
+    /// 9. `[]` System Program account.
+    /// 10. `[]` The SPL Token Program account.
     CloseStream,
 
     /// 0. `[signer]` The treasurer account (the creator of the treasury)
     /// 1. `[writable]` The treasury account
     /// 2. `[writable]` The treasury pool mint account
-    /// 3. `[writable]` The Money Streaming Protocol operating account.
+    /// 3. `[writable]` The Money Streaming Protocol operating token account.
     /// 4. `[]` The SPL Token Program account.
     /// 5. `[]` System Program account.
     CreateTreasury {
@@ -161,7 +162,7 @@ pub enum StreamInstruction {
     /// 1. `[writable]` The source token account
     /// 2. `[writable]` The destination token account.
     /// 3. `[]` The associated token mint account
-    /// 4.  [writable] The Money Streaming Protocol operating account.
+    /// 4.  [writable] The Money Streaming Protocol operating token account.
     /// 5. `[]` The SPL Token Program account.
     Transfer {
         amount: f64
@@ -202,7 +203,7 @@ impl StreamInstruction {
             Self::CreateStream {
                 beneficiary_address,
                 stream_name,
-                // funding_amount,
+                funding_amount,
                 rate_amount,
                 rate_interval_in_seconds,
                 start_utc,
@@ -217,7 +218,7 @@ impl StreamInstruction {
 
                 buf.extend_from_slice(beneficiary_address.as_ref());
                 buf.extend_from_slice(stream_name.as_ref());
-                // buf.extend_from_slice(&funding_amount.to_le_bytes());
+                buf.extend_from_slice(&funding_amount.to_le_bytes());
                 buf.extend_from_slice(&rate_amount.to_le_bytes());
                 buf.extend_from_slice(&rate_interval_in_seconds.to_le_bytes());
                 buf.extend_from_slice(&start_utc.to_le_bytes());
@@ -319,8 +320,8 @@ impl StreamInstruction {
         let (beneficiary_address, result) = Self::unpack_pubkey(input)?;
         let (stream_name, result) = Self::unpack_string(result)?;
 
-        // let (funding_amount, result) = result.split_at(8);
-        // let funding_amount = Self::unpack_f64(funding_amount)?;
+        let (funding_amount, result) = result.split_at(8);
+        let funding_amount = Self::unpack_f64(funding_amount)?;
 
         let (rate_amount, result) = result.split_at(8);
         let rate_amount = Self::unpack_f64(rate_amount)?;
@@ -346,7 +347,7 @@ impl StreamInstruction {
         Ok(Self::CreateStream {
             beneficiary_address,
             stream_name,
-            // funding_amount,
+            funding_amount,
             rate_amount,
             rate_interval_in_seconds,
             start_utc,
@@ -509,7 +510,7 @@ impl StreamInstruction {
     msp_ops_address: Pubkey,
     beneficiary_address: Pubkey,
     stream_name: String,
-    // funding_amount: f64,
+    funding_amount: f64,
     rate_amount: f64,
     rate_interval_in_seconds: u64,
     start_utc: u64,
@@ -525,7 +526,7 @@ impl StreamInstruction {
     let data = StreamInstruction::CreateStream {
         beneficiary_address,
         stream_name,
-        // funding_amount,
+        funding_amount,
         rate_amount,
         rate_interval_in_seconds,
         start_utc,
