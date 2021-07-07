@@ -149,9 +149,11 @@ pub enum StreamInstruction {
     /// 0. `[signer]` The treasurer account (the creator of the treasury)
     /// 1. `[writable]` The treasury account
     /// 2. `[writable]` The treasury pool mint account
-    /// 3. `[writable]` The Money Streaming Protocol operating token account.
-    /// 4. `[]` The SPL Token Program account.
-    /// 5. `[]` System Program account.
+    /// 3. `[writable]` The Money Streaming Protocol ccount.
+    /// 4. `[writable]` The Money Streaming Protocol operating token account.
+    /// 5. `[]` The SPL Token Program account.
+    /// 6. `[]` System Program account.
+    /// 7. `[]` SysvarRent account.
     CreateTreasury {
         nounce: u8
     },

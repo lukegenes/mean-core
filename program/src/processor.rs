@@ -237,8 +237,9 @@ impl Processor {
         let clock = Clock::get()?;
         let mint = spl_token::state::Mint::unpack_from_slice(&mint_account_info.data.borrow())?;
         let pow = num_traits::pow(10f64, mint.decimals.into());
-        let fee = 0.03f64 * funding_amount * 100f64;
-        let amount = (funding_amount - fee);
+        msg!("{:?}", funding_amount);
+        let fee = 0.03f64 * funding_amount / 100f64;
+        let amount = funding_amount - fee;
 
         if funding_amount == rate_amount &&
            start_utc / 1000 <= (clock.unix_timestamp as u64)
@@ -307,7 +308,7 @@ impl Processor {
             stream.stream_associated_token = *mint_account_info.key;
             stream.treasury_address = *treasury_account_info.key;
             stream.treasury_estimated_depletion_utc = 0;
-            stream.total_deposits = 0.0;
+            stream.total_deposits = amount;
             stream.total_withdrawals = 0.0;
             stream.escrow_vested_amount_snap = 0.0;
             stream.escrow_vested_amount_snap_block_height = 0;
@@ -1333,10 +1334,11 @@ impl Processor {
         let treasurer_account_info = next_account_info(account_info_iter)?;
         let treasury_account_info = next_account_info(account_info_iter)?;
         let mint_account_info = next_account_info(account_info_iter)?;
-        let msp_ops_account_info = next_account_info(account_info_iter)?;
         let msp_account_info = next_account_info(account_info_iter)?;
+        let msp_ops_account_info = next_account_info(account_info_iter)?;
         let token_program_account_info = next_account_info(account_info_iter)?;
         let system_account_info = next_account_info(account_info_iter)?;
+        let rent_account_info = next_account_info(account_info_iter)?;
 
         if !treasurer_account_info.is_signer
         {
@@ -1355,7 +1357,8 @@ impl Processor {
         invoke(&init_mint_ix, &[
             token_program_account_info.clone(),
             mint_account_info.clone(),
-            treasury_account_info.clone()
+            treasury_account_info.clone(),
+            rent_account_info.clone()
         ]);
 
         msg!("Initialize treasury mint: {:?}", (*mint_account_info.key).to_string());
