@@ -323,7 +323,6 @@ impl Processor {
 
         let fee = 0.03f64 * contribution_amount / 100f64;
         let amount = contribution_amount - fee;
-        let treasury_mint = spl_token::state::Mint::unpack_from_slice(&treasury_mint_account_info.data.borrow())?;
         let mut treasury = Treasury::unpack_from_slice(&treasury_account_info.data.borrow())?;
 
         let (treasury_pool_address, treasury_pool_bump_seed) = Pubkey::find_program_address(
@@ -343,6 +342,7 @@ impl Processor {
            *treasury_mint_account_info.key != Pubkey::default()
         {
             // Mint just if there is a treasury pool
+            let treasury_mint = spl_token::state::Mint::unpack_from_slice(&treasury_mint_account_info.data.borrow())?;
             let treasury_mint_signer_seed: &[&[_]] = &[
                 treasury.treasury_base_address.as_ref(),
                 &treasury.treasury_block_height.to_le_bytes(),
@@ -1497,7 +1497,6 @@ impl Processor {
     ) -> ProgramResult {
 
         let account_info_iter = &mut accounts.iter();
-        let stream_account_info = next_account_info(account_info_iter)?;
         let source_account_info = next_account_info(account_info_iter)?;
         let source_token_account_info = next_account_info(account_info_iter)?;
         let destination_token_account_info = next_account_info(account_info_iter)?;
