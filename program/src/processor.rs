@@ -339,36 +339,41 @@ impl Processor {
             return Err(StreamError::InvalidTreasuryData.into());
         }
 
-        let treasury_mint_signer_seed: &[&[_]] = &[
-            treasury.treasury_base_address.as_ref(),
-            &treasury.treasury_block_height.to_le_bytes(),
-            &[treasury_pool_bump_seed]
-        ];
+        if *contributor_treasury_token_account_info.key != Pubkey::default() &&
+           *treasury_mint_account_info.key != Pubkey::default()
+        {
+            // Mint just if there is a treasury pool
+            let treasury_mint_signer_seed: &[&[_]] = &[
+                treasury.treasury_base_address.as_ref(),
+                &treasury.treasury_block_height.to_le_bytes(),
+                &[treasury_pool_bump_seed]
+            ];
 
-        let treasury_pow = num_traits::pow(10f64, treasury_mint.decimals.into());
-        let mint_to_ix = spl_token::instruction::mint_to(
-            token_program_account_info.key,
-            treasury_mint_account_info.key,
-            contributor_treasury_token_account_info.key,
-            treasury_account_info.key, //msp_account_info.key,
-            &[],
-            (amount * treasury_pow) as u64,
-        )?;
+            let treasury_pow = num_traits::pow(10f64, treasury_mint.decimals.into());
+            let mint_to_ix = spl_token::instruction::mint_to(
+                token_program_account_info.key,
+                treasury_mint_account_info.key,
+                contributor_treasury_token_account_info.key,
+                treasury_account_info.key, //msp_account_info.key,
+                &[],
+                (amount * treasury_pow) as u64,
+            )?;
 
-        invoke_signed(&mint_to_ix,
-            &[
-                token_program_account_info.clone(),
-                treasury_mint_account_info.clone(),
-                contributor_treasury_token_account_info.clone(),
-                treasury_account_info.clone() // msp_account_info.clone()
-            ],
-            &[treasury_mint_signer_seed]
-        )?;
+            invoke_signed(&mint_to_ix,
+                &[
+                    token_program_account_info.clone(),
+                    treasury_mint_account_info.clone(),
+                    contributor_treasury_token_account_info.clone(),
+                    treasury_account_info.clone() // msp_account_info.clone()
+                ],
+                &[treasury_mint_signer_seed]
+            )?;
 
-        msg!("Minting {:?} treasury pool tokens to: {:?}", 
-            amount, 
-            (*contributor_treasury_token_account_info.key).to_string()
-        );
+            msg!("Minting {:?} treasury pool tokens to: {:?}", 
+                amount, 
+                (*contributor_treasury_token_account_info.key).to_string()
+            );
+        }
 
         // Transfer tokens from contributor to treasury pool
         let beneficiary_mint = spl_token::state::Mint::unpack_from_slice(&beneficiary_mint_account_info.data.borrow())?;
@@ -1492,6 +1497,7 @@ impl Processor {
     ) -> ProgramResult {
 
         let account_info_iter = &mut accounts.iter();
+        let stream_account_info = next_account_info(account_info_iter)?;
         let source_account_info = next_account_info(account_info_iter)?;
         let source_token_account_info = next_account_info(account_info_iter)?;
         let destination_token_account_info = next_account_info(account_info_iter)?;
