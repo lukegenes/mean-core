@@ -30,7 +30,6 @@ pub enum StreamInstruction {
     CreateStream {
         beneficiary_address: Pubkey,
         stream_name: String,        
-        funding_amount: f64, // OPTIONAL
         rate_amount: f64,
         rate_interval_in_seconds: u64,
         start_utc: u64,
@@ -155,7 +154,8 @@ pub enum StreamInstruction {
     /// 6. `[]` System Program account.
     /// 7. `[]` SysvarRent account.
     CreateTreasury {
-        nounce: u8
+        treasury_block_height: u64,
+        treasury_base_address: Pubkey
     },
 
     /// Transfers a specific amount of tokens between 2 accounts
@@ -163,8 +163,7 @@ pub enum StreamInstruction {
     /// 0. `[signer]` The source account
     /// 1. `[writable]` The source token account
     /// 2. `[writable]` The destination token account.
-    /// 3. `[]` The associated token mint account
-    /// 4.  [writable] The Money Streaming Protocol operating token account.
+    /// 3. `[writable]` The associated token mint account
     /// 5. `[]` The SPL Token Program account.
     Transfer {
         amount: f64
@@ -205,7 +204,6 @@ impl StreamInstruction {
             Self::CreateStream {
                 beneficiary_address,
                 stream_name,
-                funding_amount,
                 rate_amount,
                 rate_interval_in_seconds,
                 start_utc,
@@ -220,7 +218,6 @@ impl StreamInstruction {
 
                 buf.extend_from_slice(beneficiary_address.as_ref());
                 buf.extend_from_slice(stream_name.as_ref());
-                buf.extend_from_slice(&funding_amount.to_le_bytes());
                 buf.extend_from_slice(&rate_amount.to_le_bytes());
                 buf.extend_from_slice(&rate_interval_in_seconds.to_le_bytes());
                 buf.extend_from_slice(&start_utc.to_le_bytes());
@@ -303,9 +300,15 @@ impl StreamInstruction {
 
             &Self::CloseStream => buf.push(8),
             
-            &Self::CreateTreasury { nounce } => {
+            Self::CreateTreasury {
+                treasury_block_height,
+                treasury_base_address
+
+            } => {
                 buf.push(9);
-                buf.extend_from_slice(&nounce.to_le_bytes());
+
+                buf.extend_from_slice(&treasury_block_height.to_le_bytes());
+                buf.extend_from_slice(treasury_base_address.as_ref());
             },
 
             &Self::Transfer { amount } => {
@@ -321,9 +324,6 @@ impl StreamInstruction {
 
         let (beneficiary_address, result) = Self::unpack_pubkey(input)?;
         let (stream_name, result) = Self::unpack_string(result)?;
-
-        let (funding_amount, result) = result.split_at(8);
-        let funding_amount = Self::unpack_f64(funding_amount)?;
 
         let (rate_amount, result) = result.split_at(8);
         let rate_amount = Self::unpack_f64(rate_amount)?;
@@ -349,7 +349,6 @@ impl StreamInstruction {
         Ok(Self::CreateStream {
             beneficiary_address,
             stream_name,
-            funding_amount,
             rate_amount,
             rate_interval_in_seconds,
             start_utc,
@@ -444,16 +443,20 @@ impl StreamInstruction {
 
     fn unpack_create_treasury(input: &[u8]) -> Result<Self, StreamError> {
 
-        let (&nounce, _result) = input
-            .split_first()
-            .ok_or(StreamError::InvalidStreamInstruction.into())?;
+        let (treasury_block_height, result) = input.split_at(8);
+        let treasury_block_height = Self::unpack_u64(treasury_block_height)?;
 
-        Ok(Self::CreateTreasury { nounce })
+        let (treasury_base_address, _result) = Self::unpack_pubkey(result)?;
+
+        Ok(Self::CreateTreasury { 
+            treasury_block_height,
+            treasury_base_address
+        })
     }
 
     fn unpack_transfer(input: &[u8]) -> Result<Self, StreamError> {
 
-        let (amount, result) = input.split_at(8);
+        let (amount, _result) = input.split_at(8);
         let amount = Self::unpack_f64(amount)?;
 
         Ok(Self::Transfer { amount })
@@ -503,16 +506,12 @@ impl StreamInstruction {
  pub fn create_stream(
     program_id: &Pubkey,
     treasurer_address: Pubkey,
-    treasurer_token_address: Pubkey,
-    beneficiary_token_address: Pubkey,
-    treasury_address: Pubkey,
-    treasury_token_address: Pubkey,
-    stream_address: Pubkey,
-    mint_address: Pubkey,
-    msp_ops_address: Pubkey,
     beneficiary_address: Pubkey,
+    beneficiary_mint_address: Pubkey,
+    treasury_address: Pubkey,
+    stream_address: Pubkey,
+    msp_ops_address: Pubkey,
     stream_name: String,
-    funding_amount: f64,
     rate_amount: f64,
     rate_interval_in_seconds: u64,
     start_utc: u64,
@@ -528,7 +527,6 @@ impl StreamInstruction {
     let data = StreamInstruction::CreateStream {
         beneficiary_address,
         stream_name,
-        funding_amount,
         rate_amount,
         rate_interval_in_seconds,
         start_utc,
@@ -541,16 +539,10 @@ impl StreamInstruction {
 
     let accounts = vec![
         AccountMeta::new_readonly(treasurer_address, true),
-        AccountMeta::new(treasurer_token_address, false),
-        AccountMeta::new(beneficiary_token_address, false),
         AccountMeta::new_readonly(treasury_address, false),
-        AccountMeta::new(treasury_token_address, false),
+        AccountMeta::new_readonly(beneficiary_mint_address, false),
         AccountMeta::new(stream_address, false),
-        AccountMeta::new(mint_address, false),
         AccountMeta::new(msp_ops_address, false),
-        AccountMeta::new_readonly(*program_id, false),
-        AccountMeta::new_readonly(spl_token::id(), false),
-        AccountMeta::new_readonly(solana_program::system_program::id(), false),
         AccountMeta::new_readonly(solana_program::sysvar::rent::id(), false)
     ];
 

@@ -25,6 +25,9 @@ pub enum StreamError {
     #[error("Invalid stream data")]
     InvalidStreamData,
 
+    #[error("Invalid treasury data")]
+    InvalidTreasuryData,
+
     #[error("Instruction signature is missing")]
     MissingInstructionSignature,
 
@@ -78,6 +81,7 @@ impl PrintProgramError for StreamError {
             Self::InvalidStreamInstruction => msg!("Error: InvalidStreamInstruction"),
             Self::StreamAlreadyInitialized => msg!("Error: StreamAlreadyInitialized"),
             Self::InvalidStreamData => msg!("Error: InvalidStreamData"),
+            Self::InvalidTreasuryData => msg!("Error: InvalidTreasuryData"),
             Self::MissingInstructionSignature => msg!("Error: MissingInstructionSignature"),
             Self::InvalidRentException => msg!("Error: Account balance below rent-exempt threshold"),
             Self::InsufficientFunds => msg!("Error: InsufficientFunds"),
