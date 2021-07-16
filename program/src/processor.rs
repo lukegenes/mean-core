@@ -726,6 +726,7 @@ impl Processor {
             (fee * pow) as u64
         )?;
 
+
         invoke(&fees_ix, &[
             beneficiary_account_info.clone(),
             beneficiary_token_account_info.clone(),
