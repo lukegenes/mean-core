@@ -2,6 +2,13 @@
 
 use std::cmp;
 use num_traits;
+use arrayref::{
+    array_mut_ref,
+    mut_array_refs,
+    array_ref, 
+    array_refs, 
+};
+
 use solana_program::{
     msg,
     system_program,
@@ -225,14 +232,40 @@ impl Processor {
         let beneficiary_mint_account_info = next_account_info(account_info_iter)?;
         let stream_account_info = next_account_info(account_info_iter)?;
         let msp_ops_account_info = next_account_info(account_info_iter)?;
+        let msp_account_info = next_account_info(account_info_iter)?;
         let system_account_info = next_account_info(account_info_iter)?;
+        let rent_account_info = next_account_info(account_info_iter)?;
+        let rent = &Rent::from_account_info(rent_account_info)?;
+        let clock = Clock::get()?;
 
         if !treasurer_account_info.is_signer 
         {
             return Err(StreamError::MissingInstructionSignature.into());
         }
 
-        let clock = Clock::get()?;
+        if treasury_account_info.owner != program_id
+        {
+            return Err(StreamError::InstructionNotAuthorized.into());
+        }
+
+        let stream_balance = rent.minimum_balance(Stream::LEN);
+        let create_stream_ix = system_instruction::create_account(
+            treasurer_account_info.key,
+            stream_account_info.key,
+            stream_balance,
+            u64::from_le_bytes(Stream::LEN.to_le_bytes()),
+            msp_account_info.key
+        );
+
+        invoke(&create_stream_ix, &[
+            treasurer_account_info.clone(),
+            stream_account_info.clone(),
+            msp_account_info.clone(),
+            system_account_info.clone()
+        ]);
+
+        msg!("Stream account created with address: {:?}", (*stream_account_info.key).to_string());
+
         let mut stream = Stream::unpack_from_slice(&stream_account_info.data.borrow())?;
 
         // Updating stream data
@@ -264,7 +297,7 @@ impl Processor {
         stream.initialized = true;
                 
         Stream::pack_into_slice(&stream, &mut stream_account_info.data.borrow_mut());
-        msg!("Stream contract created with address: {:?}", (*stream_account_info.key).to_string());
+        msg!("Stream contract successfully created");
 
         // Debit Fees from treasurer
         let flat_fee = 0.025f64;
@@ -306,22 +339,86 @@ impl Processor {
         let treasury_token_account_info = next_account_info(account_info_iter)?;        
         let treasury_mint_account_info = next_account_info(account_info_iter)?;
         let stream_account_info = next_account_info(account_info_iter)?;
+        let msp_ops_account_info = next_account_info(account_info_iter)?;
         let msp_ops_token_account_info = next_account_info(account_info_iter)?;
         let msp_account_info = next_account_info(account_info_iter)?;
         let token_program_account_info = next_account_info(account_info_iter)?;
+        let associated_token_program_account_info = next_account_info(account_info_iter)?;
         let system_account_info = next_account_info(account_info_iter)?;
+        let rent_account_info = next_account_info(account_info_iter)?;
+        let clock = Clock::get()?;
 
         if !contributor_account_info.is_signer 
         {
             return Err(StreamError::MissingInstructionSignature.into());
         }
 
-        if stream_account_info.owner != program_id 
+        if treasury_account_info.owner != program_id && stream_account_info.owner != program_id
         {
             return Err(StreamError::InstructionNotAuthorized.into());
         }
 
-        let fee = 0.03f64 * contribution_amount / 100f64;
+        // Check is the stream needs to be paused because of lacks of funds
+        let mut stream = Stream::unpack_from_slice(&stream_account_info.data.borrow())?;
+        let current_block_height = clock.slot as u64;
+        let current_block_time = clock.unix_timestamp as u64;
+        let mut is_running = (stream.stream_resumed_block_time >= stream.escrow_vested_amount_snap_block_time) as u64;
+        let mut rate = stream.rate_amount / (stream.rate_interval_in_seconds as f64) * (is_running as f64);
+        let mut marker_block_time = cmp::max(stream.stream_resumed_block_time, stream.escrow_vested_amount_snap_block_time);
+        let mut elapsed_time = (current_block_time - marker_block_time) as f64;
+        let mut escrow_vested_amount = stream.escrow_vested_amount_snap + rate * elapsed_time;
+        let mut no_funds = (escrow_vested_amount >= stream.total_deposits - stream.total_withdrawals) as u64;
+
+        // Pause if no funds and it is running before
+        if no_funds == 1
+        {
+            escrow_vested_amount = stream.total_deposits - stream.total_withdrawals;
+
+            if is_running == 1
+            {
+                stream.escrow_vested_amount_snap = escrow_vested_amount;
+                stream.escrow_vested_amount_snap_block_height = current_block_height;
+                stream.escrow_vested_amount_snap_block_time = current_block_time;
+            }
+        }
+
+        // Create treasury associated token account
+        let treasury_token_address = spl_associated_token_account::get_associated_token_address(
+            treasury_account_info.key,
+            beneficiary_mint_account_info.key
+        );
+
+        if treasury_token_address != *treasury_token_account_info.key {
+            msg!("Error: Treasury associated token address does not match seed derivation");
+            return Err(StreamError::InvalidTreasuryData.into());
+        }
+
+        if (*treasury_token_account_info.owner != *token_program_account_info.key)
+        {
+            let create_treasury_associated_token_ix = spl_associated_token_account::create_associated_token_account(
+                contributor_account_info.key,
+                treasury_account_info.key,
+                beneficiary_mint_account_info.key
+            );
+
+            invoke(&create_treasury_associated_token_ix, &[
+                associated_token_program_account_info.clone(),
+                contributor_account_info.clone(),
+                treasury_token_account_info.clone(),
+                treasury_account_info.clone(),
+                beneficiary_mint_account_info.clone(),
+                system_account_info.clone(),
+                token_program_account_info.clone(),
+                rent_account_info.clone()
+            ]);
+
+            msg!(
+                "Treasury associated token account created at: {:?} address", 
+                (*treasury_token_account_info.key).to_string()
+            );
+        }
+
+        let fee = 0.3f64 * contribution_amount / 100f64;
         let amount = contribution_amount - fee;
         let mut treasury = Treasury::unpack_from_slice(&treasury_account_info.data.borrow())?;
 
@@ -339,9 +436,43 @@ impl Processor {
             return Err(StreamError::InvalidTreasuryData.into());
         }
 
-        if *contributor_treasury_token_account_info.key != Pubkey::default() &&
+        // Create contributor treasury associated token account
+        let contributor_treasury_token_address = spl_associated_token_account::get_associated_token_address(
+            contributor_account_info.key,
+            treasury_mint_account_info.key
+        );
+
+        if contributor_treasury_token_address != *contributor_treasury_token_account_info.key {
+            msg!("Error: Contributor associated token address does not match seed derivation");
+            return Err(StreamError::InvalidTreasuryData.into());
+        }
+
+        if *contributor_treasury_token_account_info.owner != *token_program_account_info.key &&
+           *contributor_treasury_token_account_info.key != Pubkey::default() &&
            *treasury_mint_account_info.key != Pubkey::default()
         {
+            // Create the contributor treasury token account if there is a treasury pool and the account does not exists
+            let create_contributor_treasury_atoken_ix = spl_associated_token_account::create_associated_token_account(
+                contributor_account_info.key,
+                contributor_account_info.key,
+                treasury_mint_account_info.key
+            );
+
+            invoke(&create_contributor_treasury_atoken_ix, &[
+                associated_token_program_account_info.clone(),
+                contributor_account_info.clone(),
+                contributor_treasury_token_account_info.clone(),
+                treasury_mint_account_info.clone(),
+                system_account_info.clone(),
+                token_program_account_info.clone(),
+                rent_account_info.clone()
+            ]);
+
+            msg!(
+                "Contributor associated token account created at: {:?} address", 
+                (*contributor_treasury_token_account_info.key).to_string()
+            );
+
             // Mint just if there is a treasury pool
             let treasury_mint = spl_token::state::Mint::unpack_from_slice(&treasury_mint_account_info.data.borrow())?;
             let treasury_mint_signer_seed: &[&[_]] = &[
@@ -349,15 +480,15 @@ impl Processor {
                 &treasury.treasury_block_height.to_le_bytes(),
                 &[treasury_pool_bump_seed]
             ];
-
-            let treasury_pow = num_traits::pow(10f64, treasury_mint.decimals.into());
+ 
+            let treasury_pow = num_traits::pow(10f64, treasury_mint.decimals.into());    
             let mint_to_ix = spl_token::instruction::mint_to(
                 token_program_account_info.key,
                 treasury_mint_account_info.key,
                 contributor_treasury_token_account_info.key,
                 treasury_account_info.key,
                 &[],
-                (amount * treasury_pow) as u64,
+                (amount * treasury_pow) as u64
             )?;
 
             invoke_signed(&mint_to_ix,
@@ -400,22 +531,60 @@ impl Processor {
             (*contributor_token_account_info.key).to_string()
         );
 
-        // Update and resume stream
-        let mut stream = Stream::unpack_from_slice(&stream_account_info.data.borrow())?;
+        // Resume if it was paused by lack of funds and the current amount after deposit
+        // makes the stream has enought funds again
         stream.total_deposits += amount;
+        is_running = (stream.stream_resumed_block_time >= stream.escrow_vested_amount_snap_block_time) as u64;
+        rate = stream.rate_amount / (stream.rate_interval_in_seconds as f64) * (is_running as f64);
+        marker_block_time = cmp::max(stream.stream_resumed_block_time, stream.escrow_vested_amount_snap_block_time);
+        elapsed_time = (current_block_time - marker_block_time) as f64;
+        escrow_vested_amount = stream.escrow_vested_amount_snap + rate * elapsed_time;
+        no_funds = (escrow_vested_amount >= stream.total_deposits - stream.total_withdrawals) as u64;
 
-        if resume == true 
+        if no_funds == 0 || (is_running == 0 && resume == true)
         {
-            let clock = Clock::get()?;
-            let current_block_height = clock.slot as u64;
-            let current_block_time = clock.unix_timestamp as u64;
-
             stream.stream_resumed_block_height = current_block_height;
             stream.stream_resumed_block_time = current_block_time;
         }
-        
+
         // Save
         Stream::pack_into_slice(&stream, &mut stream_account_info.data.borrow_mut());
+
+        // Create the Money Streaming Program operations token account if not exists
+        let msp_ops_token_address = spl_associated_token_account::get_associated_token_address(
+            msp_ops_account_info.key,
+            beneficiary_mint_account_info.key
+        );
+
+        if msp_ops_token_address != *msp_ops_token_account_info.key {
+            msg!("Error: Treasury associated token address does not match seed derivation");
+            return Err(StreamError::InvalidTreasuryData.into());
+        }
+
+        if (*msp_ops_token_account_info.owner != *token_program_account_info.key)
+        {
+            let create_msp_associated_token_ix = spl_associated_token_account::create_associated_token_account(
+                contributor_account_info.key,
+                msp_ops_account_info.key,
+                beneficiary_mint_account_info.key
+            );
+
+            invoke(&create_msp_associated_token_ix, &[
+                associated_token_program_account_info.clone(),
+                contributor_account_info.clone(),
+                msp_ops_token_account_info.clone(),
+                msp_ops_account_info.clone(),
+                beneficiary_mint_account_info.clone(),
+                system_account_info.clone(),
+                token_program_account_info.clone(),
+                rent_account_info.clone()
+            ]);
+
+            msg!(
+                "Money Streaming Program associated token account created at: {:?} address", 
+                (*msp_ops_token_account_info.key).to_string()
+            );
+        }
 
         // Pay fees
         let fees_ix = spl_token::instruction::transfer(
@@ -460,8 +629,10 @@ impl Processor {
         let stream_account_info = next_account_info(account_info_iter)?;
         let msp_ops_account_info = next_account_info(account_info_iter)?;
         let msp_ops_token_account_info = next_account_info(account_info_iter)?;
+        let msp_account_info = next_account_info(account_info_iter)?;
         let token_program_account_info = next_account_info(account_info_iter)?;
         let system_account_info = next_account_info(account_info_iter)?;
+        let clock = Clock::get()?;
 
         if !contributor_account_info.is_signer
         {
@@ -473,36 +644,35 @@ impl Processor {
             return Err(StreamError::InstructionNotAuthorized.into());
         }
 
-        let fee = 0.03f64 * recover_amount / 100f64;
-        let amount = recover_amount - fee;
-        let mint = spl_token::state::Mint::unpack_from_slice(&treasury_mint_account_info.data.borrow())?;
-        let pow = num_traits::pow(10f64, mint.decimals.into());
-        let burn_amount = amount * pow;
+        let fee = 0.3f64 * recover_amount / 100f64;
+        let treasury_mint = spl_token::state::Mint::unpack_from_slice(&treasury_mint_account_info.data.borrow())?;
+        let treasury_mint_pow = num_traits::pow(10f64, treasury_mint.decimals.into());
+        let burn_amount = recover_amount * treasury_mint_pow;
+        let recover_amount_percent = recover_amount / (treasury_mint.supply as f64) * 100f64; // The percent that represents the `recover_amount` in the pool
 
         // Burn treasury tokens from the contributor treasury token account       
         let burn_ix = spl_token::instruction::burn(
             token_program_account_info.key,
             contributor_treasury_token_account_info.key,
             treasury_mint_account_info.key,
-            treasury_account_info.key,
+            contributor_account_info.key,
             &[],
             burn_amount as u64
         )?;
 
         invoke(&burn_ix, &[
+            token_program_account_info.clone(),
             contributor_treasury_token_account_info.clone(),
             treasury_mint_account_info.clone(),
-            treasury_account_info.clone(),
-            token_program_account_info.clone()
+            contributor_account_info.clone()
         ]);
 
         msg!("Burning {:?} treasury tokens from: {:?}", 
-            amount, 
+            recover_amount, 
             (*contributor_treasury_token_account_info.key).to_string()
         );
         
         let mut stream = Stream::unpack_from_slice(&stream_account_info.data.borrow())?; 
-        let clock = Clock::get()?;
         let current_block_time = clock.unix_timestamp as u64;
         let is_running = (stream.stream_resumed_block_time > stream.escrow_vested_amount_snap_block_time) as u64;
         let rate = stream.rate_amount / (stream.rate_interval_in_seconds as f64) * (is_running as f64);
@@ -516,46 +686,72 @@ impl Processor {
         }
 
         let escrow_unvested_amount = stream.total_deposits - stream.total_withdrawals - escrow_vested_amount;
+        let amount = recover_amount_percent * escrow_unvested_amount / 100f64; // The amount calculated by the percent of the pool that the contributor owns
+        let transfer_amount = amount - fee;
 
-        if recover_amount > escrow_vested_amount
+        if transfer_amount > escrow_unvested_amount
         {
             return Err(StreamError::NotAllowedRecoverableAmount.into());
         }
 
-        let transfer_amount = (escrow_unvested_amount * recover_amount * pow) / (mint.supply as f64) * 100f64;
+        // Transfer tokens to contributor        
+        let contributor_mint = spl_token::state::Mint::unpack_from_slice(&contributor_mint_account_info.data.borrow())?;
+        let contributor_mint_pow = num_traits::pow(10f64, contributor_mint.decimals.into());
+        let mut treasury = Treasury::unpack_from_slice(&treasury_account_info.data.borrow())?;
+        let (treasury_pool_address, treasury_pool_bump_seed) = Pubkey::find_program_address(
+            &[
+                treasury.treasury_base_address.as_ref(),
+                &treasury.treasury_block_height.to_le_bytes()
+            ], 
+            msp_account_info.key
+        );
 
-        // Transfer tokens to contributor
-        let transfer_ix = spl_token::instruction::transfer(
+        if treasury_pool_address != *treasury_account_info.key 
+        {
+            msg!("Error: Treasury pool address does not match seed derivation");
+            return Err(StreamError::InvalidTreasuryData.into());
+        }
+
+        let treasury_signer_seed: &[&[_]] = &[
+            treasury.treasury_base_address.as_ref(),
+            &treasury.treasury_block_height.to_le_bytes(),
+            &[treasury_pool_bump_seed]
+        ];
+
+        let contributor_transfer_ix = spl_token::instruction::transfer(
             token_program_account_info.key,
             treasury_token_account_info.key,
             contributor_token_account_info.key,
             treasury_account_info.key,
             &[],
-            transfer_amount as u64
+            (transfer_amount * contributor_mint_pow) as u64
         )?;
 
-        invoke(&transfer_ix, &[
-            treasury_account_info.clone(),
-            treasury_token_account_info.clone(),
-            contributor_token_account_info.clone(),
-            token_program_account_info.clone()
-        ]);
+        invoke_signed(&contributor_transfer_ix, 
+            &[
+                treasury_account_info.clone(),
+                treasury_token_account_info.clone(),
+                contributor_token_account_info.clone(),
+                token_program_account_info.clone(),
+                msp_account_info.clone()
+            ],
+            &[treasury_signer_seed]
+        );
 
         msg!("Transfer {:?} tokens to: {:?}",
-            amount, 
+            transfer_amount, 
             (*contributor_token_account_info.key).to_string()
         );
 
         // Update the stream
-        stream.total_deposits -= recover_amount;
+        stream.total_deposits -= transfer_amount;
         // Save
         Stream::pack_into_slice(&stream, &mut stream_account_info.data.borrow_mut());
 
         // Check the total supply of the treasury
-        if mint.supply == 0
+        if treasury_mint.supply == 0
         {
             // Close the treasury
-            let mut treasury = Treasury::unpack_from_slice(&treasury_account_info.data.borrow())?;
             let msp_ops_lamports = msp_ops_account_info.lamports();
 
             **msp_ops_account_info.lamports.borrow_mut() = msp_ops_lamports
@@ -614,6 +810,7 @@ impl Processor {
         let msp_ops_token_account_info = next_account_info(account_info_iter)?;
         let msp_account_info = next_account_info(account_info_iter)?;
         let token_program_account_info = next_account_info(account_info_iter)?;
+        let clock = Clock::get()?;
 
         if !beneficiary_account_info.is_signer 
         {
@@ -622,12 +819,11 @@ impl Processor {
 
         let mut stream = Stream::unpack_from_slice(&stream_account_info.data.borrow())?;
 
-        if stream_account_info.owner != program_id 
+        if stream_account_info.owner != program_id || treasury_account_info.owner != program_id
         {
             return Err(StreamError::InstructionNotAuthorized.into());
         }
 
-        let clock = Clock::get()?;
         let current_block_height = clock.slot as u64;
         let current_block_time = clock.unix_timestamp as u64;
         let is_running = (stream.stream_resumed_block_time >= stream.escrow_vested_amount_snap_block_time) as u64;
@@ -635,8 +831,9 @@ impl Processor {
         let marker_block_time = cmp::max(stream.stream_resumed_block_time, stream.escrow_vested_amount_snap_block_time);
         let elapsed_time = (current_block_time - marker_block_time) as f64;
         let mut escrow_vested_amount = stream.escrow_vested_amount_snap + rate * elapsed_time;
+        let mut no_funds = (escrow_vested_amount >= stream.total_deposits - stream.total_withdrawals) as u64;
         
-        if escrow_vested_amount > stream.total_deposits - stream.total_withdrawals 
+        if no_funds == 1
         {
             escrow_vested_amount = stream.total_deposits - stream.total_withdrawals;
         }
@@ -647,9 +844,10 @@ impl Processor {
         }
 
         let escrow_unvested_amount = stream.total_deposits - stream.total_withdrawals - escrow_vested_amount;
-        let fee = 0.03f64 * withdrawal_amount / 100f64;
+        let fee = 0.3f64 * withdrawal_amount / 100f64;
+        let transfer_amount = withdrawal_amount - fee;
         let beneficiary_mint = spl_token::state::Mint::unpack_from_slice(&beneficiary_mint_account_info.data.borrow())?;
-        let pow = num_traits::pow(10f64, beneficiary_mint.decimals.into());
+        let beneficiary_mint_pow = num_traits::pow(10f64, beneficiary_mint.decimals.into());
 
         // Withdraw
         let mut treasury = Treasury::unpack_from_slice(&treasury_account_info.data.borrow())?;
@@ -663,7 +861,7 @@ impl Processor {
 
         if treasury_pool_address != *treasury_account_info.key 
         {
-            msg!("Error: Treasury mint address does not match seed derivation");
+            msg!("Error: Treasury pool address does not match seed derivation");
             return Err(StreamError::InvalidTreasuryData.into());
         }
 
@@ -679,7 +877,7 @@ impl Processor {
             beneficiary_token_account_info.key,
             treasury_account_info.key,
             &[],
-            (withdrawal_amount * pow) as u64
+            (transfer_amount * beneficiary_mint_pow) as u64
         )?;
 
         invoke_signed(&transfer_ix, 
@@ -694,23 +892,18 @@ impl Processor {
         );
 
         msg!("Transfer {:?} tokens to: {:?}",
-            withdrawal_amount, 
+            transfer_amount, 
             (*beneficiary_token_account_info.key).to_string()
         );
 
         // Update stream account data
         stream.total_withdrawals += withdrawal_amount;
         
-        if stream.total_withdrawals >= stream.total_deposits
+        if no_funds == 1
         {
             stream.escrow_vested_amount_snap = escrow_vested_amount;
             stream.escrow_vested_amount_snap_block_height = current_block_height;
             stream.escrow_vested_amount_snap_block_time = current_block_time;
-        }
-        else 
-        {
-            stream.stream_resumed_block_height = current_block_height;
-            stream.stream_resumed_block_time = current_block_time;
         }
         
         // Save
@@ -723,7 +916,7 @@ impl Processor {
             msp_ops_token_account_info.key,
             beneficiary_account_info.key,
             &[],
-            (fee * pow) as u64
+            (fee * beneficiary_mint_pow) as u64
         )?;
 
 
@@ -753,6 +946,7 @@ impl Processor {
         let stream_account_info = next_account_info(account_info_iter)?;
         let msp_ops_account_info = next_account_info(account_info_iter)?;
         let system_account_info = next_account_info(account_info_iter)?;
+        let clock = Clock::get()?;
 
         if !initializer_account_info.is_signer 
         {
@@ -762,14 +956,14 @@ impl Processor {
         let mut stream = Stream::unpack_from_slice(&stream_account_info.data.borrow())?;
 
         if stream_account_info.owner != program_id ||
-           (*initializer_account_info.key != stream.treasurer_address &&
-            *initializer_account_info.key != stream.beneficiary_address &&
-            initializer_account_info.key != program_id) // if auto pause then the MSP will be the initializer
+        (
+            *initializer_account_info.key != stream.treasurer_address && 
+            *initializer_account_info.key != stream.beneficiary_address
+        )
         {
             return Err(StreamError::InstructionNotAuthorized.into());
         }
 
-        let clock = Clock::get()?;
         let current_block_height = clock.slot as u64;
         let current_block_time = clock.unix_timestamp as u64;
         let rate = stream.rate_amount / (stream.rate_interval_in_seconds as f64);
@@ -788,28 +982,25 @@ impl Processor {
         Stream::pack_into_slice(&stream, &mut stream_account_info.data.borrow_mut());
         msg!("Pausing the stream");
 
-        if initializer_account_info.key != program_id
-        {
-            // Debit fees if the initializer of the instruction is not the MSP (auto pause)
-            let fees = 0.025f64;
-            let fees_lamports = fees * (LAMPORTS_PER_SOL as f64);
-            let fees_transfer_ix = system_instruction::transfer(
-                initializer_account_info.key,
-                msp_ops_account_info.key,
-                fees_lamports as u64
-            );
+        // Pay fees
+        let fee = 0.025f64;
+        let fee_lamports = fee * (LAMPORTS_PER_SOL as f64);
+        let fee_ix = system_instruction::transfer(
+            initializer_account_info.key,
+            msp_ops_account_info.key,
+            fee_lamports as u64
+        );
 
-            invoke(&fees_transfer_ix, &[
-                initializer_account_info.clone(),
-                msp_ops_account_info.clone(),
-                system_account_info.clone()
-            ]);
+        invoke(&fee_ix, &[
+            initializer_account_info.clone(),
+            msp_ops_account_info.clone(),
+            system_account_info.clone()
+        ]);
 
-            msg!("Transfer {:?} lamports of fee to: {:?}", 
-                fees_lamports, 
-                (*msp_ops_account_info.key).to_string()
-            );
-        }
+        msg!("Transfer {:?} lamports of fee to: {:?}", 
+            fee_lamports, 
+            (*msp_ops_account_info.key).to_string()
+        );
 
         Ok(())
     }
@@ -825,6 +1016,7 @@ impl Processor {
         let stream_account_info = next_account_info(account_info_iter)?;
         let msp_ops_account_info = next_account_info(account_info_iter)?;
         let system_account_info = next_account_info(account_info_iter)?;
+        let clock = Clock::get()?;
 
         if !initializer_account_info.is_signer 
         {
@@ -834,44 +1026,40 @@ impl Processor {
         let mut stream = Stream::unpack_from_slice(&stream_account_info.data.borrow())?;
 
         if stream_account_info.owner != program_id || 
-           (*initializer_account_info.key != stream.treasurer_address &&
-            *initializer_account_info.key != stream.beneficiary_address &&
-            initializer_account_info.key != program_id) // if auto resume then the MSP will be the initializer
+        (
+            *initializer_account_info.key != stream.treasurer_address &&
+            *initializer_account_info.key != stream.beneficiary_address
+        )
         {
             return Err(StreamError::InstructionNotAuthorized.into());
         }
 
         // Resuming the stream and updating data
-        let clock = Clock::get()?;
-
         stream.stream_resumed_block_height = clock.slot as u64;
         stream.stream_resumed_block_time = clock.unix_timestamp as u64;
         // Save
         Stream::pack_into_slice(&stream, &mut stream_account_info.data.borrow_mut());
         msg!("Resuming the stream");
 
-        if initializer_account_info.key != program_id
-        {
-            // Debit fees if the initializer of the instruction is not the MSP (auto pause)
-            let fees = 0.025f64;
-            let fees_lamports = fees * (LAMPORTS_PER_SOL as f64);
-            let fees_transfer_ix = system_instruction::transfer(
-                initializer_account_info.key,
-                msp_ops_account_info.key,
-                fees_lamports as u64
-            );
+        // Pay fees
+        let fee = 0.025f64;
+        let fee_lamports = fee * (LAMPORTS_PER_SOL as f64);
+        let fee_ix = system_instruction::transfer(
+            initializer_account_info.key,
+            msp_ops_account_info.key,
+            fee_lamports as u64
+        );
 
-            invoke(&fees_transfer_ix, &[
-                initializer_account_info.clone(),
-                msp_ops_account_info.clone(),
-                system_account_info.clone()
-            ]);
+        invoke(&fee_ix, &[
+            initializer_account_info.clone(),
+            msp_ops_account_info.clone(),
+            system_account_info.clone()
+        ]);
 
-            msg!("Transfer {:?} lamports of fee to: {:?}", 
-                fees_lamports, 
-                (*msp_ops_account_info.key).to_string()
-            );
-        }
+        msg!("Transfer {:?} lamports of fee to: {:?}", 
+            fee_lamports, 
+            (*msp_ops_account_info.key).to_string()
+        );
 
         Ok(())
     }
@@ -1142,16 +1330,17 @@ impl Processor {
         let account_info_iter = &mut accounts.iter();
         let initializer_account_info = next_account_info(account_info_iter)?;
         let counterparty_account_info = next_account_info(account_info_iter)?;
-        let stream_account_info = next_account_info(account_info_iter)?;
         let beneficiary_token_account_info = next_account_info(account_info_iter)?;
-        let mint_account_info = next_account_info(account_info_iter)?;
+        let beneficiary_mint_account_info = next_account_info(account_info_iter)?;
         let treasury_account_info = next_account_info(account_info_iter)?;  
-        let treasury_token_account_info = next_account_info(account_info_iter)?; 
+        let treasury_token_account_info = next_account_info(account_info_iter)?;
+        let stream_account_info = next_account_info(account_info_iter)?;
         let msp_ops_account_info = next_account_info(account_info_iter)?;
         let msp_ops_token_account_info = next_account_info(account_info_iter)?;
         let msp_account_info = next_account_info(account_info_iter)?;
         let token_program_account_info = next_account_info(account_info_iter)?;
         let system_account_info = next_account_info(account_info_iter)?;
+        let clock = Clock::get()?;
 
         if !initializer_account_info.is_signer 
         {
@@ -1177,7 +1366,6 @@ impl Processor {
             beneficiary_account_info = initializer_account_info;
         }
         
-        let clock = Clock::get()?;
         let current_block_time = clock.unix_timestamp as u64;
         let is_running = (stream.stream_resumed_block_time > stream.escrow_vested_amount_snap_block_time) as u64;
         let rate = stream.rate_amount / (stream.rate_interval_in_seconds as f64) * (is_running as f64);
@@ -1196,28 +1384,52 @@ impl Processor {
         // Crediting escrow vested amount to the beneficiary
         if escrow_vested_amount > 0.0 
         {
-            let mint = spl_token::state::Mint::unpack_from_slice(&mint_account_info.data.borrow())?;
-            let pow = num_traits::pow(10f64, mint.decimals.into());
-            let amount = (escrow_vested_amount - fee);
-            // Crediting escrow vested amount to the beneficiary
+            let beneficiary_mint = spl_token::state::Mint::unpack_from_slice(&beneficiary_mint_account_info.data.borrow())?;
+            let beneficiary_mint_pow = num_traits::pow(10f64, beneficiary_mint.decimals.into());
+            let transfer_amount = escrow_vested_amount - fee;            
+            let mut treasury = Treasury::unpack_from_slice(&treasury_account_info.data.borrow())?;
+            let (treasury_pool_address, treasury_pool_bump_seed) = Pubkey::find_program_address(
+                &[
+                    treasury.treasury_base_address.as_ref(),
+                    &treasury.treasury_block_height.to_le_bytes()
+                ], 
+                msp_account_info.key
+            );
+
+            if treasury_pool_address != *treasury_account_info.key 
+            {
+                msg!("Error: Treasury pool address does not match seed derivation");
+                return Err(StreamError::InvalidTreasuryData.into());
+            }
+
+            let treasury_signer_seed: &[&[_]] = &[
+                treasury.treasury_base_address.as_ref(),
+                &treasury.treasury_block_height.to_le_bytes(),
+                &[treasury_pool_bump_seed]
+            ];
+
             let transfer_ix = spl_token::instruction::transfer(
                 token_program_account_info.key,
                 treasury_token_account_info.key,
                 beneficiary_token_account_info.key,
                 treasury_account_info.key,
                 &[],
-                (amount * pow) as u64
+                (transfer_amount * beneficiary_mint_pow) as u64
             )?;
 
-            invoke(&transfer_ix, &[
-                treasury_account_info.clone(),
-                treasury_token_account_info.clone(),
-                beneficiary_token_account_info.clone(),
-                token_program_account_info.clone()
-            ]);
+            invoke_signed(&transfer_ix, 
+                &[
+                    treasury_account_info.clone(),
+                    treasury_token_account_info.clone(),
+                    beneficiary_token_account_info.clone(),
+                    token_program_account_info.clone(),
+                    msp_account_info.clone()
+                ],
+                &[treasury_signer_seed]
+            );
 
             msg!("Transfer {:?} tokens to: {:?}",
-                amount, 
+                transfer_amount, 
                 (*beneficiary_token_account_info.key).to_string()
             );
         }
@@ -1377,7 +1589,7 @@ impl Processor {
             return Err(StreamError::InvalidTreasuryData.into());
         }
 
-        if (*treasury_token_account_info.owner != *treasury_account_info.key)
+        if (*treasury_token_account_info.owner != *token_program_account_info.key)
         {
             let create_treasury_associated_token_ix = spl_associated_token_account::create_associated_token_account(
                 treasurer_account_info.key,
