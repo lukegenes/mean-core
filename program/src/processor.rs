@@ -968,8 +968,8 @@ impl Processor {
 
         if stream_account_info.owner != program_id ||
         (
-            (*initializer_account_info.key).ne(&stream.treasurer_address) && 
-            (*initializer_account_info.key).ne(&stream.beneficiary_address)
+            stream.treasurer_address.ne(initializer_account_info.key) && 
+            stream.beneficiary_address.ne(initializer_account_info.key)
         )
         {
             return Err(StreamError::InstructionNotAuthorized.into());
@@ -1038,8 +1038,8 @@ impl Processor {
 
         if stream_account_info.owner != program_id || 
         (
-            (*initializer_account_info.key).ne(&stream.treasurer_address) &&
-            (*initializer_account_info.key).ne(&stream.beneficiary_address)
+            stream.treasurer_address.ne(initializer_account_info.key) && 
+            stream.beneficiary_address.ne(initializer_account_info.key)
         )
         {
             return Err(StreamError::InstructionNotAuthorized.into());
@@ -1114,7 +1114,7 @@ impl Processor {
 
         let stream = Stream::unpack_from_slice(&stream_account_info.data.borrow())?;
 
-        if stream.treasurer_address.ne(initializer_account_info.key) || 
+        if stream.treasurer_address.ne(initializer_account_info.key) &&
            stream.beneficiary_address.ne(initializer_account_info.key)
         {
             return Err(StreamError::InstructionNotAuthorized.into()); // Only the treasurer or the beneficiary of the stream can propose an update
@@ -1380,7 +1380,7 @@ impl Processor {
         stream.escrow_vested_amount_snap_block_time = current_block_time;
         msg!("Pausing the stream");
 
-        if stream.treasurer_address.ne(initializer_account_info.key) ||
+        if stream.treasurer_address.ne(initializer_account_info.key) &&
            stream.beneficiary_address.ne(initializer_account_info.key) 
         {
             return Err(StreamError::InstructionNotAuthorized.into()); // Just the treasurer or the beneficiary can close a stream
