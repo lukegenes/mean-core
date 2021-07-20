@@ -170,6 +170,7 @@ pub struct Stream {
     pub treasurer_address: Pubkey,
     pub rate_amount: f64,
     pub rate_interval_in_seconds: u64,
+    pub funded_on_utc: u64,
     pub start_utc: u64,
     pub rate_cliff_in_seconds: u64,
     pub cliff_vest_amount: f64,
@@ -201,9 +202,10 @@ impl Default for Stream {
         Self {
             initialized: false,
             stream_name: String::default(),
-            treasurer_address: Pubkey::default(),                   
+            treasurer_address: Pubkey::default(),             
             rate_amount: 0.0,
             rate_interval_in_seconds: 0,
+            funded_on_utc: 0,
             start_utc: 0,
             rate_cliff_in_seconds: 0,
             cliff_vest_amount: 0.0,
@@ -225,7 +227,7 @@ impl Default for Stream {
 }
 
 impl Pack for Stream {
-    const LEN: usize = 281;
+    const LEN: usize = 289;
 
     fn pack_into_slice(&self, output: &mut [u8]) {
         let output = array_mut_ref![output, 0, Stream::LEN];
@@ -235,6 +237,7 @@ impl Pack for Stream {
             treasurer_address_output,
             rate_amount_output,
             rate_interval_in_seconds_output,
+            funded_on_utc_output,
             start_utc_output,
             rate_cliff_in_seconds_output,
             cliff_vest_amount_output,
@@ -252,7 +255,7 @@ impl Pack for Stream {
             stream_resumed_block_time_output,
             auto_pause_in_seconds_output
             
-        ) = mut_array_refs![output, 1, 32, 32, 8, 8, 8, 8, 8, 8, 32, 32, 32, 8, 8, 8, 8, 8, 8, 8, 8, 8];
+        ) = mut_array_refs![output, 1, 32, 32, 8, 8, 8, 8, 8, 8, 8, 32, 32, 32, 8, 8, 8, 8, 8, 8, 8, 8, 8];
 
         let Stream {
             initialized,
@@ -260,6 +263,7 @@ impl Pack for Stream {
             treasurer_address,
             rate_amount,
             rate_interval_in_seconds,
+            funded_on_utc,
             start_utc,
             rate_cliff_in_seconds,
             cliff_vest_amount,
@@ -284,6 +288,7 @@ impl Pack for Stream {
         treasurer_address_output.copy_from_slice(treasurer_address.as_ref());
         *rate_amount_output = rate_amount.to_le_bytes();
         *rate_interval_in_seconds_output = rate_interval_in_seconds.to_le_bytes();
+        *funded_on_utc_output = funded_on_utc.to_le_bytes();
         *start_utc_output = start_utc.to_le_bytes();
         *rate_cliff_in_seconds_output = rate_cliff_in_seconds.to_le_bytes();
         *cliff_vest_amount_output = cliff_vest_amount.to_le_bytes();
@@ -310,6 +315,7 @@ impl Pack for Stream {
             treasurer_address,
             rate_amount,
             rate_interval_in_seconds,
+            funded_on_utc,
             start_utc,
             rate_cliff_in_seconds,
             cliff_vest_amount,
@@ -327,7 +333,7 @@ impl Pack for Stream {
             stream_resumed_block_time,
             auto_pause_in_seconds
             
-        ) = array_refs![input, 1, 32, 32, 8, 8, 8, 8, 8, 8, 32, 32, 32, 8, 8, 8, 8, 8, 8, 8, 8, 8];
+        ) = array_refs![input, 1, 32, 32, 8, 8, 8, 8, 8, 8, 8, 32, 32, 32, 8, 8, 8, 8, 8, 8, 8, 8, 8];
 
         let initialized = match initialized {
             [0] => false,
@@ -341,6 +347,7 @@ impl Pack for Stream {
             treasurer_address: Pubkey::new_from_array(*treasurer_address),                   
             rate_amount: f64::from_le_bytes(*rate_amount),
             rate_interval_in_seconds: u64::from_le_bytes(*rate_interval_in_seconds),
+            funded_on_utc: u64::from_le_bytes(*funded_on_utc),
             start_utc: u64::from_le_bytes(*start_utc),
             rate_cliff_in_seconds: u64::from_le_bytes(*rate_cliff_in_seconds),
             cliff_vest_amount: f64::from_le_bytes(*cliff_vest_amount),

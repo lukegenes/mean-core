@@ -55,6 +55,7 @@ pub enum StreamInstruction {
     /// 11. `[]` The SPL Token Program account.
     AddFunds {
         contribution_amount: f64,
+        funded_on_utc: u64,
         resume: bool
     },
 
@@ -229,12 +230,14 @@ impl StreamInstruction {
 
             &Self::AddFunds { 
                 contribution_amount,
+                funded_on_utc,
                 resume
 
             } => {
                 buf.push(1);
 
                 buf.extend_from_slice(&contribution_amount.to_le_bytes());
+                buf.extend_from_slice(&funded_on_utc.to_le_bytes());
                 
                 let resume = match resume {
                     false => [0],
@@ -362,6 +365,8 @@ impl StreamInstruction {
     fn unpack_add_funds(input: &[u8]) -> Result<Self, StreamError> {
         let (contribution_amount, result) = input.split_at(8);
         let contribution_amount = Self::unpack_f64(contribution_amount)?;
+        let (funded_on_utc, result) = result.split_at(8);
+        let funded_on_utc = Self::unpack_u64(funded_on_utc)?;
 
         let (resume, _result) = result.split_at(1);
         let resume = match resume {
@@ -372,6 +377,7 @@ impl StreamInstruction {
 
         Ok(Self::AddFunds { 
             contribution_amount,
+            funded_on_utc,
             resume
         })
     }
@@ -559,6 +565,7 @@ impl StreamInstruction {
     treasury_address: &Pubkey,
     contribution_token_address: Pubkey,
     contribution_amount: f64,
+    funded_on_utc: u64,
     resume: bool
 
  ) -> Result<Instruction, StreamError> {
@@ -567,6 +574,7 @@ impl StreamInstruction {
 
     let data = StreamInstruction::AddFunds { 
         contribution_amount,
+        funded_on_utc,
         resume
 
     }.pack();

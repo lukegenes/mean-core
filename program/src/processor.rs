@@ -80,6 +80,7 @@ impl Processor {
 
             StreamInstruction::AddFunds { 
                 contribution_amount,
+                funded_on_utc,
                 resume
 
             } => {
@@ -89,6 +90,7 @@ impl Processor {
                     accounts, 
                     program_id,
                     contribution_amount,
+                    funded_on_utc,
                     resume,
                 )
             },
@@ -273,6 +275,7 @@ impl Processor {
         stream.treasurer_address = *treasurer_account_info.key;
         stream.rate_amount = rate_amount;
         stream.rate_interval_in_seconds = rate_interval_in_seconds;
+        stream.funded_on_utc = 0;
         stream.start_utc = start_utc;
         stream.rate_cliff_in_seconds = rate_cliff_in_seconds;
         stream.cliff_vest_amount = cliff_vest_amount;
@@ -326,6 +329,7 @@ impl Processor {
         accounts: &[AccountInfo],
         program_id: &Pubkey,
         contribution_amount: f64,
+        funded_on_utc: u64,
         resume: bool
 
     ) -> ProgramResult {
@@ -530,6 +534,11 @@ impl Processor {
         );
 
         stream.total_deposits += amount;
+
+        if stream.funded_on_utc == 0 // First time the stream is being funded
+        {
+            stream.funded_on_utc = funded_on_utc
+        }
         // Resume if it was paused by lack of funds OR it was manually paused 
         // and it is going to be manually resumed again        
         if no_funds == 1 || resume == true
@@ -840,6 +849,13 @@ impl Processor {
         if no_funds == 1
         {
             escrow_vested_amount = stream.total_deposits - stream.total_withdrawals;
+
+            if is_running == 1
+            {
+                stream.escrow_vested_amount_snap = escrow_vested_amount;
+                stream.escrow_vested_amount_snap_block_height = current_block_height;
+                stream.escrow_vested_amount_snap_block_time = current_block_time;
+            }
         }
 
         if withdrawal_amount > escrow_vested_amount
@@ -901,15 +917,7 @@ impl Processor {
         );
 
         // Update stream account data
-        stream.total_withdrawals += withdrawal_amount;
-        
-        if is_running == 1 && no_funds == 1
-        {
-            stream.escrow_vested_amount_snap = escrow_vested_amount;
-            stream.escrow_vested_amount_snap_block_height = current_block_height;
-            stream.escrow_vested_amount_snap_block_time = current_block_time;
-        }
-        
+        stream.total_withdrawals += withdrawal_amount;   
         // Save
         Stream::pack_into_slice(&stream, &mut stream_account_info.data.borrow_mut());
 
