@@ -22,6 +22,9 @@ pub enum StreamError {
     #[error("Stream account is already initialized")]
     StreamAlreadyInitialized,
 
+    #[error("Stream terms account is already initialized")]
+    StreamTermsAlreadyInitialized,
+
     #[error("Invalid stream data")]
     InvalidStreamData,
 
@@ -80,6 +83,7 @@ impl PrintProgramError for StreamError {
             Self::IncorrectProgramId => msg!("Error: IncorrectProgramId"),
             Self::InvalidStreamInstruction => msg!("Error: InvalidStreamInstruction"),
             Self::StreamAlreadyInitialized => msg!("Error: StreamAlreadyInitialized"),
+            Self::StreamTermsAlreadyInitialized => msg!("Error: StreamTermsAlreadyInitialized"),
             Self::InvalidStreamData => msg!("Error: InvalidStreamData"),
             Self::InvalidTreasuryData => msg!("Error: InvalidTreasuryData"),
             Self::MissingInstructionSignature => msg!("Error: MissingInstructionSignature"),
