@@ -63,6 +63,8 @@ impl Processor {
 
                 msg!("Instruction: CreateStream");
 
+                // let msp_account_info = AccountMeta::new_readonly(MSP_ACCOUNT_KEY, false);
+
                 Self::process_create_stream(
                     accounts, 
                     program_id,
