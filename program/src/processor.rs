@@ -30,7 +30,7 @@ use spl_token::instruction;
 use crate::{
     error::StreamError,
     instruction::{ StreamInstruction, transfer },
-    state::{ Stream, StreamTerms, Treasury, NATIVE_MINT, LAMPORTS_PER_SOL, TREASURY_MINT_DECIMALS }
+    state::{ Stream, StreamTerms, Treasury, NATIVE_MINT, LAMPORTS_PER_SOL, TREASURY_MINT_DECIMALS, MSP_ACCOUNT_ADDRESS }
 };
 
 pub struct Processor {}
@@ -63,7 +63,10 @@ impl Processor {
 
                 msg!("Instruction: CreateStream");
 
-                // let msp_account_info = AccountMeta::new_readonly(MSP_ACCOUNT_KEY, false);
+                let test_account_info = AccountMeta::new_readonly(
+                    Pubkey::new(MSP_ACCOUNT_ADDRESS.as_ref()), 
+                    false
+                );
 
                 Self::process_create_stream(
                     accounts, 
