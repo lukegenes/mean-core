@@ -17,9 +17,7 @@ use arrayref::{
 
 use crate::error::{ StreamError, TreasuryError };
 
-pub const NATIVE_MINT: &str = "So11111111111111111111111111111111111111112";
-pub const MSP_ACCOUNT_ADDRESS: &str = "So11111111111111111111111111111111111111112";
-// pub const MSP_ACCOUNT_KEY: &Pubkey = &Pubkey::new(MSP_ACCOUNT_ADDRESS);
+pub const MSP_ACCOUNT_ADDRESS: &str = "BgxJuujLZDR27SS41kYZhsHkXx6CP2ELaVyg1qBxWYNU";
 pub const LAMPORTS_PER_SOL: u64 = 1000000000;
 pub const TREASURY_MINT_DECIMALS: u8 = 6;
 
