@@ -2,12 +2,7 @@
 
 use std::cmp;
 use num_traits;
-use arrayref::{
-    array_mut_ref,
-    mut_array_refs,
-    array_ref, 
-    array_refs, 
-};
+
 
 use solana_program::{
     msg,
@@ -24,7 +19,7 @@ use solana_program::{
     sysvar::{ clock::Clock, rent::Rent, Sysvar } 
 };
 
-use spl_token::instruction;
+
 // use spl_associated_token_program;
 
 use crate::{
@@ -63,10 +58,10 @@ impl Processor {
 
                 msg!("Instruction: CreateStream");
 
-                let test_account_info = AccountMeta::new_readonly(
-                    Pubkey::new(MSP_ACCOUNT_ADDRESS.as_ref()), 
-                    false
-                );
+                // let test_account_info = AccountMeta::new_readonly(
+                //     Pubkey::new(MSP_ACCOUNT_ADDRESS.as_ref()), 
+                //     false
+                // );
 
                 Self::process_create_stream(
                     accounts, 
@@ -425,7 +420,7 @@ impl Processor {
 
         let fee = 0.3f64 * contribution_amount / 100f64;
         let amount = contribution_amount - fee;
-        let mut treasury = Treasury::unpack_from_slice(&treasury_account_info.data.borrow())?;
+        let treasury = Treasury::unpack_from_slice(&treasury_account_info.data.borrow())?;
 
         let (treasury_pool_address, treasury_pool_bump_seed) = Pubkey::find_program_address(
             &[
@@ -566,7 +561,7 @@ impl Processor {
             return Err(StreamError::InvalidTreasuryData.into());
         }
 
-        if (*msp_ops_token_account_info.owner != *token_program_account_info.key)
+        if *msp_ops_token_account_info.owner != *token_program_account_info.key
         {
             let create_msp_associated_token_ix = spl_associated_token_account::create_associated_token_account(
                 contributor_account_info.key,
@@ -636,7 +631,7 @@ impl Processor {
         let msp_ops_token_account_info = next_account_info(account_info_iter)?;
         let msp_account_info = next_account_info(account_info_iter)?;
         let token_program_account_info = next_account_info(account_info_iter)?;
-        let system_account_info = next_account_info(account_info_iter)?;
+        let _system_account_info = next_account_info(account_info_iter)?;
         let clock = Clock::get()?;
 
         if !contributor_account_info.is_signer
@@ -842,25 +837,17 @@ impl Processor {
         }
 
         let mut stream = Stream::unpack_from_slice(&stream_account_info.data.borrow())?;
-        let current_block_height = clock.slot as u64;
+        let _current_block_height = clock.slot as u64;
         let current_block_time = clock.unix_timestamp as u64;
         let is_running = (stream.stream_resumed_block_time >= stream.escrow_vested_amount_snap_block_time) as u64;
         let rate = stream.rate_amount / (stream.rate_interval_in_seconds as f64) * (is_running as f64);
         let marker_block_time = cmp::max(stream.stream_resumed_block_time, stream.escrow_vested_amount_snap_block_time);
         let elapsed_time = (current_block_time - marker_block_time) as f64;
         let mut escrow_vested_amount = stream.escrow_vested_amount_snap + rate * elapsed_time;
-        let no_funds = (escrow_vested_amount >= stream.total_deposits - stream.total_withdrawals) as u64;
         
-        if no_funds == 1
+        if escrow_vested_amount >= (stream.total_deposits - stream.total_withdrawals)
         {
             escrow_vested_amount = stream.total_deposits - stream.total_withdrawals;
-
-            if is_running == 1
-            {
-                stream.escrow_vested_amount_snap = escrow_vested_amount;
-                stream.escrow_vested_amount_snap_block_height = current_block_height;
-                stream.escrow_vested_amount_snap_block_time = current_block_time;
-            }
         }
 
         if withdrawal_amount > escrow_vested_amount
@@ -868,14 +855,14 @@ impl Processor {
             return Err(StreamError::NotAllowedWithdrawalAmount.into());
         }
 
-        let escrow_unvested_amount = stream.total_deposits - stream.total_withdrawals - escrow_vested_amount;
+        let _escrow_unvested_amount = stream.total_deposits - stream.total_withdrawals - escrow_vested_amount;
         let fee = 0.3f64 * withdrawal_amount / 100f64;
         let transfer_amount = withdrawal_amount - fee;
         let beneficiary_mint = spl_token::state::Mint::unpack_from_slice(&beneficiary_mint_account_info.data.borrow())?;
         let beneficiary_mint_pow = num_traits::pow(10f64, beneficiary_mint.decimals.into());
 
         // Withdraw
-        let mut treasury = Treasury::unpack_from_slice(&treasury_account_info.data.borrow())?;
+        let treasury = Treasury::unpack_from_slice(&treasury_account_info.data.borrow())?;
         let (treasury_pool_address, treasury_pool_bump_seed) = Pubkey::find_program_address(
             &[
                 treasury.treasury_base_address.as_ref(),
@@ -922,7 +909,9 @@ impl Processor {
         );
 
         // Update stream account data
-        stream.total_withdrawals += withdrawal_amount;   
+        stream.total_withdrawals += withdrawal_amount;  
+        stream.stream_resumed_block_height = clock.slot as u64;
+        stream.stream_resumed_block_time = clock.unix_timestamp as u64; 
         // Save
         Stream::pack_into_slice(&stream, &mut stream_account_info.data.borrow_mut());
 
@@ -1083,7 +1072,7 @@ impl Processor {
     fn process_propose_update(
         accounts: &[AccountInfo], 
         program_id:  &Pubkey,
-        proposed_by: Pubkey,
+        _proposed_by: Pubkey,
         stream_name: String,
         treasurer_address: Pubkey,
         beneficiary_address: Pubkey,
@@ -1097,12 +1086,12 @@ impl Processor {
 
     ) -> ProgramResult {
 
-        let treasurer_account_info: &AccountInfo;
-        let beneficiary_account_info: &AccountInfo;
+        let _treasurer_account_info: &AccountInfo;
+        let _beneficiary_account_info: &AccountInfo;
         let account_info_iter = &mut accounts.iter();
         let initializer_account_info = next_account_info(account_info_iter)?;
         let stream_terms_account_info = next_account_info(account_info_iter)?;
-        let counterparty_account_info = next_account_info(account_info_iter)?;
+        let _counterparty_account_info = next_account_info(account_info_iter)?;
         let stream_account_info = next_account_info(account_info_iter)?;
         let msp_ops_account_info = next_account_info(account_info_iter)?;
         let system_account_info = next_account_info(account_info_iter)?;
@@ -1338,7 +1327,7 @@ impl Processor {
 
     fn process_close_stream(
         accounts: &[AccountInfo],
-        program_id: &Pubkey
+        _program_id: &Pubkey
 
     ) -> ProgramResult {
 
@@ -1378,7 +1367,7 @@ impl Processor {
             escrow_vested_amount = stream.total_deposits - stream.total_withdrawals;
         }
 
-        let escrow_unvested_amount = stream.total_deposits - stream.total_withdrawals - escrow_vested_amount;
+        let _escrow_unvested_amount = stream.total_deposits - stream.total_withdrawals - escrow_vested_amount;
         // Pausing the stream
         stream.escrow_vested_amount_snap = escrow_vested_amount;
         stream.escrow_vested_amount_snap_block_height = current_block_height;
@@ -1409,7 +1398,7 @@ impl Processor {
             let beneficiary_mint_pow = num_traits::pow(10f64, beneficiary_mint.decimals.into());
             let beneficiary_fee = 0.3f64 * escrow_vested_amount / 100f64;
             let transfer_amount = escrow_vested_amount - beneficiary_fee;            
-            let mut treasury = Treasury::unpack_from_slice(&treasury_account_info.data.borrow())?;
+            let treasury = Treasury::unpack_from_slice(&treasury_account_info.data.borrow())?;
             let (treasury_pool_address, treasury_pool_bump_seed) = Pubkey::find_program_address(
                 &[
                     treasury.treasury_base_address.as_ref(),
@@ -1541,7 +1530,7 @@ impl Processor {
 
     fn process_create_treasury(
         accounts: &[AccountInfo], 
-        program_id: &Pubkey,
+        _program_id: &Pubkey,
         treasury_block_height: u64,
         treasury_base_address: Pubkey
 
@@ -1751,7 +1740,7 @@ impl Processor {
 
     fn process_transfer(
         accounts: &[AccountInfo],
-        program_id: &Pubkey,
+        _program_id: &Pubkey,
         amount: f64
         
     ) -> ProgramResult {
