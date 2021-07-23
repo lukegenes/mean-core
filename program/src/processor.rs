@@ -909,7 +909,8 @@ impl Processor {
         );
 
         // Update stream account data
-        stream.total_withdrawals += withdrawal_amount;  
+        stream.total_withdrawals += withdrawal_amount;
+        stream.escrow_vested_amount_snap = escrow_vested_amount - withdrawal_amount;
         stream.stream_resumed_block_height = clock.slot as u64;
         stream.stream_resumed_block_time = clock.unix_timestamp as u64; 
         // Save
