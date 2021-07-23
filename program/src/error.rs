@@ -9,6 +9,7 @@ use solana_program::{
 use num_derive::FromPrimitive;
 use thiserror::Error;
 
+/// Stream errors
 #[derive(Clone, Debug, Eq, Error, FromPrimitive, PartialEq)]
 pub enum StreamError {
 
@@ -21,8 +22,14 @@ pub enum StreamError {
     #[error("Stream account is already initialized")]
     StreamAlreadyInitialized,
 
+    #[error("Stream terms account is already initialized")]
+    StreamTermsAlreadyInitialized,
+
     #[error("Invalid stream data")]
     InvalidStreamData,
+
+    #[error("Invalid treasury data")]
+    InvalidTreasuryData,
 
     #[error("Instruction signature is missing")]
     MissingInstructionSignature,
@@ -38,6 +45,9 @@ pub enum StreamError {
 
     #[error("Invalid argument")]
     InvalidArgument,
+
+    #[error("NotAllowedRecoverableAmount")]
+    NotAllowedRecoverableAmount,
 
     #[error("NotAllowedWithdrawalAmount")]
     NotAllowedWithdrawalAmount,
@@ -73,17 +83,48 @@ impl PrintProgramError for StreamError {
             Self::IncorrectProgramId => msg!("Error: IncorrectProgramId"),
             Self::InvalidStreamInstruction => msg!("Error: InvalidStreamInstruction"),
             Self::StreamAlreadyInitialized => msg!("Error: StreamAlreadyInitialized"),
+            Self::StreamTermsAlreadyInitialized => msg!("Error: StreamTermsAlreadyInitialized"),
             Self::InvalidStreamData => msg!("Error: InvalidStreamData"),
+            Self::InvalidTreasuryData => msg!("Error: InvalidTreasuryData"),
             Self::MissingInstructionSignature => msg!("Error: MissingInstructionSignature"),
             Self::InvalidRentException => msg!("Error: Account balance below rent-exempt threshold"),
             Self::InsufficientFunds => msg!("Error: InsufficientFunds"),
             Self::InstructionNotAuthorized => msg!("Error: InstructionNotAuthorized"),
             Self::InvalidArgument => msg!("Error: InvalidArgument"),
+            Self::NotAllowedRecoverableAmount => msg!("Error: Can not recover more that the unvested amount"),            
             Self::NotAllowedWithdrawalAmount => msg!("Error: Can not withdraw more that the vested amount"),
             Self::NotAuthorizedToWithdraw => msg!("Error: Not authorized to withdraw from the stream"),
             Self::InvalidWithdrawalDate => msg!("Error: The date to withdraw your money has not been reached yet"),
             Self::InvalidSignerAuthority => msg!("Error: InvalidSignerAuthority"),
             Self::Overflow => msg!("Error: Overflow")
+        }
+    }
+}
+
+/// Treasury errors
+#[derive(Clone, Debug, Eq, Error, FromPrimitive, PartialEq)]
+pub enum TreasuryError {
+
+    #[error("Invalid treasury data")]
+    InvalidTreasuryData
+}
+
+impl From<TreasuryError> for ProgramError {
+    fn from(e: TreasuryError) -> Self {
+        ProgramError::Custom(e as u32)
+    }
+}
+
+impl<E> DecodeError<E> for TreasuryError {
+    fn type_of() -> &'static str {
+        "TreasuryError"
+    }
+}
+
+impl PrintProgramError for TreasuryError {
+    fn print<E>(&self) where E: 'static + std::error::Error + DecodeError<E> + PrintProgramError {
+        match self {
+            Self::InvalidTreasuryData => msg!("Error: InvalidTreasuryData")
         }
     }
 }
