@@ -3,7 +3,6 @@
 use std::{ mem::size_of, convert::TryInto };
 
 use solana_program::{
-    msg,
     pubkey::Pubkey,
     instruction::{ AccountMeta, Instruction }
 };
@@ -383,7 +382,7 @@ impl StreamInstruction {
     }
 
     fn unpack_recover_funds(input: &[u8]) -> Result<Self, StreamError> {
-        let (recover_amount, result) = input.split_at(8);
+        let (recover_amount, _result) = input.split_at(8);
         let recover_amount = Self::unpack_f64(recover_amount)?;
 
         Ok(Self::RecoverFunds { recover_amount })
