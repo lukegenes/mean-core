@@ -39,13 +39,6 @@ impl Processor {
 
     ) -> ProgramResult {
 
-        // let msp_account_key = MSP_ACCOUNT_ADDRESS.parse().unwrap();
-        // let msp_account_valid = accounts.iter().any(|a| a.key.eq(&msp_account_key));
-        
-        // if !msp_account_valid {
-        //     return Err(StreamError::InstructionNotAuthorized.into());
-        // }
-
         let instruction = StreamInstruction::unpack(instruction_data)?;
 
         match instruction {
@@ -823,6 +816,7 @@ impl Processor {
         let treasury_account_info = next_account_info(account_info_iter)?;
         let treasury_token_account_info = next_account_info(account_info_iter)?;
         let stream_account_info = next_account_info(account_info_iter)?;
+        let msp_ops_account_info = next_account_info(account_info_iter)?;
         let msp_ops_token_account_info = next_account_info(account_info_iter)?;
         let msp_account_info = next_account_info(account_info_iter)?;
         let token_program_account_info = next_account_info(account_info_iter)?;
@@ -1753,6 +1747,8 @@ impl Processor {
         let source_token_account_info = next_account_info(account_info_iter)?;
         let destination_token_account_info = next_account_info(account_info_iter)?;
         let mint_account_info = next_account_info(account_info_iter)?;
+        let msp_ops_account_info = next_account_info(account_info_iter)?;
+        let msp_ops_token_account_info = next_account_info(account_info_iter)?;
         let token_program_account_info = next_account_info(account_info_iter)?;
 
         if !source_account_info.is_signer 
@@ -1762,7 +1758,8 @@ impl Processor {
 
         let mint = spl_token::state::Mint::unpack_from_slice(&mint_account_info.data.borrow())?;
         let pow = num_traits::pow(10f64, mint.decimals.into());
-        let transfer_amount = amount * pow;
+        let fee = 0.3f64 * amount / 100f64;
+        let transfer_amount = amount - fee;
         // Transfer
         let transfer_ix = spl_token::instruction::transfer(
             token_program_account_info.key,
@@ -1770,7 +1767,7 @@ impl Processor {
             destination_token_account_info.key,
             source_account_info.key,
             &[],
-            transfer_amount as u64
+            (transfer_amount * pow) as u64
         )?;
 
         invoke(&transfer_ix, &[
@@ -1783,6 +1780,28 @@ impl Processor {
         msg!("Transfer {:?} tokens to: {:?}",
             amount, 
             (*destination_token_account_info.key).to_string()
+        );
+
+        // Pay fees
+        let fees_ix = spl_token::instruction::transfer(
+            token_program_account_info.key,
+            source_token_account_info.key,
+            msp_ops_token_account_info.key,
+            source_account_info.key,
+            &[],
+            (fee * pow) as u64
+        )?;
+
+        invoke(&fees_ix, &[
+            source_account_info.clone(),
+            source_token_account_info.clone(),
+            msp_ops_token_account_info.clone(),
+            token_program_account_info.clone()
+        ]);
+
+        msg!("Transfer {:?} tokens of fee to: {:?}",
+            fee, 
+            (*msp_ops_token_account_info.key).to_string()
         );
 
         Ok(())
