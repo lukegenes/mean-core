@@ -25,7 +25,7 @@ use solana_program::{
 use crate::{
     error::StreamError,
     instruction::{ StreamInstruction, transfer },
-    state::{ Stream, StreamTerms, Treasury, NATIVE_MINT, LAMPORTS_PER_SOL, TREASURY_MINT_DECIMALS, MSP_ACCOUNT_ADDRESS }
+    state::{ Stream, StreamTerms, Treasury, MSP_ACCOUNT_ADDRESS, LAMPORTS_PER_SOL, TREASURY_MINT_DECIMALS }
 };
 
 pub struct Processor {}
@@ -38,6 +38,13 @@ impl Processor {
         instruction_data: &[u8]
 
     ) -> ProgramResult {
+
+        // let msp_account_key = MSP_ACCOUNT_ADDRESS.parse().unwrap();
+        // let msp_account_valid = accounts.iter().any(|a| a.key.eq(&msp_account_key));
+        
+        // if !msp_account_valid {
+        //     return Err(StreamError::InstructionNotAuthorized.into());
+        // }
 
         let instruction = StreamInstruction::unpack(instruction_data)?;
 
@@ -57,11 +64,6 @@ impl Processor {
             } => {
 
                 msg!("Instruction: CreateStream");
-
-                // let test_account_info = AccountMeta::new_readonly(
-                //     Pubkey::new(MSP_ACCOUNT_ADDRESS.as_ref()), 
-                //     false
-                // );
 
                 Self::process_create_stream(
                     accounts, 
