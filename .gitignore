@@ -18,7 +18,7 @@
 /program/devnet-config.yml
 /program/testnet-config.yml
 
-/js/package-lock.json
+# /js/package-lock.json
 /js/node_modules/*
-js/main.ts
-js/main-utils.ts
+/js/main.ts
+/js/main-utils.ts
