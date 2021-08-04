@@ -12,13 +12,15 @@
 
 # These are custom exclusions
 /program/dist/
-/program/dist/*.so
+/program/dist/**/*
 /program/keys/
-/program/dist/*.json
+/program/keys/**/*
 /program/devnet-config.yml
 /program/testnet-config.yml
+/program/mainnet-beta-config.yml
 
 # /js/package-lock.json
-/js/node_modules/*
+/js/node_modules
+/js/node_modules/**/*
 /js/main.ts
 /js/main-utils.ts
