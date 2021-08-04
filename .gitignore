@@ -19,6 +19,10 @@
 /program/testnet-config.yml
 
 # /js/package-lock.json
-/js/node_modules/*
+/js/src/*.js
+/js/lib/
+/js/lib/**/*
+/js/node_modules
+/js/node_modules/**/*
 /js/main.ts
 /js/main-utils.ts
