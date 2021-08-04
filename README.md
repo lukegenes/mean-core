@@ -6,4 +6,4 @@ Money streaming represents the idea of continuous payments over time. Block numb
 
 Looking for a Dapp that leverages the Money Streaming Protocol? 
 * See MeanPay Dapp at https://app-stage.meanfi.com
-* See Mean Pay Dapp repo: https://github.com/mean-code/mean-pay-webapp
+* See Mean Pay Dapp repo: https://github.com/mean-code/meanfi-webapp
