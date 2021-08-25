@@ -3,29 +3,21 @@
 use std::cmp;
 use num_traits;
 
-
 use solana_program::{
     msg,
-    system_program,
     system_instruction,
     program::{ invoke, invoke_signed },
-    program_option::COption,
     pubkey::Pubkey,
     entrypoint::ProgramResult,
-    system_instruction::SystemInstruction,
-    instruction::{ AccountMeta, Instruction },
     account_info::{ next_account_info, AccountInfo },
     program_pack::{ IsInitialized, Pack },
     sysvar::{ clock::Clock, rent::Rent, Sysvar } 
 };
 
-
-// use spl_associated_token_program;
-
 use crate::{
     error::StreamError,
-    instruction::{ StreamInstruction, transfer },
-    state::{ Stream, StreamTerms, Treasury, MSP_ACCOUNT_ADDRESS, LAMPORTS_PER_SOL, TREASURY_MINT_DECIMALS }
+    instruction::{ StreamInstruction },
+    state::{ Stream, StreamTerms, Treasury, LAMPORTS_PER_SOL, TREASURY_MINT_DECIMALS }
 };
 
 pub struct Processor {}
@@ -626,7 +618,6 @@ impl Processor {
         let msp_ops_token_account_info = next_account_info(account_info_iter)?;
         let msp_account_info = next_account_info(account_info_iter)?;
         let token_program_account_info = next_account_info(account_info_iter)?;
-        let _system_account_info = next_account_info(account_info_iter)?;
         let clock = Clock::get()?;
 
         if !contributor_account_info.is_signer
@@ -816,7 +807,7 @@ impl Processor {
         let treasury_account_info = next_account_info(account_info_iter)?;
         let treasury_token_account_info = next_account_info(account_info_iter)?;
         let stream_account_info = next_account_info(account_info_iter)?;
-        let msp_ops_account_info = next_account_info(account_info_iter)?;
+        let _msp_ops_account_info = next_account_info(account_info_iter)?;
         let msp_ops_token_account_info = next_account_info(account_info_iter)?;
         let msp_account_info = next_account_info(account_info_iter)?;
         let token_program_account_info = next_account_info(account_info_iter)?;
@@ -1328,11 +1319,8 @@ impl Processor {
 
     ) -> ProgramResult {
 
-        let treasurer_account_info: &AccountInfo;
-        let beneficiary_account_info: &AccountInfo;
         let account_info_iter = &mut accounts.iter();
         let initializer_account_info = next_account_info(account_info_iter)?;
-        let counterparty_account_info = next_account_info(account_info_iter)?;
         let beneficiary_token_account_info = next_account_info(account_info_iter)?;
         let beneficiary_mint_account_info = next_account_info(account_info_iter)?;
         let treasury_account_info = next_account_info(account_info_iter)?;  
@@ -1375,17 +1363,6 @@ impl Processor {
            stream.beneficiary_address.ne(initializer_account_info.key) 
         {
             return Err(StreamError::InstructionNotAuthorized.into()); // Just the treasurer or the beneficiary can close a stream
-        }
-        
-        if stream.treasurer_address.eq(initializer_account_info.key)
-        {
-            treasurer_account_info = initializer_account_info;
-            beneficiary_account_info = counterparty_account_info;
-        } 
-        else 
-        {
-            treasurer_account_info = counterparty_account_info;
-            beneficiary_account_info = initializer_account_info;
         }
         
         if escrow_vested_amount > 0.0 
@@ -1541,8 +1518,8 @@ impl Processor {
         let treasury_mint_account_info = next_account_info(account_info_iter)?;
         let msp_account_info = next_account_info(account_info_iter)?;
         let msp_ops_account_info = next_account_info(account_info_iter)?;
-        let token_program_account_info = next_account_info(account_info_iter)?;
         let associated_token_program_account_info = next_account_info(account_info_iter)?;
+        let token_program_account_info = next_account_info(account_info_iter)?;
         let system_account_info = next_account_info(account_info_iter)?;
         let rent_account_info = next_account_info(account_info_iter)?;
         let rent = &Rent::from_account_info(rent_account_info)?;
@@ -1747,7 +1724,7 @@ impl Processor {
         let source_token_account_info = next_account_info(account_info_iter)?;
         let destination_token_account_info = next_account_info(account_info_iter)?;
         let mint_account_info = next_account_info(account_info_iter)?;
-        let msp_ops_account_info = next_account_info(account_info_iter)?;
+        let _msp_ops_account_info = next_account_info(account_info_iter)?;
         let msp_ops_token_account_info = next_account_info(account_info_iter)?;
         let token_program_account_info = next_account_info(account_info_iter)?;
 

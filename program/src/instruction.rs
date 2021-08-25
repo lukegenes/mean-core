@@ -17,15 +17,13 @@ pub enum StreamInstruction {
     /// Initialize a new stream contract
     ///
     /// 0. `[signer]` The treasurer account (The creator of the money stream).
-    /// 1. `[writable]` The treasurer token account.
-    /// 2. `[writable]` The beneficiary token account.
-    /// 3. `[]` The treasury account (The stream contract treasury account).
-    /// 4. `[]` The treasury token account.
-    /// 5. `[writable]` The stream account (The stream contract account).
-    /// 6. `[]` The associated token mint account    
-    /// 7.  [] The Money Streaming Program account.
-    /// 8. `[]` The SPL Token Program account.
-    /// 9. `[]` System Account.
+    /// 1. `[]` The treasury account (The stream contract treasury account).
+    /// 2. `[]` The beneficiary associated token mint account.
+    /// 3. `[writable]` The stream account (The stream contract account).
+    /// 4.  [writable] The Money Streaming Program operating account (Fees account).
+    /// 5.  [] The Money Streaming Program account.
+    /// 6. `[]` The System Program account.
+    /// 7. `[]` Rent sysvar account.
     CreateStream {
         beneficiary_address: Pubkey,
         stream_name: String,        
@@ -44,14 +42,17 @@ pub enum StreamInstruction {
     /// 1. `[writable]` The contributor token account
     /// 2. `[writable]` The contributor treasury token account (the account of the token issued by the treasury and owned by the contributor)
     /// 3. `[]` The beneficiary mint account
-    /// 4. `[]` The treasury account (Money stream treasury account).
+    /// 4. `[]` The treasury account (Stream treasury account).
     /// 5. `[writable]` The treasury token account.    
     /// 6. `[]` The treasury mint account (the mint of the treasury pool token)
     /// 7. `[writable]` The stream account (The stream contract account).
-    /// 8.  [writable] The Money Streaming Protocol account.
-    /// 9.  [writable] The Money Streaming Protocol operating token account.
+    /// 8.  [writable] The Money Streaming Program operating account (Fees account).
+    /// 9.  [writable] The Money Streaming Program operating token account.
     /// 10.  [] The Money Streaming Program account.
-    /// 11. `[]` The SPL Token Program account.
+    /// 11. `[]` The Associated Token Program account.
+    /// 12. `[]` The Token Program account.
+    /// 13. `[]` The System Program account.
+    /// 14. `[]` Rent sysvar account.
     AddFunds {
         contribution_amount: f64,
         funded_on_utc: u64,
@@ -64,14 +65,14 @@ pub enum StreamInstruction {
     /// 1. `[writable]` The contributor token account
     /// 2. `[writable]` The contributor treasury token account (the account of the token issued by the treasury and owned by the contributor)
     /// 3. `[]` The contributor mint account
-    /// 4. `[]` The treasury account (Money streaming treasury account).
+    /// 4. `[]` The treasury account (Stream treasury account).
     /// 5. `[writable]` The treasury token account.    
     /// 6. `[]` The treasury mint account (the mint of the treasury pool token)
     /// 7. `[writable]` The stream account (The stream contract account).
-    /// 8.  [writable] The Money Streaming Protocol account.
-    /// 9.  [writable] The Money Streaming Protocol operating token account.
+    /// 8.  [writable] The Money Streaming Program operating account (Fees account).
+    /// 9.  [writable] The Money Streaming Program operating token account.
     /// 10.  [] The Money Streaming Program account.
-    /// 11. `[]` The SPL Token Program account.
+    /// 11. `[]` The Token Program account.
     RecoverFunds {
         recover_amount: f64
     },
@@ -81,32 +82,32 @@ pub enum StreamInstruction {
     /// 2. `[]` The beneficiary token mint account
     /// 3. `[]` The treasury account
     /// 4. `[writable]` The treasury token account
-    /// 5. `[writable]` The stream account (Money streaming state account).
-    /// 6. `[writable]` The Money Streaming Protocol operating token account.
-    /// 7. `[]` The Money Streaming Program account.
-    /// 8. `[]` The SPL Token Program account.
-    /// 9. `[]` System Program account.
+    /// 5. `[writable]` The stream account (The stream contract account).
+    /// 6.  [writable] The Money Streaming Program operating account (Fees account).
+    /// 7.  [writable] The Money Streaming Program operating token account.
+    /// 8. `[]` The Money Streaming Program account.
+    /// 9. `[]` The Token Program account.
     Withdraw { 
         withdrawal_amount: f64
     },
 
-    /// 0. `[signer]` The initializer of the transaction (msp => `auto pause`, treasurer or beneficiary)
-    /// 1. `[writable]` The stream account (Money stream state account).
-    /// 2. `[writable]` The Money Streaming Protocol operating account.
+    /// 0. `[signer]` The initializer of the transaction (treasurer or beneficiary)
+    /// 1. `[writable]` The stream account (The stream contract account).
+    /// 2. `[writable]` The Money Streaming Program operating account.
     /// 3. `[]` System Program account.
     PauseStream,
 
-    /// 0. `[signer]` The initializer of the transaction (msp => `auto resume`, treasurer or beneficiary)
-    /// 1. `[writable]` The stream account (Money stream state account).
-    /// 2. `[writable]` The Money Streaming Protocol operating token account.
+    /// 0. `[signer]` The initializer of the transaction (treasurer or beneficiary)
+    /// 1. `[writable]` The stream account (The stream contract account).
+    /// 2. `[writable]` The Money Streaming Program operating account.
     /// 3. `[]` System Program account.
     ResumeStream,
 
     /// 0. `[signer]` The initializer of the transaction (treasurer or beneficiary)
     /// 1. `[writable]` The stream terms account (Update proposal account).
     /// 2. `[]` The counterparty's account (if the initializer is the treasurer then it would be the beneficiary or vice versa)
-    /// 3. `[writable]` The stream account
-    /// 4.  [writable] The Money Streaming Protocol operating token account.
+    /// 3. `[writable]` The stream account (The stream contract account).
+    /// 4.  [writable] The Money Streaming Program operating account (Fees account).
     /// 5. `[]` System Program account.
     ProposeUpdate {
         proposed_by: Pubkey,
@@ -125,8 +126,8 @@ pub enum StreamInstruction {
     /// 0. `[signer]` The initializer of the transaction (treasurer or beneficiary)
     /// 1. `[writable]` The stream terms account (Update proposal account).
     /// 2. `[]` The counterparty's account (if the initializer is the treasurer then it would be the beneficiary or vice versa)
-    /// 3. `[writable]` The stream account
-    /// 4.  [writable] The Money Streaming Protocol operating token account.
+    /// 3. `[writable]` The stream account (The stream contract account). 
+    /// 4.  [writable] The Money Streaming Program operating account (Fees account).
     /// 5. `[]` System Program account.
     AnswerUpdate {
         approve: bool
@@ -134,25 +135,29 @@ pub enum StreamInstruction {
 
     /// 0. `[signer]` The initializer account (treasurer/beneficiary)
     /// 1. `[]` The counterparty account (treasurer/beneficiary)
-    /// 2. `[writable]` The stream account (The stream contract account).
-    /// 3. `[writable]` The beneficiary token account.
-    /// 4. `[]` The beneficiary token mint account
+    /// 2. `[writable]` The beneficiary token account.
+    /// 3. `[]` The beneficiary token mint account
+    /// 4. `[writable]` The treasury account
     /// 5. `[writable]` The treasury token account
-    /// 6. `[writable]` The treasury token owner (The Money Streaming Program)
-    /// 7. `[writable]` The Money Streaming Protocol ccount.
-    /// 8. `[writable]` The Money Streaming Protocol operating token account.
-    /// 9. `[]` System Program account.
-    /// 10. `[]` The SPL Token Program account.
+    /// 6. `[writable]` The stream account (The stream contract account).
+    /// 7. `[writable]` The Money Streaming Program operating account (Fees account).
+    /// 8. `[writable]` The Money Streaming Program operating token account.
+    /// 9. `[writable]` The Money Streaming Program account
+    /// 10. `[]` The Token Program account.
+    /// 11. `[]` System Program account.
     CloseStream,
 
     /// 0. `[signer]` The treasurer account (the creator of the treasury)
     /// 1. `[writable]` The treasury account
-    /// 2. `[writable]` The treasury pool mint account
-    /// 3. `[writable]` The Money Streaming Protocol ccount.
-    /// 4. `[writable]` The Money Streaming Protocol operating token account.
-    /// 5. `[]` The SPL Token Program account.
-    /// 6. `[]` System Program account.
-    /// 7. `[]` SysvarRent account.
+    /// 2. `[writable]` The treasury token account (The token account of the treasury which the funds are going to be payed for)
+    /// 3. `[writable]` The treasury token mint account (The mint account of the treasury token which the funds are going to be payed for).
+    /// 4. `[writable]` The treasury mint account (The mint account of the treasury pool token issued by the treasury).
+    /// 5. `[writable]` The Money Streaming Program operating ccount (Fees account).
+    /// 6. `[writable]` The Money Streaming Protocol operating token account.
+    /// 7. `[]` The Associated Token Program account.
+    /// 8. `[]` The Token Program account.    
+    /// 9. `[]` System Program account.
+    /// 10. `[]` SysvarRent account.
     CreateTreasury {
         treasury_block_height: u64,
         treasury_base_address: Pubkey
@@ -164,7 +169,9 @@ pub enum StreamInstruction {
     /// 1. `[writable]` The source token account
     /// 2. `[writable]` The destination token account.
     /// 3. `[writable]` The associated token mint account
-    /// 5. `[]` The SPL Token Program account.
+    /// 4. `[writable]` The Money Streaming Program operating ccount (Fees account).
+    /// 5. `[writable]` The Money Streaming Protocol operating token account.
+    /// 6. `[]` The Token Program account.
     Transfer {
         amount: f64
     }
@@ -527,7 +534,9 @@ impl StreamInstruction {
 
  ) -> Result<Instruction, StreamError> {
 
-    check_program_account(program_id);
+    if let Err(_error) = check_program_account(program_id) {
+        return Err(StreamError::IncorrectProgramId.into());
+    }
 
     let data = StreamInstruction::CreateStream {
         beneficiary_address,
@@ -569,7 +578,9 @@ impl StreamInstruction {
 
  ) -> Result<Instruction, StreamError> {
 
-    check_program_account(program_id);
+    if let Err(_error) = check_program_account(program_id) {
+        return Err(StreamError::IncorrectProgramId.into());
+    }
 
     let data = StreamInstruction::AddFunds { 
         contribution_amount,
@@ -600,7 +611,9 @@ impl StreamInstruction {
 
  ) -> Result<Instruction, StreamError> {
 
-    check_program_account(program_id);
+    if let Err(_error) = check_program_account(program_id) {
+        return Err(StreamError::IncorrectProgramId.into());
+    }
 
     let data = StreamInstruction::Withdraw { withdrawal_amount }.pack();
     let accounts = vec![
@@ -625,7 +638,9 @@ impl StreamInstruction {
 
  ) -> Result<Instruction, StreamError> {
 
-    check_program_account(program_id);
+    if let Err(_error) = check_program_account(program_id) {
+        return Err(StreamError::IncorrectProgramId.into());
+    }
 
     let data = StreamInstruction::CloseStream.pack();
     let accounts = vec![
@@ -649,7 +664,9 @@ impl StreamInstruction {
 
  ) -> Result<Instruction, StreamError> {
 
-    check_program_account(program_id);
+    if let Err(_error) = check_program_account(program_id) {
+        return Err(StreamError::IncorrectProgramId.into());
+    }
 
     let data = StreamInstruction::Transfer { amount }.pack();
     let accounts = vec![
