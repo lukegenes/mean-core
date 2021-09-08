@@ -17,7 +17,17 @@ use solana_program::{
 use crate::{
     error::StreamError,
     instruction::{ StreamInstruction },
-    state::{ Stream, StreamTerms, Treasury, LAMPORTS_PER_SOL, TREASURY_MINT_DECIMALS }
+    state::{ Stream, StreamTerms, Treasury },
+    constants::{ 
+        CREATE_STREAM_FLAT_FEE,
+        ADD_FUNDS_PERCENT_FEE,
+        WITHDRAW_PERCENT_FEE,
+        PROPOSE_UPDATE_FLAT_FEE,
+        CLOSE_STREAM_FLAT_FEE,
+        CLOSE_STREAM_PERCENT_FEE, 
+        LAMPORTS_PER_SOL, 
+        TREASURY_MINT_DECIMALS 
+    }
 };
 
 pub struct Processor {}
@@ -290,8 +300,7 @@ impl Processor {
         msg!("Stream contract successfully created");
 
         // Debit Fees from treasurer
-        let flat_fee = 0.025f64;
-        let fees_lamports = flat_fee * (LAMPORTS_PER_SOL as f64);
+        let fees_lamports = CREATE_STREAM_FLAT_FEE * (LAMPORTS_PER_SOL as f64);
         let fees_transfer_ix = system_instruction::transfer(
             treasurer_account_info.key,
             msp_ops_account_info.key,
@@ -405,7 +414,7 @@ impl Processor {
             );
         }
 
-        let fee = 0.3f64 * contribution_amount / 100f64;
+        let fee = ADD_FUNDS_PERCENT_FEE * contribution_amount / 100f64;
         let amount = contribution_amount - fee;
         let treasury = Treasury::unpack_from_slice(&treasury_account_info.data.borrow())?;
 
@@ -641,7 +650,7 @@ impl Processor {
             return Err(StreamError::InstructionNotAuthorized.into());
         }
 
-        let fee = 0.3f64 * recover_amount / 100f64;
+        let fee = WITHDRAW_PERCENT_FEE * recover_amount / 100f64;
         let treasury_mint = spl_token::state::Mint::unpack_from_slice(&treasury_mint_account_info.data.borrow())?;
         let treasury_mint_pow = num_traits::pow(10f64, treasury_mint.decimals.into());
         let burn_amount = recover_amount * treasury_mint_pow;
@@ -843,7 +852,7 @@ impl Processor {
         }
 
         let _escrow_unvested_amount = stream.total_deposits - stream.total_withdrawals - escrow_vested_amount;
-        let fee = 0.3f64 * withdrawal_amount / 100f64;
+        let fee = WITHDRAW_PERCENT_FEE * withdrawal_amount / 100f64;
         let transfer_amount = withdrawal_amount - fee;
         let beneficiary_mint = spl_token::state::Mint::unpack_from_slice(&beneficiary_mint_account_info.data.borrow())?;
         let beneficiary_mint_pow = num_traits::pow(10f64, beneficiary_mint.decimals.into());
@@ -976,8 +985,7 @@ impl Processor {
         msg!("Pausing the stream");
 
         // Pay fees
-        let fee = 0.025f64;
-        let fee_lamports = fee * (LAMPORTS_PER_SOL as f64);
+        let fee_lamports = CREATE_STREAM_FLAT_FEE * (LAMPORTS_PER_SOL as f64);
         let fee_ix = system_instruction::transfer(
             initializer_account_info.key,
             msp_ops_account_info.key,
@@ -1035,8 +1043,7 @@ impl Processor {
         msg!("Resuming the stream");
 
         // Pay fees
-        let fee = 0.025f64;
-        let fee_lamports = fee * (LAMPORTS_PER_SOL as f64);
+        let fee_lamports = CREATE_STREAM_FLAT_FEE * (LAMPORTS_PER_SOL as f64);
         let fee_ix = system_instruction::transfer(
             initializer_account_info.key,
             msp_ops_account_info.key,
@@ -1136,8 +1143,7 @@ impl Processor {
         StreamTerms::pack_into_slice(&stream_terms, &mut stream_terms_account_info.data.borrow_mut());
 
         // Debit fees from the initializer of the instruction
-        let flat_fee = 0.025f64;
-        let fee_lamports = flat_fee * (LAMPORTS_PER_SOL as f64);
+        let fee_lamports = PROPOSE_UPDATE_FLAT_FEE * (LAMPORTS_PER_SOL as f64);
         let fee_transfer_ix = system_instruction::transfer(
             initializer_account_info.key,
             msp_ops_account_info.key,
@@ -1291,8 +1297,7 @@ impl Processor {
         StreamTerms::pack_into_slice(&stream_terms, &mut stream_terms_account_info.data.borrow_mut());
 
         // Debit fees from the initializer of the instruction
-        let flat_fee = 0.025f64;
-        let fee_lamports = flat_fee * (LAMPORTS_PER_SOL as f64);
+        let fee_lamports = PROPOSE_UPDATE_FLAT_FEE * (LAMPORTS_PER_SOL as f64);
         let fee_transfer_ix = system_instruction::transfer(
             initializer_account_info.key,
             msp_ops_account_info.key,
@@ -1370,7 +1375,7 @@ impl Processor {
             // Crediting escrow vested amount to the beneficiary
             let beneficiary_mint = spl_token::state::Mint::unpack_from_slice(&beneficiary_mint_account_info.data.borrow())?;
             let beneficiary_mint_pow = num_traits::pow(10f64, beneficiary_mint.decimals.into());
-            let beneficiary_fee = 0.3f64 * escrow_vested_amount / 100f64;
+            let beneficiary_fee = CLOSE_STREAM_PERCENT_FEE * escrow_vested_amount / 100f64;
             let transfer_amount = escrow_vested_amount - beneficiary_fee;            
             let treasury = Treasury::unpack_from_slice(&treasury_account_info.data.borrow())?;
             let (treasury_pool_address, treasury_pool_bump_seed) = Pubkey::find_program_address(
@@ -1469,8 +1474,7 @@ impl Processor {
         Stream::pack_into_slice(&stream, &mut stream_account_info.data.borrow_mut());
 
         // Debit fees from the initializer of the instruction
-        let flat_fee = 0.025f64;
-        let fee_lamports = flat_fee * (LAMPORTS_PER_SOL as f64);
+        let fee_lamports = CLOSE_STREAM_FLAT_FEE * (LAMPORTS_PER_SOL as f64);
         let fee_transfer_ix = system_instruction::transfer(
             initializer_account_info.key,
             msp_ops_account_info.key,
@@ -1518,8 +1522,8 @@ impl Processor {
         let treasury_mint_account_info = next_account_info(account_info_iter)?;
         let msp_account_info = next_account_info(account_info_iter)?;
         let msp_ops_account_info = next_account_info(account_info_iter)?;
-        let associated_token_program_account_info = next_account_info(account_info_iter)?;
         let token_program_account_info = next_account_info(account_info_iter)?;
+        let associated_token_program_account_info = next_account_info(account_info_iter)?;
         let system_account_info = next_account_info(account_info_iter)?;
         let rent_account_info = next_account_info(account_info_iter)?;
         let rent = &Rent::from_account_info(rent_account_info)?;
@@ -1690,8 +1694,7 @@ impl Processor {
         Treasury::pack_into_slice(&treasury, &mut treasury_account_info.data.borrow_mut());
 
         // Debit Fees from treasurer
-        let flat_fee = 0.025f64;
-        let fees_lamports = flat_fee * (LAMPORTS_PER_SOL as f64);
+        let fees_lamports = CREATE_STREAM_FLAT_FEE * (LAMPORTS_PER_SOL as f64);
         let fees_transfer_ix = system_instruction::transfer(
             treasurer_account_info.key,
             msp_ops_account_info.key,
@@ -1735,7 +1738,7 @@ impl Processor {
 
         let mint = spl_token::state::Mint::unpack_from_slice(&mint_account_info.data.borrow())?;
         let pow = num_traits::pow(10f64, mint.decimals.into());
-        let fee = 0.3f64 * amount / 100f64;
+        let fee = ADD_FUNDS_PERCENT_FEE * amount / 100f64;
         let transfer_amount = amount - fee;
         // Transfer
         let transfer_ix = spl_token::instruction::transfer(
