@@ -17,10 +17,6 @@ use arrayref::{
 
 use crate::error::{ StreamError, TreasuryError };
 
-pub const MSP_ACCOUNT_ADDRESS: &str = "CLazQV1BhSrxfgRHko4sC8GYBU3DoHcX4xxRZd12Kohr";
-pub const LAMPORTS_PER_SOL: u64 = 1000000000;
-pub const TREASURY_MINT_DECIMALS: u8 = 6;
-
 #[derive(Clone, Debug)]
 pub struct StreamTerms {
     pub initialized: bool,

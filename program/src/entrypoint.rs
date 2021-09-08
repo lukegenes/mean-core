@@ -11,7 +11,7 @@ use solana_program::{
 use crate::{ 
     processor::Processor,
     error::StreamError,
-    state::MSP_ACCOUNT_ADDRESS
+    constants::MSP_ACCOUNT_ADDRESS
 };
 
 entrypoint!(process_instruction);
