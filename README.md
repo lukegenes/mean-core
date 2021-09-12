@@ -5,5 +5,5 @@ The **Money Streaming Program** is an implementation of the **[Money Streaming P
 Money streaming represents the idea of continuous payments over time. Block numbers are used to measure time in the blockchain and continuously update the balances of the parties in the contract.
 
 Looking for a Dapp that leverages the Money Streaming Protocol? 
-* See MeanPay Dapp at https://app-stage.meanfi.com
-* See Mean Pay Dapp repo: https://github.com/mean-code/meanfi-webapp
+* See MeanPay Dapp at https://app.meanfi.com
+* See Mean Pay Dapp repo: https://github.com/mean-dao/meanfi-ui

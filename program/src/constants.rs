@@ -1,4 +1,4 @@
-pub const MSP_ACCOUNT_ADDRESS: &str = "BgxJuujLZDR27SS41kYZhsHkXx6CP2ELaVyg1qBxWYNU";
+pub const MSP_ACCOUNT_ADDRESS: &str = "CLazQV1BhSrxfgRHko4sC8GYBU3DoHcX4xxRZd12Kohr";
 pub const CREATE_STREAM_FLAT_FEE: f64 = 0.000010;
 pub const ADD_FUNDS_PERCENT_FEE: f64 = 0.3;
 pub const WITHDRAW_PERCENT_FEE: f64 = 0.3;
