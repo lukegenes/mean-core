@@ -10,7 +10,7 @@
 | `ddca` | Rust program to implement the **[DDCA Protocol]()** | **--** |
 | `hybrid-liquidity-ag` | Rust program to implement the **[Universal Liquidity Aggregator Protocol]()** | **--**
 
-<h2>Note</h2>
+<h2>Notes</h2>
 
 * The **Mean Protocol** is in active development and the programs are subject to change
 * For detailed documentation, please read the Developer Docs 👉 https://docs.meanfi.com/platform/developers
