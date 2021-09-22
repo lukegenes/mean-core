@@ -1,6 +1,6 @@
 # Mean Core
 
-**Mean Core** is the repository for the **Solana** programs (smart contracts) of **Mean DAO**.
+**Mean Core** is the repository for the **Mean Protocol** Smart Contracts (Programs) in Solana.
 
 <h2>Programs</h2>
 
@@ -12,7 +12,7 @@
 
 <h2>Note</h2>
 
-* **Mean Core** is in active development and the programs are subject to change
+* The **Mean Protocol** is in active development and the programs are subject to change
 
 <br/>
 <h2>Money Streaming</h2>
