@@ -13,6 +13,7 @@
 <h2>Note</h2>
 
 * The **Mean Protocol** is in active development and the programs are subject to change
+* For detailed documentation, please read the Developer Docs 👉 https://docs.meanfi.com/platform/developers
 
 <br/>
 <h2>Money Streaming</h2>
