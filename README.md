@@ -1,4 +1,4 @@
-# Mean Core
+# Mean Protocol
 
 **Mean Core** is the repository for the **Mean Protocol** Smart Contracts (Programs) in Solana.
 
