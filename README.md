@@ -1,6 +1,7 @@
 # Mean Protocol
 
-**Mean Core** is the repository for the **Mean Protocol** Smart Contracts (Programs) in Solana.
+The Mean Protocol is a set of rules and interoperable smart contracts that help application developers facilitate everyday banking workflows and investment banking operations.  
+
 The Mean Protocol is maintained by the Mean DAO and is deployed on the Solana Blockchain. The protocol facilitates transaction coordination using several sub-graphs and programs, such as the Universal Liquidity (ULI) and the Money Streaming (MSP) programs. To explore all the different components of the Mean Protocol, head over to the [Developers Page](https://docs.meanfi.com/platform/developers).
 
 ## Getting Started
