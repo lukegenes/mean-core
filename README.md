@@ -2,44 +2,39 @@
 
 **Mean Core** is the repository for the **Mean Protocol** Smart Contracts (Programs) in Solana.
 
-<h2>Programs</h2>
+## Programs
 
 | Program | Description | Version
 | :-- | :-- | :--|
-| `money-streaming` | Rust program to implement the **[Money Streaming Protocol](https://docs.google.com/document/d/19W5V2B8eyFIocccgSP4orn6Wi1El07LQSyaT7yw6hMQ)** | **1.1.0** |
-| `ddca` | Rust program to implement the **[DDCA Protocol]()** | **--** |
-| `hybrid-liquidity-ag` | Rust program to implement the **[Universal Liquidity Aggregator Protocol]()** | **--**
+| `money-streaming` | Implementation of the **[Money Streaming Protocol](https://docs.meanfi.com/platform/specifications/money-streaming-protocol)** | **1.1.0** |
+| `ddca` | Implementation of the **[DDCA Protocol]()** | **--** |
+| `hybrid-liquidity-ag` | Implementation of the **[Hybrid Liquidity Aggregator Protocol]()** | **--**
 
-<h2>Notes</h2>
+## Getting Started
 
 * The **Mean Protocol** is in active development and the programs are subject to change
 * For detailed documentation, please read the Developer Docs 👉 https://docs.meanfi.com/platform/developers
 
-<br/>
-<h2>Money Streaming</h2>
+An example of a web3 Dapp implementing the different programs in the Mean Protocol is [MeanFi](https://meanfi.com).
 
-The **Money Streaming** program is an implementation of the **[Money Streaming Protocol](https://docs.google.com/document/d/19W5V2B8eyFIocccgSP4orn6Wi1El07LQSyaT7yw6hMQ)** built and deployed on the **Solana** blockchain, with address `H6wJxgkcc93yeUFnsZHgor3Q3pSWgGpEysfqKrwLtMko` on [Mainnet Beta](https://explorer.solana.com/address/H6wJxgkcc93yeUFnsZHgor3Q3pSWgGpEysfqKrwLtMko).
+To leverage the Mean Protocol Programs in your own dapp, go to the [Mean Protocol SDK repo](https://github.com/mean-dao/mean-sdk), and follow the instructions there.
 
-Money streaming represents the idea of continuous payments over time. Block numbers are used to measure time in the blockchain and continuously update the balances of the parties in the contract.
 
-Looking for a Dapp that leverages the Money Streaming Protocol?
-* See MeanFi at https://app.meanfi.com
-* See MeanFi repo: https://github.com/mean-dao/meanfi-ui
+### Money Streaming
 
-<br/>
-<h2>DDCA</h2>
+Money streaming represents the idea of continuous payments over time. Block numbers are used to measure time in the blockchain and continuously update the balances of the parties in the contract. Head over to the **[Whitepaper](https://docs.meanfi.com/platform/specifications/money-streaming-protocol)** for more details.
 
-**DDCA** (Decentralized Dollar Cost Averaging) is an implementation of the **[DDCA Protocol]()** on the **Solana** blockchain.
-The **DDCA** showcases the idea of an on-chain DCA investment strategy without a central timekeeper, such as a **Centralized Exchange** or centrally managed application.
+The Money Streaming Program is an implementation of the protocol built and deployed on the Solana blockchain, with address `H6wJxgkcc93yeUFnsZHgor3Q3pSWgGpEysfqKrwLtMko` on [Mainnet Beta](https://explorer.solana.com/address/H6wJxgkcc93yeUFnsZHgor3Q3pSWgGpEysfqKrwLtMko).
 
-<br/>
-<h2>Hybrid Liquidity Aggregator</h2>
+### Decentralized DCA
 
-**Hybrid Liquidity Aggregator** is an implementation of the **[Universal Liquidity Aggregator Protocol]()** on the **Solana** blockchain.
-The **Hybrid Liquidity Aggregator** aggregates multiple **Automated Market Makers** (AMMs) built on the Solana blockchain to leverage their provided **Liquidity Pools** (LP) to offer the best possible exchange rates between the supported token pairs
+Decentralized Dollar Cost Averaging (DDCA) is great to help people become regular investors every day. Decentralized DCA gives account owners a way to automate their investment strategy without the dependence on a centralized entity like Coinbase or Robinhood.
 
-Supported AMMs:
+The DDCA Program is an implementation of the **[DDCA Protocol]()** on the Solana blockchain.
 
-* **Raydium**
-* **Orca**
-* **Saber HQ**
+
+### Hybrid Liquidity Aggregator
+
+The Hybrid Liquidity Aggregator is a phenomenal tool to help your users access massive liquidity from multiple protocols and optimize their routing, fees, slippage, and pricing impact. This is useful if you want to guarantee the best swap prices across multiple Automated Market Makers (AMMs) and Serum's CLOB without having to manually implement each of them. One program to rule them all.
+
+The HLA Program is an implementation of the **[Hybrid Liquidity Aggregator Protocol]()** on the Solana blockchain. It currently supports Serum's CLOB and AMMs from Raydium, Orca, Saber and Mercurial.
