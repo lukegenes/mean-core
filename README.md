@@ -1,14 +1,7 @@
 # Mean Protocol
 
 **Mean Core** is the repository for the **Mean Protocol** Smart Contracts (Programs) in Solana.
-
-## Programs
-
-| Program | Description | Version
-| :-- | :-- | :--|
-| `money-streaming` | Implementation of the **[Money Streaming Protocol](https://docs.meanfi.com/platform/specifications/money-streaming-protocol)** | **1.1.0** |
-| `ddca` | Implementation of the **[DDCA Protocol]()** | **--** |
-| `hybrid-liquidity-ag` | Implementation of the **[Hybrid Liquidity Aggregator Protocol]()** | **--**
+The Mean Protocol is maintained by the Mean DAO and is deployed on the Solana Blockchain. The protocol facilitates transaction coordination using several sub-graphs and programs, such as the Universal Liquidity (ULI) and the Money Streaming (MSP) programs. To explore all the different components of the Mean Protocol, head over to the [Developers Page](https://docs.meanfi.com/platform/developers).
 
 ## Getting Started
 
@@ -18,6 +11,14 @@
 An example of a web3 Dapp implementing the different programs in the Mean Protocol is [MeanFi](https://meanfi.com).
 
 To leverage the Mean Protocol Programs in your own dapp, go to the [Mean Protocol SDK repo](https://github.com/mean-dao/mean-sdk), and follow the instructions there.
+
+## Program Catalog
+
+| Program | Description | Version
+| :-- | :-- | :--|
+| `money-streaming` | Implementation of the **[Money Streaming Protocol](https://docs.meanfi.com/platform/specifications/money-streaming-protocol)** | **1.1.0** |
+| `ddca` | Implementation of the **[DDCA Protocol]()** | **--** |
+| `hybrid-liquidity-ag` | Implementation of the **[Hybrid Liquidity Aggregator Protocol]()** | **--**
 
 
 ### Money Streaming
