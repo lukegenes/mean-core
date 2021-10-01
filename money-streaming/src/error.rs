@@ -28,8 +28,26 @@ pub enum StreamError {
     #[error("Invalid stream data")]
     InvalidStreamData,
 
+    #[error("Invalid treasury account")]
+    InvalidTreasuryAccount,
+
+    #[error("Invalid treasury mint")]
+    InvalidTreasuryMint,
+
+    #[error("Invalid treasury token")]
+    InvalidTreasuryToken,    
+
     #[error("Invalid treasury data")]
     InvalidTreasuryData,
+
+    #[error("Invalid treasury pool")]
+    InvalidTreasuryPool,    
+
+    #[error("Invalid contributor treasury associated token")]
+    InvalidContributorTreasuryToken,
+
+    #[error("Invalid MSP Operations token")]
+    InvalidMspOpsToken,   
 
     #[error("Instruction signature is missing")]
     MissingInstructionSignature,
@@ -85,7 +103,13 @@ impl PrintProgramError for StreamError {
             Self::StreamAlreadyInitialized => msg!("Error: StreamAlreadyInitialized"),
             Self::StreamTermsAlreadyInitialized => msg!("Error: StreamTermsAlreadyInitialized"),
             Self::InvalidStreamData => msg!("Error: InvalidStreamData"),
-            Self::InvalidTreasuryData => msg!("Error: InvalidTreasuryData"),
+            Self::InvalidTreasuryAccount => msg!("Error: Treasury associated token address does not match seed derivation"),
+            Self::InvalidTreasuryMint => msg!("Error: Treasury mint address does not match seed derivation"),
+            Self::InvalidTreasuryToken => msg!("Error: Treasury associated token address does not match seed derivation"),
+            Self::InvalidTreasuryData => msg!("Error: Treasury data in not valid"),
+            Self::InvalidMspOpsToken => msg!("Error: MSP Operations associated token address does not match seed derivation"),
+            Self::InvalidTreasuryPool => msg!("Error: Treasury pool address does not match seed derivation"),
+            Self::InvalidContributorTreasuryToken => msg!("Error: Contributor treasury associated token address does not match seed derivation"),
             Self::MissingInstructionSignature => msg!("Error: MissingInstructionSignature"),
             Self::InvalidRentException => msg!("Error: Account balance below rent-exempt threshold"),
             Self::InsufficientFunds => msg!("Error: InsufficientFunds"),

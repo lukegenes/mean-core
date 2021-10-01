@@ -134,8 +134,8 @@ pub enum StreamInstruction {
     },
 
     /// 0. `[signer]` The initializer account (treasurer/beneficiary)
-    /// 1. `[]` The counterparty account (treasurer/beneficiary)
-    /// 2. `[writable]` The beneficiary token account.
+    /// 1. `[writable]` The treasurer account (the creator of the treasury)
+    /// 2. `[writable]` The beneficiary token account (the recipient of the money)
     /// 3. `[]` The beneficiary token mint account
     /// 4. `[writable]` The treasury account
     /// 5. `[writable]` The treasury token account
@@ -307,7 +307,7 @@ impl StreamInstruction {
                 buf.push(approve[0] as u8);
             },
 
-            &Self::CloseStream => buf.push(8),
+            Self::CloseStream => buf.push(8),
             
             Self::CreateTreasury {
                 treasury_block_height,
