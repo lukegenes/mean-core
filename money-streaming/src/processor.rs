@@ -264,7 +264,6 @@ impl Processor {
         ]);
 
         msg!("Stream account created with address: {:?}", (*stream_account_info.key).to_string());
-
         let mut stream = Stream::unpack_from_slice(&stream_account_info.data.borrow())?;
 
         // Updating stream data
@@ -294,10 +293,8 @@ impl Processor {
             stream.auto_pause_in_seconds = auto_pause_in_seconds;
         }
 
-        stream.initialized = true;
-                
+        stream.initialized = true;                
         Stream::pack_into_slice(&stream, &mut stream_account_info.data.borrow_mut());
-        msg!("Stream contract successfully created");
 
         // Debit Fees from treasurer
         let fees_lamports = CREATE_STREAM_FLAT_FEE * (LAMPORTS_PER_SOL as f64);
@@ -384,9 +381,9 @@ impl Processor {
             beneficiary_mint_account_info.key
         );
 
-        if treasury_token_address != *treasury_token_account_info.key {
-            msg!("Error: Treasury associated token address does not match seed derivation");
-            return Err(StreamError::InvalidTreasuryData.into());
+        if treasury_token_address != *treasury_token_account_info.key 
+        {
+            return Err(StreamError::InvalidTreasuryAccount.into());
         }
 
         if (*treasury_token_account_info.owner).ne(token_program_account_info.key)
@@ -428,8 +425,7 @@ impl Processor {
 
         if treasury_pool_address != *treasury_account_info.key 
         {
-            msg!("Error: Treasury mint address does not match seed derivation");
-            return Err(StreamError::InvalidTreasuryData.into());
+            return Err(StreamError::InvalidTreasuryPool.into());
         }
 
         if (*contributor_treasury_token_account_info.key).ne(&Pubkey::default()) &&
@@ -443,9 +439,9 @@ impl Processor {
                     treasury_mint_account_info.key
                 );
 
-                if contributor_treasury_token_address != *contributor_treasury_token_account_info.key {
-                    msg!("Error: Contributor associated token address does not match seed derivation");
-                    return Err(StreamError::InvalidTreasuryData.into());
+                if contributor_treasury_token_address != *contributor_treasury_token_account_info.key 
+                {
+                    return Err(StreamError::InvalidContributorTreasuryToken.into());
                 }
 
                 // Create the contributor treasury token account if there is a treasury pool and the account does not exists
@@ -466,7 +462,7 @@ impl Processor {
                 ]);
 
                 msg!(
-                    "Contributor associated token account created at: {:?} address", 
+                    "Contributor treasury associated token account created at: {:?} address", 
                     (*contributor_treasury_token_account_info.key).to_string()
                 );
             }
@@ -535,6 +531,7 @@ impl Processor {
         {
             stream.funded_on_utc = funded_on_utc
         }
+
         // Resume if it was paused by lack of funds OR it was manually paused 
         // and it is going to be manually resumed again        
         if no_funds == 1 || resume == true
@@ -552,9 +549,9 @@ impl Processor {
             beneficiary_mint_account_info.key
         );
 
-        if msp_ops_token_address != *msp_ops_token_account_info.key {
-            msg!("Error: Treasury associated token address does not match seed derivation");
-            return Err(StreamError::InvalidTreasuryData.into());
+        if msp_ops_token_address != *msp_ops_token_account_info.key 
+        {
+            return Err(StreamError::InvalidMspOpsToken.into());
         }
 
         if *msp_ops_token_account_info.owner != *token_program_account_info.key
@@ -1326,6 +1323,7 @@ impl Processor {
 
         let account_info_iter = &mut accounts.iter();
         let initializer_account_info = next_account_info(account_info_iter)?;
+        let treasurer_token_account_info = next_account_info(account_info_iter)?;
         let beneficiary_token_account_info = next_account_info(account_info_iter)?;
         let beneficiary_mint_account_info = next_account_info(account_info_iter)?;
         let treasury_account_info = next_account_info(account_info_iter)?;  
@@ -1344,6 +1342,13 @@ impl Processor {
         }
 
         let mut stream = Stream::unpack_from_slice(&stream_account_info.data.borrow())?;
+
+        if stream.treasurer_address.ne(initializer_account_info.key) &&
+           stream.beneficiary_address.ne(initializer_account_info.key) 
+        {
+            return Err(StreamError::InstructionNotAuthorized.into()); // Just the treasurer or the beneficiary can close a stream
+        }
+        
         let current_block_height = clock.slot as u64;
         let current_block_time = clock.unix_timestamp as u64;
         let is_running = (stream.stream_resumed_block_time >= stream.escrow_vested_amount_snap_block_time) as u64;
@@ -1357,24 +1362,18 @@ impl Processor {
             escrow_vested_amount = stream.total_deposits - stream.total_withdrawals;
         }
 
-        let _escrow_unvested_amount = stream.total_deposits - stream.total_withdrawals - escrow_vested_amount;
         // Pausing the stream
         stream.escrow_vested_amount_snap = escrow_vested_amount;
         stream.escrow_vested_amount_snap_block_height = current_block_height;
         stream.escrow_vested_amount_snap_block_time = current_block_time;
         msg!("Pausing the stream");
 
-        if stream.treasurer_address.ne(initializer_account_info.key) &&
-           stream.beneficiary_address.ne(initializer_account_info.key) 
-        {
-            return Err(StreamError::InstructionNotAuthorized.into()); // Just the treasurer or the beneficiary can close a stream
-        }
+        let mint = spl_token::state::Mint::unpack_from_slice(&beneficiary_mint_account_info.data.borrow())?;
+        let mint_pow = num_traits::pow(10f64, mint.decimals.into());
         
         if escrow_vested_amount > 0.0 
         {
             // Crediting escrow vested amount to the beneficiary
-            let beneficiary_mint = spl_token::state::Mint::unpack_from_slice(&beneficiary_mint_account_info.data.borrow())?;
-            let beneficiary_mint_pow = num_traits::pow(10f64, beneficiary_mint.decimals.into());
             let beneficiary_fee = CLOSE_STREAM_PERCENT_FEE * escrow_vested_amount / 100f64;
             let transfer_amount = escrow_vested_amount - beneficiary_fee;            
             let treasury = Treasury::unpack_from_slice(&treasury_account_info.data.borrow())?;
@@ -1404,7 +1403,7 @@ impl Processor {
                 beneficiary_token_account_info.key,
                 treasury_account_info.key,
                 &[],
-                (transfer_amount * beneficiary_mint_pow) as u64
+                (transfer_amount * mint_pow) as u64
             )?;
 
             invoke_signed(&transfer_ix, 
@@ -1430,7 +1429,7 @@ impl Processor {
                 msp_ops_token_account_info.key,
                 treasury_account_info.key,
                 &[],
-                (beneficiary_fee * beneficiary_mint_pow) as u64
+                (beneficiary_fee * mint_pow) as u64
             )?;
 
             invoke_signed(&beneficiary_fee_ix, 
@@ -1447,6 +1446,59 @@ impl Processor {
             msg!("Transfer {:?} tokens of fee to: {:?}",
                 beneficiary_fee, 
                 (*msp_ops_token_account_info.key).to_string()
+            );
+        }
+
+        let escrow_unvested_amount = stream.total_deposits - stream.total_withdrawals - escrow_vested_amount;
+
+        if escrow_unvested_amount > 0.0
+        {
+            // Crediting escrow unvested amount to the contributor
+            let transfer_amount = escrow_unvested_amount - CLOSE_STREAM_FLAT_FEE;            
+            let treasury = Treasury::unpack_from_slice(&treasury_account_info.data.borrow())?;
+            let (treasury_pool_address, treasury_pool_bump_seed) = Pubkey::find_program_address(
+                &[
+                    treasury.treasury_base_address.as_ref(),
+                    &treasury.treasury_block_height.to_le_bytes()
+                ], 
+                msp_account_info.key
+            );
+
+            if treasury_pool_address.ne(treasury_account_info.key)
+            {
+                msg!("Error: Treasury pool address does not match seed derivation");
+                return Err(StreamError::InvalidTreasuryData.into());
+            }
+
+            let treasury_signer_seed: &[&[_]] = &[
+                treasury.treasury_base_address.as_ref(),
+                &treasury.treasury_block_height.to_le_bytes(),
+                &[treasury_pool_bump_seed]
+            ];
+
+            let transfer_ix = spl_token::instruction::transfer(
+                token_program_account_info.key,
+                treasury_token_account_info.key,
+                treasurer_token_account_info.key,
+                treasury_account_info.key,
+                &[],
+                (transfer_amount * mint_pow) as u64
+            )?;
+
+            invoke_signed(&transfer_ix, 
+                &[
+                    treasury_account_info.clone(),
+                    treasury_token_account_info.clone(),
+                    treasurer_token_account_info.clone(),
+                    token_program_account_info.clone(),
+                    msp_account_info.clone()
+                ],
+                &[treasury_signer_seed]
+            );
+
+            msg!("Transfer {:?} tokens to: {:?}",
+                transfer_amount, 
+                (*treasurer_token_account_info.key).to_string()
             );
         }
             
@@ -1544,7 +1596,6 @@ impl Processor {
 
         if treasury_pool_address.ne(treasury_account_info.key) 
         {
-            msg!("Error: Treasury pool address does not match seed derivation");
             return Err(StreamError::InvalidTreasuryData.into());
         }
 
@@ -1586,8 +1637,7 @@ impl Processor {
 
         if treasury_token_address.ne(treasury_token_account_info.key) 
         {
-            msg!("Error: Treasury associated token address does not match seed derivation");
-            return Err(StreamError::InvalidTreasuryData.into());
+            return Err(StreamError::InvalidTreasuryToken.into());
         }
 
         if (*treasury_token_account_info.owner).ne(token_program_account_info.key)
@@ -1629,8 +1679,7 @@ impl Processor {
 
             if treasury_mint_address.ne(treasury_mint_account_info.key)
             {
-                msg!("Error: Treasury mint address does not match seed derivation");
-                return Err(StreamError::InvalidTreasuryData.into());
+                return Err(StreamError::InvalidTreasuryMint.into());
             }
 
             let treasury_mint_signer_seed: &[&[_]] = &[
