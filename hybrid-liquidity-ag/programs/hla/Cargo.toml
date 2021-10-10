@@ -18,3 +18,4 @@ default = []
 anchor-lang = "0.17.0"
 anchor-spl = "0.17.0"
 spl-token = { version = "3.2.0", features = ["no-entrypoint"] }
+stable-swap-anchor = { version = "1.4.4" }

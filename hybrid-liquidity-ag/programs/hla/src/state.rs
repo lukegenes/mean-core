@@ -19,29 +19,39 @@ pub struct PoolInfo {
 #[account]
 #[derive(Debug)]
 pub struct ExchangeInfo {
-    pub amount_in: f64,
-    pub amount_out: f64,
-    pub minimum_amount_out: f64,
-    pub out_price: f64,
-    pub price_impact: f64,
-    pub protocol_fee: f64,
-    pub network_fee: f64
+    pub amount_in: u64,
+    pub amount_out: u64,
+    pub minimum_amount_out: u64,
+    pub out_price: u64,
+    pub price_impact: u64,
+    pub protocol_fee: u64,
+    pub network_fee: u64
 }
 
-#[interface]
-pub trait Client<'info, T: Accounts<'info>> {
+#[account]
+pub struct SwapInfo {
+    pub owner: Pubkey,
+    pub from_account: Pubkey,
+    pub from_token: Pubkey,
+    pub to_account: Pubkey,
+    pub to_token: Pubkey,
+    pub amount_in: u64,
+    pub slippage: u8
+}
 
-    fn get_protocol_account(ctx: Context<T>) -> ProgramResult;
+pub trait Client<'info> {
+
+    fn get_protocol_account(&self) -> Pubkey;
 
     fn get_exchange_info(
-        ctx: Context<T>, 
+        &self,
         amount: f64, 
         slippage: f64
 
     ) -> ProgramResult;
 
     fn execute_swap(
-        ctx: Context<T>,
+        &self,
         amount_in: f64,
         amount_out: f64,
         slippage: f64,
@@ -50,8 +60,8 @@ pub trait Client<'info, T: Accounts<'info>> {
     ) -> ProgramResult;
 }
 
-#[interface]
-pub trait LpClient<'info, T: Accounts<'info>> {
+pub trait LpClient<'info> : Client<'info> {
 
-    fn get_pool_info(ctx: Context<T>) -> ProgramResult;
+    fn get_pool_info(&self) -> ProgramResult;
+
 }

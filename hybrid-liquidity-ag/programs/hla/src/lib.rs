@@ -1,10 +1,11 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, TokenAccount, Mint};
 
-mod errors;
-mod utils;
-mod state;
-mod data;
+pub mod errors;
+pub mod utils;
+pub mod state;
+pub mod data;
+pub mod saber;
 
 declare_id!("5sEgjVKG4pNUrjU1EVmKRsEAmsB9f2ujJn2H1ZxX2UQs");
 
@@ -12,32 +13,24 @@ declare_id!("5sEgjVKG4pNUrjU1EVmKRsEAmsB9f2ujJn2H1ZxX2UQs");
 pub mod hla {
     use super::*;
 
-    pub fn swap(ctx: Context<Swap>) -> ProgramResult {
+    pub fn swap(
+        ctx: Context<Swap>,
+        amount_in: u64,
+        slippage: u8
+
+    ) -> ProgramResult {
         msg!("{:?}", data::get_pools());
         Ok(())
     }
 }
 
 #[derive(Accounts)]
-#[instruction(amount_in: u64, slippage: u64)]
+#[instruction(amount_in: u64, slippage: u8)]
 pub struct Swap<'info> {
-    #[account(signer)]
-    pub owner: AccountInfo<'info>,
     #[account(mut)]
-    pub from_account: Account<'info, TokenAccount>,
-    pub from_token: Account<'info, Mint>,
-    #[account(mut)]
-    pub to_account: Account<'info, TokenAccount>,
-    pub to_token: Account<'info, Mint>
-}
-
-#[account]
-pub struct SwapInfo {
-    pub owner: Pubkey,
-    pub from_account: Pubkey,
-    pub from_token: Pubkey,
-    pub to_account: Pubkey,
-    pub to_token: Pubkey,
-    pub amount_in: u64,
-    pub slippage: u64
+    pub owner: Signer<'info>,
+    pub from_account: AccountInfo<'info>,
+    pub from_token: AccountInfo<'info>,
+    pub to_account: AccountInfo<'info>,
+    pub to_token: AccountInfo<'info>
 }

@@ -565,6 +565,7 @@ dependencies = [
  "anchor-lang",
  "anchor-spl",
  "spl-token",
+ "stable-swap-anchor",
 ]
 
 [[package]]
@@ -1149,6 +1150,32 @@ dependencies = [
  "num-traits",
  "num_enum",
  "solana-program",
+ "thiserror",
+]
+
+[[package]]
+name = "stable-swap-anchor"
+version = "1.4.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee9aa4b0b293ed1d1fb6244e728df97a5f148123906b698e116a56431116c81a"
+dependencies = [
+ "anchor-lang",
+ "anchor-spl",
+ "solana-program",
+ "stable-swap-client",
+]
+
+[[package]]
+name = "stable-swap-client"
+version = "1.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "64e11be29cf7d9abcfb5f6f2727f45ca45e70b91d7dd2003ad58ede447fad717"
+dependencies = [
+ "arrayref",
+ "num-derive",
+ "num-traits",
+ "solana-program",
+ "spl-token",
  "thiserror",
 ]
 

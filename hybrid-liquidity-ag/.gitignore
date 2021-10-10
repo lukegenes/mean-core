@@ -5,3 +5,4 @@ target
 **/*.rs.bk
 keys
 node_modules
+test-ledger
