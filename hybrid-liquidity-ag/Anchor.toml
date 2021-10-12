@@ -1,0 +1,18 @@
+[programs.localnet]
+hla = "5sEgjVKG4pNUrjU1EVmKRsEAmsB9f2ujJn2H1ZxX2UQs"
+
+[programs.devnet]
+hla = "5sEgjVKG4pNUrjU1EVmKRsEAmsB9f2ujJn2H1ZxX2UQs"
+
+[programs.mainnet]
+hla = "5sEgjVKG4pNUrjU1EVmKRsEAmsB9f2ujJn2H1ZxX2UQs"
+
+[registry]
+url = "https://anchor.projectserum.com"
+
+[provider]
+cluster = "localnet"
+wallet = "keys/wallet.json"
+
+[scripts]
+test = "mocha -t 1000000 tests/hla.ts"

@@ -360,7 +360,14 @@ impl Processor {
         let current_block_height = clock.slot as u64;
         let current_block_time = clock.unix_timestamp as u64;
         let is_running = (stream.stream_resumed_block_time >= stream.escrow_vested_amount_snap_block_time) as u64;
-        let rate = stream.rate_amount / (stream.rate_interval_in_seconds as f64) * (is_running as f64);
+
+        let mut rate = 0.0;
+        
+        if stream.rate_interval_in_seconds > 0
+        {
+            rate = stream.rate_amount / (stream.rate_interval_in_seconds as f64) * (is_running as f64);
+        }
+
         let marker_block_time = cmp::max(stream.stream_resumed_block_time, stream.escrow_vested_amount_snap_block_time);
         let elapsed_time = (current_block_time - marker_block_time) as f64;
         let mut escrow_vested_amount = stream.escrow_vested_amount_snap + rate * elapsed_time;
@@ -678,7 +685,14 @@ impl Processor {
         let mut stream = Stream::unpack_from_slice(&stream_account_info.data.borrow())?; 
         let current_block_time = clock.unix_timestamp as u64;
         let is_running = (stream.stream_resumed_block_time > stream.escrow_vested_amount_snap_block_time) as u64;
-        let rate = stream.rate_amount / (stream.rate_interval_in_seconds as f64) * (is_running as f64);
+        
+        let mut rate = 0.0;
+        
+        if stream.rate_interval_in_seconds > 0
+        {
+            rate = stream.rate_amount / (stream.rate_interval_in_seconds as f64) * (is_running as f64);
+        }
+
         let marker_block_time = cmp::max(stream.stream_resumed_block_time, stream.escrow_vested_amount_snap_block_time);
         let elapsed_time = (current_block_time - marker_block_time) as f64;
         let mut escrow_vested_amount = stream.escrow_vested_amount_snap + rate * elapsed_time;
@@ -833,7 +847,14 @@ impl Processor {
         let _current_block_height = clock.slot as u64;
         let current_block_time = clock.unix_timestamp as u64;
         let is_running = (stream.stream_resumed_block_time >= stream.escrow_vested_amount_snap_block_time) as u64;
-        let rate = stream.rate_amount / (stream.rate_interval_in_seconds as f64) * (is_running as f64);
+        
+        let mut rate = 0.0;
+        
+        if stream.rate_interval_in_seconds > 0
+        {
+            rate = stream.rate_amount / (stream.rate_interval_in_seconds as f64) * (is_running as f64);
+        }
+
         let marker_block_time = cmp::max(stream.stream_resumed_block_time, stream.escrow_vested_amount_snap_block_time);
         let elapsed_time = (current_block_time - marker_block_time) as f64;
         let mut escrow_vested_amount = stream.escrow_vested_amount_snap + rate * elapsed_time;
@@ -965,7 +986,13 @@ impl Processor {
 
         let current_block_height = clock.slot as u64;
         let current_block_time = clock.unix_timestamp as u64;
-        let rate = stream.rate_amount / (stream.rate_interval_in_seconds as f64);
+        let mut rate = 0.0;
+        
+        if stream.rate_interval_in_seconds > 0
+        {
+            rate = stream.rate_amount / (stream.rate_interval_in_seconds as f64);
+        }
+
         let elapsed_time = current_block_time - stream.stream_resumed_block_time;
         let mut escrow_vested_amount = stream.escrow_vested_amount_snap + rate * (elapsed_time as f64);
         
@@ -1352,7 +1379,14 @@ impl Processor {
         let current_block_height = clock.slot as u64;
         let current_block_time = clock.unix_timestamp as u64;
         let is_running = (stream.stream_resumed_block_time >= stream.escrow_vested_amount_snap_block_time) as u64;
-        let rate = stream.rate_amount / (stream.rate_interval_in_seconds as f64) * (is_running as f64);
+
+        let mut rate = 0.0;
+
+        if stream.rate_interval_in_seconds > 0
+        {
+            rate = stream.rate_amount / (stream.rate_interval_in_seconds as f64) * (is_running as f64);
+        }
+
         let marker_block_time = cmp::max(stream.stream_resumed_block_time, stream.escrow_vested_amount_snap_block_time);
         let elapsed_time = (current_block_time - marker_block_time) as f64;
         let mut escrow_vested_amount = stream.escrow_vested_amount_snap + rate * elapsed_time;
