@@ -22,6 +22,13 @@ pub mod hla {
 
     ) -> ProgramResult {
 
+        let hla_ops_account_key: Pubkey = state::HLA_OPS.parse().unwrap();
+
+        if hla_ops_account_key.ne(ctx.accounts.hla_ops_account.key)
+        {
+            return Err(errors::ErrorCode::InvalidOpsAccount.into());
+        }
+
         let pool_account_key = ctx.accounts.pool_account.key;
         let pool_info = utils::get_pool(&pool_account_key)?;
 
@@ -84,5 +91,7 @@ pub struct Swap<'info> {
     pub from_token_mint: CpiAccount<'info, Mint>,
     pub from_token_account: CpiAccount<'info, TokenAccount>,
     pub to_token_mint: CpiAccount<'info, Mint>,
-    pub to_token_account: CpiAccount<'info, TokenAccount>
+    pub to_token_account: CpiAccount<'info, TokenAccount>,
+    pub hla_ops_account: AccountInfo<'info>,
+    pub hla_ops_token_account: Account<'info, TokenAccount>
 }

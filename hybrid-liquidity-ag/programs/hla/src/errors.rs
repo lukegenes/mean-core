@@ -5,6 +5,9 @@ pub enum ErrorCode {
     #[msg("Unknown error")]
     Unknown,
 
+    #[msg("HLA Operations account is not valid")]
+    InvalidOpsAccount,    
+
     #[msg("Pool not found")]
     PoolNotFound,
 

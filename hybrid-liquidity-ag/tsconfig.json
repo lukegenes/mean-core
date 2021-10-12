@@ -8,21 +8,15 @@
             "esnext"
         ],
         "allowJs": true,
-        "skipLibCheck": true,
-        "esModuleInterop": true,
         "allowSyntheticDefaultImports": true,
+        "module": "commonjs",
         "strict": true,
+        "sourceMap": false,
+        "esModuleInterop": true,
+        "skipLibCheck": true,
         "forceConsistentCasingInFileNames": true,
-        "module": "esnext",
-        "moduleResolution": "node",
-        "downlevelIteration": true,
-        "resolveJsonModule": true,
-        "noEmit": true,
         "types": ["mocha", "chai", "node"],
-        "typeRoots": ["./node_modules/@types"],
-        "jsx": "react-jsx",
-        "noFallthroughCasesInSwitch": true,
-        "isolatedModules": true
+        "typeRoots": ["./node_modules/@types"]
     },
     "include": [
         "src"
