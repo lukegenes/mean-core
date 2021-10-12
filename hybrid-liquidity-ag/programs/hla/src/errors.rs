@@ -11,6 +11,9 @@ pub enum ErrorCode {
     #[msg("Pool not found")]
     PoolNotFound,
 
+    #[msg("Pool is not valid")]
+    InvalidPool,    
+
     #[msg("Protocol is not valid")]
     InvalidProtocol,
 
