@@ -14,8 +14,12 @@ no-idl = []
 cpi = ["no-entrypoint"]
 default = []
 
+[net]
+git-fetch-with-cli = true
+
 [dependencies]
 anchor-lang = "0.17.0"
 anchor-spl = "0.17.0"
 spl-token = { version = "3.1.1", features = ["no-entrypoint"] }
 solana-program = "=1.7.11"
+hybrid-liquidity-ag = { git = "https://github.com/mean-dao/mean-core/tree/develop/hybrid-liquidity-ag", features = ["cpi"], version = "0.1.0" }

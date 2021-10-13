@@ -36,7 +36,7 @@ describe("ddca", () => {
   const ddcaIntervalInSeconds = 5 * 60; //5 minutes
 
   // Hybrid Liquidity Aggregator accounts
-  const HLA_PROGRAM_ADDRESS = new PublicKey("B6gLd2uyVQLZMdC1s9C4WR7ZP9fMhJNh7WZYcsibuzN3");
+  const HLA_PROGRAM_ADDRESS = new PublicKey("EPa4WdYPcGGdwEbq425DMZukU2wDUE1RWAGrPbRYSLRE");
   const HLA_OPERATING_ACCOUNT_ADDRESS = new PublicKey("FZMd4pn9FsvMC55D4XQfaexJvKBtQpVuqMk5zuonLRDX");
   const hlaProtocolAddress = anchor.web3.Keypair.generate().publicKey;
   const hlaPoolAddress = anchor.web3.Keypair.generate().publicKey;

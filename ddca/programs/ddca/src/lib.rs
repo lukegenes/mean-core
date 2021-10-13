@@ -1,15 +1,16 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{ self, Mint, TokenAccount, Token, Transfer, CloseAccount };
 use anchor_spl::associated_token::AssociatedToken;
+use hybrid_liquidity_ag::{ Swap };
 
-// Constants.
+// Constants
 pub mod ddca_operating_account {
     solana_program::declare_id!("3oSfkjQZKCneYvsCTZc9HViGAPqR8pYr4h9YeGB5ZxHf");
 }
 
-// hybrid_liquidity_aggregator_program
+// hybrid liquidity aggregator program
 pub mod hla_program {
-    solana_program::declare_id!("B6gLd2uyVQLZMdC1s9C4WR7ZP9fMhJNh7WZYcsibuzN3");
+    solana_program::declare_id!("EPa4WdYPcGGdwEbq425DMZukU2wDUE1RWAGrPbRYSLRE");
 }
 pub mod hla_operating_account {
     solana_program::declare_id!("3oSfkjQZKCneYvsCTZc9HViGAPqR8pYr4h9YeGB5ZxHf");
@@ -124,9 +125,31 @@ pub mod ddca {
             from_initial_amount,
         )?;
 
-        // execute the first swap
-        // TODO:
+        // call hla to execute the first swap
+        let hla_cpi_program = ctx.accounts.hla_program.to_account_info();
+        let hla_cpi_accounts = Swap {
+            hla_ops_account: ctx.accounts.hla_operating_account.clone(),
+            hla_ops_token_account: ctx.accounts.hla_operating_from_token_account.clone(),
+            vault_account: ctx.accounts.ddca_account.clone(),
+            from_token_account: ctx.accounts.from_token_account.clone(),
+            from_token_mint: ctx.accounts.from_mint.clone(),
+            to_token_account: ctx.accounts.to_token_account.clone(),
+            to_token_mint: ctx.accounts.to_mint.clone(),
+            token_program_account: ctx.accounts.token_program.clone(),
+        };
 
+        let seeds = &[
+            ctx.accounts.owner_account.key.as_ref(),
+            &ctx.accounts.ddca_account.block_height.to_be_bytes(),
+            b"ddca-seed",
+            &[ctx.accounts.ddca_account.pda_bump],
+        ];
+
+        let hla_cpi_ctx = CpiContext::new(hla_cpi_program, hla_cpi_accounts)
+        .with_signer(&[&seeds[..]])
+        .with_remaining_accounts(ctx.remaining_accounts);
+        hybrid_liquidity_ag::cpi::swap(hla_cpi_ctx, { from_amount: from_amount_per_swap, min_out_amount: first_swap_min_out_amount });
+        
         Ok(())
     }
 }
