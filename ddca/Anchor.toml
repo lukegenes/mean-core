@@ -1,6 +1,12 @@
 [programs.localnet]
 ddca = "3nmm1awnyhABJdoA25MYVksxz1xnpUFeepJJyRTZfsyD"
 
+[programs.devnet]
+ddca = "3nmm1awnyhABJdoA25MYVksxz1xnpUFeepJJyRTZfsyD"
+
+[programs.mainnet]
+ddca = "3nmm1awnyhABJdoA25MYVksxz1xnpUFeepJJyRTZfsyD"
+
 [registry]
 url = "https://anchor.projectserum.com"
 

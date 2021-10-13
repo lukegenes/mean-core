@@ -9,20 +9,20 @@ pub mod ddca_operating_account {
 
 // hybrid_liquidity_aggregator_program
 pub mod hla_program {
-    solana_program::declare_id!("5sEgjVKG4pNUrjU1EVmKRsEAmsB9f2ujJn2H1ZxX2UQs");
+    solana_program::declare_id!("B6gLd2uyVQLZMdC1s9C4WR7ZP9fMhJNh7WZYcsibuzN3");
 }
 pub mod hla_operating_account {
     solana_program::declare_id!("3oSfkjQZKCneYvsCTZc9HViGAPqR8pYr4h9YeGB5ZxHf");
 }
 
-pub const CREATE_FLAT_LAMPORT_FEE: u64 = 10000;
-pub const ADD_FUNDS_PERCENT_TOKEN_FEE: f64 = 0.003;
-pub const CREATE_WITH_FUNDS_PERCENT_TOKEN_FEE: f64 = 0.003;
-pub const WITHDRAW_PERCENT_TOKEN_FEE: f64 = 0.0005;
-pub const STOP_FLAT_LAMPORT_FEE: u64 = 10000;
-pub const START_FLAT_LAMPORT_FEE: u64 = 10000;
+// pub const CREATE_FLAT_LAMPORT_FEE: u64 = 10000;
+// pub const ADD_FUNDS_PERCENT_TOKEN_FEE: f64 = 0.003;
+// pub const CREATE_WITH_FUNDS_PERCENT_TOKEN_FEE: f64 = 0.003;
+pub const WITHDRAW_PERCENT_TOKEN_FEE: f64 = 0.005;
+// pub const STOP_FLAT_LAMPORT_FEE: u64 = 10000;
+// pub const START_FLAT_LAMPORT_FEE: u64 = 10000;
 pub const LAMPORTS_PER_SOL: u64 = 1000000000;
-pub const SINGLE_SWAP_MINIMUM_LAMPORT_FEE: u64 = 20000000; //20 million
+pub const SINGLE_SWAP_MINIMUM_LAMPORT_GAS_FEE: u64 = 20000000; //20 million
 
 declare_id!("3nmm1awnyhABJdoA25MYVksxz1xnpUFeepJJyRTZfsyD");
 
@@ -37,8 +37,8 @@ pub mod ddca {
         from_initial_amount: u64,
         from_amount_per_swap: u64,
         interval_in_seconds: u64,
-        min_out_amount: u64,
-        slippage: u8,
+        first_swap_min_out_amount: u64,
+        first_swap_slippage: u8,
     ) -> ProgramResult {
 
         // for i in &block_height.to_be_bytes() {
@@ -46,7 +46,7 @@ pub mod ddca {
         // }
 
         if ctx.remaining_accounts.len() == 0 {
-            return Err(ProgramError::Custom(1)); // Arbitrary error.
+            return Err(ProgramError::Custom(1)); // Arbitrary error. TODO: create proper error
         }
 
         ctx.accounts.ddca_account.owner_acc_addr = *ctx.accounts.owner_account.key;
@@ -60,25 +60,25 @@ pub mod ddca {
         ctx.accounts.ddca_account.from_amount_per_swap = from_amount_per_swap;
         ctx.accounts.ddca_account.interval_in_seconds = interval_in_seconds;
 
-        if from_initial_amount == 0 {
-            // transfer LAMPORT flat fees to the ddca operating account
-            msg!("flat fees: transfering {} lamports from owner to operating account", CREATE_FLAT_LAMPORT_FEE);
-            let ix = anchor_lang::solana_program::system_instruction::transfer(
-                ctx.accounts.owner_account.key,
-                ctx.accounts.operating_account.key,
-                CREATE_FLAT_LAMPORT_FEE,
-            );
+        // if from_initial_amount == 0 {
+        //     // transfer LAMPORT flat fees to the ddca operating account
+        //     msg!("flat fees: transfering {} lamports from owner to operating account", CREATE_FLAT_LAMPORT_FEE);
+        //     let ix = anchor_lang::solana_program::system_instruction::transfer(
+        //         ctx.accounts.owner_account.key,
+        //         ctx.accounts.operating_account.key,
+        //         CREATE_FLAT_LAMPORT_FEE,
+        //     );
 
-            anchor_lang::solana_program::program::invoke(
-                &ix,
-                &[
-                    ctx.accounts.owner_account.to_account_info(),
-                    ctx.accounts.operating_account.to_account_info(),
-                ],
-            )?;
+        //     anchor_lang::solana_program::program::invoke(
+        //         &ix,
+        //         &[
+        //             ctx.accounts.owner_account.to_account_info(),
+        //             ctx.accounts.operating_account.to_account_info(),
+        //         ],
+        //     )?;
 
-            return Ok(());
-        }
+        //     return Ok(());
+        // }
 
         if from_initial_amount % from_amount_per_swap != 0 {
             return Err(ErrorCode::InvalidAmounts.into());
@@ -89,20 +89,20 @@ pub mod ddca {
             return Err(ErrorCode::InvalidSwapsCount.into());
         }
 
-        // transfer Token percentage fee to the ddca operating account
-        let from_mint_decimals = ctx.accounts.from_mint.decimals;
-        // msg!("from_mint_decimals: {}", from_mint_decimals);
-        let add_funds_fee = spl_token::ui_amount_to_amount(from_initial_amount as f64 * CREATE_WITH_FUNDS_PERCENT_TOKEN_FEE, from_mint_decimals);
-        msg!("'create with funds' fee: {}", add_funds_fee);
-        if add_funds_fee > 0 {
-            token::transfer(
-                ctx.accounts.into_transfer_fee_to_operating_context(),
-                add_funds_fee,
-            )?;
-        }
+        // // transfer Token percentage fee to the ddca operating account
+        // let from_mint_decimals = ctx.accounts.from_mint.decimals;
+        // // msg!("from_mint_decimals: {}", from_mint_decimals);
+        // let add_funds_fee = spl_token::ui_amount_to_amount(from_initial_amount as f64 * CREATE_WITH_FUNDS_PERCENT_TOKEN_FEE, from_mint_decimals);
+        // msg!("'create with funds' fee: {}", add_funds_fee);
+        // if add_funds_fee > 0 {
+        //     token::transfer(
+        //         ctx.accounts.into_transfer_fee_to_operating_context(),
+        //         add_funds_fee,
+        //     )?;
+        // }
 
-        // transfer enough SOL gas budget to the ddca account to pay future recurring swaps fees
-        let recurring_lamport_fees = swap_count * SINGLE_SWAP_MINIMUM_LAMPORT_FEE;
+        // transfer enough SOL gas budget to the ddca account to pay future recurring swaps fees (network + amm fees)
+        let recurring_lamport_fees = swap_count * SINGLE_SWAP_MINIMUM_LAMPORT_GAS_FEE;
         msg!("transfering {} lamports ({} SOL) from owner to ddca account for next {} swaps", recurring_lamport_fees, recurring_lamport_fees as f64 / LAMPORTS_PER_SOL as f64, swap_count);
         let ix = anchor_lang::solana_program::system_instruction::transfer(
             ctx.accounts.owner_account.key,
@@ -192,11 +192,9 @@ pub struct CreateInputAccounts<'info> {
     pub hla_program: AccountInfo<'info>,
     pub hla_operating_account: AccountInfo<'info>,
     pub hla_operating_from_token_account: Box<Account<'info, TokenAccount>>,
-    // pub hla_protocol_account: AccountInfo<'info>, // remaining account
-    // pub hla_pool_account: AccountInfo<'info>, // remaining account
-    // pub hla_amm_account: AccountInfo<'info>, // remaining account
     // system and spl
     pub rent: Sysvar<'info, Rent>,
+    pub clock: Sysvar<'info, Clock>,
     pub system_program: Program<'info, System>,
     pub token_program: AccountInfo<'info>,
     pub associated_token_program: Program<'info, AssociatedToken>,
