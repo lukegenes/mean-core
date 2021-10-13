@@ -11,7 +11,7 @@ pub const AGGREGATOR_FEE: f64 = 0.05;
 
 #[derive(Clone, Debug)]
 pub struct PoolInfo {
-    pub name: &str,
+    pub name: String,
     pub account: Pubkey,
     pub protocol_account: Pubkey,
     pub amm_account: Pubkey

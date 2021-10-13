@@ -135,7 +135,7 @@ describe('hla', async () => {
           },
           signers: [],
           remainingAccounts: [
-            { pubkey: , isSigner: false, isWritable: false  }
+            // { pubkey: , isSigner: false, isWritable: false  }
           ]
         },
         fromAmount: new BN(amount),
