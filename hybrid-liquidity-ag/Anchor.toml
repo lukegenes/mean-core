@@ -1,11 +1,11 @@
 [programs.localnet]
-hla = "5sEgjVKG4pNUrjU1EVmKRsEAmsB9f2ujJn2H1ZxX2UQs"
+hla = "B6gLd2uyVQLZMdC1s9C4WR7ZP9fMhJNh7WZYcsibuzN3"
 
 [programs.devnet]
-hla = "5sEgjVKG4pNUrjU1EVmKRsEAmsB9f2ujJn2H1ZxX2UQs"
+hla = "B6gLd2uyVQLZMdC1s9C4WR7ZP9fMhJNh7WZYcsibuzN3"
 
 [programs.mainnet]
-hla = "5sEgjVKG4pNUrjU1EVmKRsEAmsB9f2ujJn2H1ZxX2UQs"
+hla = "B6gLd2uyVQLZMdC1s9C4WR7ZP9fMhJNh7WZYcsibuzN3"
 
 [registry]
 url = "https://anchor.projectserum.com"
