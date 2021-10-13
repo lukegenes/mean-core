@@ -32,7 +32,9 @@ pub struct Swap<'info> {
     pub from_token_account: CpiAccount<'info, TokenAccount>,
     pub to_token_mint: CpiAccount<'info, Mint>,
     pub to_token_account: CpiAccount<'info, TokenAccount>,
+    #[account(mut)]
     pub hla_ops_account: AccountInfo<'info>,
+    #[account(mut)]
     pub hla_ops_token_account: Account<'info, TokenAccount>,
     pub token_program_account: AccountInfo<'info>
 }
