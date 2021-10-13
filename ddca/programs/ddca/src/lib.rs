@@ -9,7 +9,7 @@ pub mod ddca_operating_account {
 
 // hybrid_liquidity_aggregator_program
 pub mod hla_program {
-    solana_program::declare_id!("5sEgjVKG4pNUrjU1EVmKRsEAmsB9f2ujJn2H1ZxX2UQs");
+    solana_program::declare_id!("B6gLd2uyVQLZMdC1s9C4WR7ZP9fMhJNh7WZYcsibuzN3");
 }
 pub mod hla_operating_account {
     solana_program::declare_id!("3oSfkjQZKCneYvsCTZc9HViGAPqR8pYr4h9YeGB5ZxHf");
