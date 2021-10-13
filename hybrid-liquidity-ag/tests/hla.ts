@@ -110,13 +110,21 @@ describe('hla', async () => {
         true
       );
 
+      const poolAccount = new PublicKey("2poo1w1DL6yd2WNTCnNTzDqkC6MBXq7axo77P16yrBuf");
+      const protocolAccount = new PublicKey("SSwpkEEcbUqx4vtoEByFjSkhKdCT862DNVb52nZg1UZ");
+      const ammAccount = new PublicKey("YAkoNb6HKmSxQN9L8hiBE5tPJRsniSSMzND1boHmZxe");
+      const [swapAuthority] = PublicKey.findProgramAddress(
+        [wallet.publicKey.toBuffer()],
+        program.programId
+      );
+
       tx = await program.rpc.swap({
         ctx: {
           accounts: {
             feePayer: wallet.publicKey,
-            poolAccount: new PublicKey("2poo1w1DL6yd2WNTCnNTzDqkC6MBXq7axo77P16yrBuf"),
-            protocolAccount: new PublicKey("SSwpkEEcbUqx4vtoEByFjSkhKdCT862DNVb52nZg1UZ"),
-            ammAccount: new PublicKey("YAkoNb6HKmSxQN9L8hiBE5tPJRsniSSMzND1boHmZxe"),
+            // poolAccount: new PublicKey("2poo1w1DL6yd2WNTCnNTzDqkC6MBXq7axo77P16yrBuf"),
+            // protocolAccount: new PublicKey("SSwpkEEcbUqx4vtoEByFjSkhKdCT862DNVb52nZg1UZ"),
+            // ammAccount: new PublicKey("YAkoNb6HKmSxQN9L8hiBE5tPJRsniSSMzND1boHmZxe"),
             vaultAccount: ddcaAccount,
             fromTokenMint: USDC,
             fromTokenAccount: ownerFromAccount,
@@ -125,7 +133,10 @@ describe('hla', async () => {
             hlaOpsAccount: hlaOpsAccount,
             hlaOpsTokenAccount: hlaOpsTokenAccount
           },
-          signers: []
+          signers: [],
+          remainingAccounts: [
+            // { pubkey: , isSigner: false, isWritable: false  }
+          ]
         },
         fromAmount: new BN(amount),
         minOutAmount: new BN(amount * (100 - slippage) / 100),

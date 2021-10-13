@@ -1,26 +1,10 @@
 {
-    "extends": "@tsconfig/recommended/tsconfig.json",
     "compilerOptions": {
-        "target": "ES6",
-        "lib": [
-            "dom",
-            "dom.iterable",
-            "esnext"
-        ],
-        "allowJs": true,
-        "allowSyntheticDefaultImports": true,
-        "module": "commonjs",
-        "strict": true,
-        "sourceMap": false,
-        "esModuleInterop": true,
-        "skipLibCheck": true,
-        "forceConsistentCasingInFileNames": true,
         "types": ["mocha", "chai", "node"],
-        "typeRoots": ["./node_modules/@types"]
-    },
-    "include": [
-        "src"
-    ],
-    "$schema": "https://json.schemastore.org/tsconfig",
-    "display": "Recommended"
+        "typeRoots": ["./node_modules/@types"],
+        "lib": ["es2015"],
+        "module": "commonjs",
+        "target": "es6",
+        "esModuleInterop": true
+    }
 }
