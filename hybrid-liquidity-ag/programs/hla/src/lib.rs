@@ -6,8 +6,9 @@ pub mod utils;
 pub mod state;
 pub mod data;
 pub mod saber;
+pub mod orca;
 
-use crate::saber::*;
+use crate::state::*;
 
 declare_id!("5sEgjVKG4pNUrjU1EVmKRsEAmsB9f2ujJn2H1ZxX2UQs");
 
@@ -15,8 +16,8 @@ declare_id!("5sEgjVKG4pNUrjU1EVmKRsEAmsB9f2ujJn2H1ZxX2UQs");
 pub mod hla {
     use super::*;
 
-    pub fn swap<'info>(
-        ctx: Context<'_, '_, '_, 'info, Swap<'info>>,
+    pub fn swap<'a, 'b, 'c, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, Swap<'info>>,
         from_amount: u64,
         min_out_amount: u64,
         slippage: u8
@@ -30,8 +31,9 @@ pub mod hla {
             return Err(errors::ErrorCode::InvalidOpsAccount.into());
         }
 
-        let rem_accs_iter = &mut ctx.remaining_accounts.clone().iter();
-        let pool_account = next_account_info(rem_accs_iter)?.to_account_info();
+        let remaining_accounts = ctx.remaining_accounts.clone();
+        let rem_accs_iter = &mut remaining_accounts.iter();
+        let pool_account = next_account_info(rem_accs_iter)?;
         let pool_info = utils::get_pool(&pool_account.key)?;
 
         if pool_info.account.ne(pool_account.key)
@@ -39,59 +41,45 @@ pub mod hla {
             return Err(errors::ErrorCode::InvalidPool.into());
         }
 
-        let protocol_account = next_account_info(rem_accs_iter)?.to_account_info();        
+        let protocol_account = next_account_info(rem_accs_iter)?;        
 
         if pool_info.protocol_account.ne(protocol_account.key)
         {
             return Err(errors::ErrorCode::InvalidProtocol.into());
         }
 
-        let amm_account = next_account_info(rem_accs_iter)?.to_account_info();    
+        let amm_account = next_account_info(rem_accs_iter)?;    
 
         if pool_info.amm_account.ne(amm_account.key)
         {
             return Err(errors::ErrorCode::InvalidAmm.into());
         }
 
-        let mut accounts = vec![
-            ctx.accounts.vault_account.to_account_info(),
-            ctx.accounts.from_token_account.to_account_info(),
-            ctx.accounts.to_token_account.to_account_info()
-        ];
+        let accounts = Swap {
+            fee_payer: ctx.accounts.fee_payer.clone(),
+            vault_account: ctx.accounts.vault_account.clone(),
+            from_token_mint: ctx.accounts.from_token_mint.clone(),
+            from_token_account: ctx.accounts.from_token_account.clone(),
+            to_token_mint: ctx.accounts.to_token_mint.clone(),
+            to_token_account: ctx.accounts.to_token_account.clone(),
+            hla_ops_account: ctx.accounts.hla_ops_account.clone(),
+            hla_ops_token_account: ctx.accounts.hla_ops_token_account.clone(),
+            token_program_account: ctx.accounts.token_program_account.clone()
+        };
 
-        accounts.extend_from_slice(ctx.remaining_accounts);
+        let swap_info = SwapInfo {
+            accounts,
+            remaining_accounts: ctx.remaining_accounts.to_vec(),
+            from_amount,
+            min_out_amount
+        };
 
         match pool_account.key.to_string().as_str() {
 
-            SABER => {
-                saber::swap(
-                    accounts,
-                    from_amount as f64,
-                    min_out_amount as f64
-                )
-            },
+            SABER => { saber::swap(swap_info) },
+            ORCA => { orca::swap(swap_info) },
     
             _ => return Err(errors::ErrorCode::PoolNotFound.into()),
         }
     }
-}
-
-#[derive(Accounts)]
-#[
-    instruction(
-        from_amount: u64, 
-        min_out_amount: u64, 
-        slippage: u8
-    )
-]
-pub struct Swap<'info> {
-    #[account(mut)]
-    pub fee_payer: Signer<'info>,
-    pub vault_account: AccountInfo<'info>,
-    pub from_token_mint: CpiAccount<'info, Mint>,
-    pub from_token_account: CpiAccount<'info, TokenAccount>,
-    pub to_token_mint: CpiAccount<'info, Mint>,
-    pub to_token_account: CpiAccount<'info, TokenAccount>,
-    pub hla_ops_account: AccountInfo<'info>,
-    pub hla_ops_token_account: Account<'info, TokenAccount>
 }
