@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{ self, Mint, TokenAccount, Token, Transfer, CloseAccount };
 use anchor_spl::associated_token::AssociatedToken;
-use hybrid_liquidity_ag::{ Swap };
+use hybrid_liquidity_ag::cpi::accounts::Swap;
 
 // Constants
 pub mod ddca_operating_account {
@@ -12,8 +12,8 @@ pub mod ddca_operating_account {
 pub mod hla_program {
     solana_program::declare_id!("EPa4WdYPcGGdwEbq425DMZukU2wDUE1RWAGrPbRYSLRE");
 }
-pub mod hla_operating_account {
-    solana_program::declare_id!("3oSfkjQZKCneYvsCTZc9HViGAPqR8pYr4h9YeGB5ZxHf");
+pub mod hla_ops_accountsss {
+    solana_program::declare_id!("FZMd4pn9FsvMC55D4XQfaexJvKBtQpVuqMk5zuonLRDX");
 }
 
 // pub const CREATE_FLAT_LAMPORT_FEE: u64 = 10000;
@@ -31,8 +31,10 @@ declare_id!("3nmm1awnyhABJdoA25MYVksxz1xnpUFeepJJyRTZfsyD");
 pub mod ddca {
     use super::*;
 
-    pub fn create(
-        ctx: Context<CreateInputAccounts>,
+    // pub fn create<'a, 'b, 'c, 'info>(
+    //     ctx: Context<'a, 'b, 'c, 'info, CreateInputAccounts<'info>>,
+    pub fn create<'info>(
+        ctx: Context<'_, '_, '_, 'info, CreateInputAccounts<'info>>,
         block_height: u64, 
         pda_bump: u8,
         from_initial_amount: u64,
@@ -42,13 +44,16 @@ pub mod ddca {
         first_swap_slippage: u8,
     ) -> ProgramResult {
 
+
+        let start_ts = Clock::get()?.unix_timestamp as u64;
+        
         // for i in &block_height.to_be_bytes() {
         //     msg!("{}", i);
         // }
 
-        if ctx.remaining_accounts.len() == 0 {
-            return Err(ProgramError::Custom(1)); // Arbitrary error. TODO: create proper error
-        }
+        // if ctx.remaining_accounts.len() == 0 {
+        //     return Err(ProgramError::Custom(1)); // Arbitrary error. TODO: create proper error
+        // }
 
         ctx.accounts.ddca_account.owner_acc_addr = *ctx.accounts.owner_account.key;
         ctx.accounts.ddca_account.from_mint = *ctx.accounts.from_mint.as_ref().key; //ctx.accounts.from_token_account.mint;
@@ -60,6 +65,7 @@ pub mod ddca {
         ctx.accounts.ddca_account.from_initial_amount = from_initial_amount;
         ctx.accounts.ddca_account.from_amount_per_swap = from_amount_per_swap;
         ctx.accounts.ddca_account.interval_in_seconds = interval_in_seconds;
+        ctx.accounts.ddca_account.start_ts = start_ts;
 
         // if from_initial_amount == 0 {
         //     // transfer LAMPORT flat fees to the ddca operating account
@@ -119,23 +125,23 @@ pub mod ddca {
             ],
         )?;
 
-        // transfer Token initial amount to ddca 'from' token account
+        // transfer Token initial amount to ddca 'from' token account // TODO: Enable later
         token::transfer(
             ctx.accounts.into_transfer_to_vault_context(),
             from_initial_amount,
         )?;
 
         // call hla to execute the first swap
-        let hla_cpi_program = ctx.accounts.hla_program.to_account_info();
+        let hla_cpi_program = ctx.accounts.hla_program.clone();
         let hla_cpi_accounts = Swap {
             hla_ops_account: ctx.accounts.hla_operating_account.clone(),
-            hla_ops_token_account: ctx.accounts.hla_operating_from_token_account.clone(),
-            vault_account: ctx.accounts.ddca_account.clone(),
-            from_token_account: ctx.accounts.from_token_account.clone(),
-            from_token_mint: ctx.accounts.from_mint.clone(),
-            to_token_account: ctx.accounts.to_token_account.clone(),
-            to_token_mint: ctx.accounts.to_mint.clone(),
-            token_program_account: ctx.accounts.token_program.clone(),
+            hla_ops_token_account: ctx.accounts.hla_operating_from_token_account.to_account_info().clone(),
+            vault_account: ctx.accounts.ddca_account.to_account_info().clone(),
+            from_token_account: ctx.accounts.from_token_account.to_account_info().clone(),
+            from_token_mint: ctx.accounts.from_mint.to_account_info().clone(),
+            to_token_account: ctx.accounts.to_token_account.to_account_info().clone(),
+            to_token_mint: ctx.accounts.to_mint.to_account_info().clone(),
+            token_program_account: ctx.accounts.token_program.to_account_info().clone(),
         };
 
         let seeds = &[
@@ -145,10 +151,13 @@ pub mod ddca {
             &[ctx.accounts.ddca_account.pda_bump],
         ];
 
+        let seeds_sign = &[&seeds[..]];
+
         let hla_cpi_ctx = CpiContext::new(hla_cpi_program, hla_cpi_accounts)
-        .with_signer(&[&seeds[..]])
-        .with_remaining_accounts(ctx.remaining_accounts);
-        hybrid_liquidity_ag::cpi::swap(hla_cpi_ctx, { from_amount: from_amount_per_swap, min_out_amount: first_swap_min_out_amount });
+        .with_signer(seeds_sign)
+        .with_remaining_accounts(ctx.remaining_accounts.to_vec());
+        hybrid_liquidity_ag::cpi::swap(hla_cpi_ctx, from_amount_per_swap, first_swap_min_out_amount, first_swap_slippage);
+
         
         Ok(())
     }
@@ -156,7 +165,7 @@ pub mod ddca {
 
 // DERIVE ACCOUNTS
 
-#[derive(Accounts)]
+#[derive(Accounts, Clone)]
 #[instruction(
     block_height: u64, 
     pda_bump: u8,
@@ -169,7 +178,7 @@ pub struct CreateInputAccounts<'info> {
     pub owner_account: Signer<'info>,
     #[account(
         mut,
-        constraint = owner_from_token_account.amount >= from_initial_amount
+        constraint = owner_from_token_account.amount >= from_initial_amount  // TODO: enable later when I have enough balance
     )]
     pub owner_from_token_account: Box<Account<'info, TokenAccount>>,
     // ddca
@@ -213,13 +222,15 @@ pub struct CreateInputAccounts<'info> {
     // Hybrid Liquidity Aggregator
     #[account(address = hla_program::ID)]
     pub hla_program: AccountInfo<'info>,
+    #[account(mut, address = hla_ops_accountsss::ID)]
     pub hla_operating_account: AccountInfo<'info>,
+    #[account(mut)]
     pub hla_operating_from_token_account: Box<Account<'info, TokenAccount>>,
     // system and spl
     pub rent: Sysvar<'info, Rent>,
     pub clock: Sysvar<'info, Clock>,
     pub system_program: Program<'info, System>,
-    pub token_program: AccountInfo<'info>,
+    pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
 }
 
