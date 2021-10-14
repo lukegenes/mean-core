@@ -38,8 +38,8 @@ pub mod ddca {
         ctx: Context<CreateInputAccounts>,
         block_height: u64, 
         pda_bump: u8,
-        from_initial_amount: u64,
-        from_amount_per_swap: u64,
+        deposit_amount: u64,
+        amount_per_swap: u64,
         interval_in_seconds: u64,
     ) -> ProgramResult {
 
@@ -52,8 +52,8 @@ pub mod ddca {
         ctx.accounts.ddca_account.to_tacc_addr =  *ctx.accounts.to_token_account.to_account_info().key;
         ctx.accounts.ddca_account.block_height = block_height;
         ctx.accounts.ddca_account.pda_bump = pda_bump;
-        ctx.accounts.ddca_account.from_initial_amount = from_initial_amount;
-        ctx.accounts.ddca_account.from_amount_per_swap = from_amount_per_swap;
+        ctx.accounts.ddca_account.total_deposits_amount = deposit_amount;
+        ctx.accounts.ddca_account.amount_per_swap = amount_per_swap;
         ctx.accounts.ddca_account.interval_in_seconds = interval_in_seconds;
         ctx.accounts.ddca_account.start_ts = start_ts;
 
@@ -77,11 +77,11 @@ pub mod ddca {
         //     return Ok(());
         // }
 
-        if from_initial_amount % from_amount_per_swap != 0 {
+        if deposit_amount % amount_per_swap != 0 {
             return Err(ErrorCode::InvalidAmounts.into());
         }
         
-        let swap_count: u64 = from_initial_amount / from_amount_per_swap;
+        let swap_count: u64 = deposit_amount / amount_per_swap;
         if swap_count == 1 {
             return Err(ErrorCode::InvalidSwapsCount.into());
         }
@@ -116,7 +116,7 @@ pub mod ddca {
         )?;
 
         // transfer Token initial amount to ddca 'from' token account
-        let deposit_amount = spl_token::ui_amount_to_amount(from_initial_amount as f64, ctx.accounts.from_mint.decimals);
+        let deposit_amount = spl_token::ui_amount_to_amount(deposit_amount as f64, ctx.accounts.from_mint.decimals);
         msg!("Depositing: {} of token: {} into the ddca", deposit_amount, ctx.accounts.from_mint.key());
         token::transfer(
             ctx.accounts.into_transfer_to_vault_context(),
@@ -142,7 +142,7 @@ pub mod ddca {
         }
 
         // check balance
-        if ctx.accounts.from_token_account.amount < ctx.accounts.ddca_account.from_amount_per_swap {
+        if ctx.accounts.from_token_account.amount < ctx.accounts.ddca_account.amount_per_swap {
             return Err(ErrorCode::InsufficientBalanceForSwap.into());
         }
 
@@ -200,7 +200,7 @@ pub mod ddca {
         let hla_cpi_ctx = CpiContext::new(hla_cpi_program, hla_cpi_accounts)
         .with_signer(seeds_sign)
         .with_remaining_accounts(ctx.remaining_accounts.to_vec());
-        hybrid_liquidity_ag::cpi::swap(hla_cpi_ctx, ctx.accounts.ddca_account.from_amount_per_swap, swap_min_out_amount, swap_slippage);
+        hybrid_liquidity_ag::cpi::swap(hla_cpi_ctx, ctx.accounts.ddca_account.amount_per_swap, swap_min_out_amount, swap_slippage);
 
         
         Ok(())
@@ -257,8 +257,8 @@ pub mod ddca {
 #[instruction(
     block_height: u64, 
     pda_bump: u8,
-    from_initial_amount: u64,
-    from_amount_per_swap: u64,
+    deposit_amount: u64,
+    amount_per_swap: u64,
     interval_in_seconds: u64,
     )]
 pub struct CreateInputAccounts<'info> {
@@ -267,7 +267,7 @@ pub struct CreateInputAccounts<'info> {
     pub owner_account: Signer<'info>,
     #[account(
         mut,
-        constraint = owner_from_token_account.amount >= from_initial_amount  // TODO: enable later when I have enough balance
+        constraint = owner_from_token_account.amount >= deposit_amount  // TODO: enable later when I have enough balance
     )]
     pub owner_from_token_account: Box<Account<'info, TokenAccount>>,
     // ddca
@@ -281,7 +281,7 @@ pub struct CreateInputAccounts<'info> {
         bump = pda_bump,
         payer = owner_account, 
         space = 8 + DdcaAccount::LEN,
-        constraint = from_amount_per_swap > 0,
+        constraint = amount_per_swap > 0,
         constraint = interval_in_seconds >= 300, // minimum inverval is 5 min
     )]
     pub ddca_account: Account<'info, DdcaAccount>,
@@ -318,10 +318,6 @@ pub struct CreateInputAccounts<'info> {
 }
 
 #[derive(Accounts)]
-// #[instruction(
-//     from_initial_amount: u64,
-//     from_amount_per_swap: u64,
-//     )]
 pub struct WakeAndSwapInputAccounts<'info> {
     // ddca
     #[account(mut)]
@@ -392,8 +388,8 @@ pub struct DdcaAccount {
     pub to_tacc_addr: Pubkey, //32 bytes
     pub block_height: u64, //8 bytes
     pub pda_bump: u8, //1 byte
-    pub from_initial_amount: u64, //8 bytes
-    pub from_amount_per_swap: u64, //8 bytes
+    pub total_deposits_amount: u64, //8 bytes
+    pub amount_per_swap: u64, //8 bytes
     pub start_ts: u64, //8 bytes
     pub interval_in_seconds: u64, //8 bytes
     pub last_completed_swap_ts: u64, //8 bytes

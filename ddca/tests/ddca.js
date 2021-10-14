@@ -31,8 +31,8 @@ describe("ddca", () => {
   let ownerTokenAccountAAddress = null;
   const ownerTokenAccountAInitialBalance = 500;
 
-  const ddcaFromInitialAmount = 100;
-  const ddcaFromAmountPerSwap = 10;
+  const ddcaFromInitialDepositAmount = 100;
+  const ddcaAmountPerSwap = 10;
   const ddcaIntervalInSeconds = 5 * 60; //5 minutes
 
   // Hybrid Liquidity Aggregator accounts
@@ -210,7 +210,7 @@ describe("ddca", () => {
     console.log();
 
     const createTx = await program.rpc.create(new anchor.BN(blockHeight), ddcaAccountPdaBump,
-      new anchor.BN(ddcaFromInitialAmount), new anchor.BN(ddcaFromAmountPerSwap), new anchor.BN(ddcaIntervalInSeconds), 
+      new anchor.BN(ddcaFromInitialDepositAmount), new anchor.BN(ddcaAmountPerSwap), new anchor.BN(ddcaIntervalInSeconds), 
       new anchor.BN(0), 0,
       {
         accounts: {
@@ -260,7 +260,7 @@ describe("ddca", () => {
 
     let _ddcaFromTokenAccount = await splTokenAClient.getAccountInfo(ddcaFromTokenAccountAddress);
     assert.ok(_ddcaFromTokenAccount.state === 1);
-    assert.ok(_ddcaFromTokenAccount.amount.toNumber() === ddcaFromInitialAmount);
+    assert.ok(_ddcaFromTokenAccount.amount.toNumber() === ddcaFromInitialDepositAmount);
     assert.ok(_ddcaFromTokenAccount.isInitialized);
     assert.ok(_ddcaFromTokenAccount.owner.equals(ddcaAccountPda));
     assert.ok(_ddcaFromTokenAccount.mint.equals(mintA.publicKey));
