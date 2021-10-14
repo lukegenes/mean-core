@@ -151,8 +151,8 @@ pub mod ddca {
         let interval = ctx.accounts.ddca_account.interval_in_seconds;
         let last_ts = ctx.accounts.ddca_account.last_completed_swap_ts;
         let now_ts = Clock::get()?.unix_timestamp as u64;
-        let max_diff_in_secs = cmp::min(interval / 100, 3600); // make interval > 300 seconds (five minutes)
-        let prev_checkpoint = (now_ts - start_ts) / interval; // min is zero
+        let max_diff_in_secs = cmp::min(interval / 100, 3600); // +/-1% up to 3600 sec (ok for min interval = 5 min)
+        let prev_checkpoint = (now_ts - start_ts) / interval;
         let prev_ts = start_ts + prev_checkpoint * interval;
         let next_checkpoint = prev_checkpoint + 1;
         let next_ts = start_ts + next_checkpoint * interval;
@@ -215,6 +215,7 @@ pub mod ddca {
     pda_bump: u8,
     from_initial_amount: u64,
     from_amount_per_swap: u64,
+    interval_in_seconds: u64,
     )]
 pub struct CreateInputAccounts<'info> {
     // owner
@@ -237,6 +238,7 @@ pub struct CreateInputAccounts<'info> {
         payer = owner_account, 
         space = 8 + DdcaAccount::LEN,
         constraint = from_amount_per_swap > 0,
+        constraint = interval_in_seconds >= 300, // minimum inverval is 5 min
     )]
     pub ddca_account: Account<'info, DdcaAccount>,
     pub from_mint:  Account<'info, Mint>, 
