@@ -127,7 +127,7 @@ pub mod ddca {
     }
 
     pub fn wake_and_swap<'info>(
-        ctx: Context<'_, '_, '_, 'info, WakeAndSwap<'info>>,
+        ctx: Context<'_, '_, '_, 'info, WakeAndSwapInputAccounts<'info>>,
         swap_min_out_amount: u64,
         swap_slippage: u8,
     ) -> ProgramResult {
@@ -205,6 +205,50 @@ pub mod ddca {
         
         Ok(())
     }
+
+    pub fn close(ctx: Context<CloseInputAccounts>) -> ProgramResult {
+        // Transferring from vault token account to vault onwer token account
+        let seeds = &[
+            ctx.accounts.owner_account.key.as_ref(),
+            &ctx.accounts.ddca_account.block_height.to_be_bytes(),
+            b"ddca-seed",
+            &[ctx.accounts.ddca_account.pda_bump],
+        ];
+
+        // from
+        if ctx.accounts.ddca_from_token_account.amount > 0 {
+            token::transfer(
+                ctx.accounts
+                    .into_transfer_from_to_owner_context()
+                    .with_signer(&[&seeds[..]]),
+                ctx.accounts.ddca_from_token_account.amount,
+            )?;
+        }
+
+        token::close_account(
+            ctx.accounts
+                .into_close_from_context()
+                .with_signer(&[&seeds[..]]),
+        )?;
+
+        // to
+        if ctx.accounts.ddca_to_token_account.amount > 0 {
+            token::transfer(
+                ctx.accounts
+                    .into_transfer_to_to_owner_context()
+                    .with_signer(&[&seeds[..]]),
+                ctx.accounts.ddca_to_token_account.amount,
+            )?;
+        }
+
+        token::close_account(
+            ctx.accounts
+                .into_close_to_context()
+                .with_signer(&[&seeds[..]]),
+        )?;
+
+        Ok(())
+    }
 }
 
 // DERIVE ACCOUNTS
@@ -273,13 +317,12 @@ pub struct CreateInputAccounts<'info> {
     pub associated_token_program: Program<'info, AssociatedToken>,
 }
 
-
 #[derive(Accounts)]
 // #[instruction(
 //     from_initial_amount: u64,
 //     from_amount_per_swap: u64,
 //     )]
-pub struct WakeAndSwap<'info> {
+pub struct WakeAndSwapInputAccounts<'info> {
     // ddca
     #[account(mut)]
     pub ddca_account: Account<'info, DdcaAccount>,
@@ -304,6 +347,38 @@ pub struct WakeAndSwap<'info> {
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
+}
+
+#[derive(Accounts)]
+pub struct CloseInputAccounts<'info> {
+    pub owner_account: Signer<'info>,
+    #[account(mut)]
+    pub owner_from_token_account: Box<Account<'info, TokenAccount>>,
+    #[account(mut)]
+    pub owner_to_token_account: Box<Account<'info, TokenAccount>>,
+    #[account(
+        mut,
+        constraint = ddca_account.owner_acc_addr == *owner_account.key,
+        close = owner_account,
+    )]
+    pub ddca_account: Account<'info, DdcaAccount>,
+    #[account(
+        mut,
+        // close = owner_account,
+    )]
+    pub ddca_from_token_account: Box<Account<'info, TokenAccount>>,
+    #[account(
+        mut,
+        // close = owner_account,
+    )]
+    pub ddca_to_token_account: Box<Account<'info, TokenAccount>>,
+    #[account(address = ddca_operating_account::ID)]
+    pub operating_account: AccountInfo<'info>,
+    #[account( mut)]
+    pub operating_from_token_account: Box<Account<'info, TokenAccount>>,
+    #[account( mut)]
+    pub operating_to_token_account: Box<Account<'info, TokenAccount>>,
+    pub token_program: Program<'info, Token>,
 }
 
 // ACCOUNT STRUCTS
@@ -357,6 +432,71 @@ impl<'info> CreateInputAccounts<'info> {
                 .to_account_info()
                 .clone(),
             authority: self.owner_account.to_account_info().clone(),
+        };
+        let cpi_program = self.token_program.to_account_info();
+        CpiContext::new(cpi_program, cpi_accounts)
+    }
+}
+
+impl<'info> CloseInputAccounts<'info> {
+    // from
+    fn into_transfer_from_to_owner_context(
+        &self,
+    ) -> CpiContext<'_, '_, '_, 'info, Transfer<'info>> {
+        let cpi_accounts = Transfer {
+            from: self.ddca_from_token_account.to_account_info().clone(),
+            to: self
+                .owner_from_token_account
+                .to_account_info()
+                .clone(),
+            authority: self.ddca_account.to_account_info().clone(),
+        };
+        let cpi_program = self.token_program.to_account_info();
+        CpiContext::new(cpi_program, cpi_accounts)
+    }
+
+    fn into_close_from_context(&self) -> CpiContext<'_, '_, '_, 'info, CloseAccount<'info>> {
+        let cpi_accounts = CloseAccount {
+            account: self.ddca_from_token_account.to_account_info().clone(),
+            destination: self.owner_account.to_account_info().clone(),
+            authority: self.ddca_account.to_account_info().clone(),
+        };
+        let cpi_program = self.token_program.to_account_info();
+        CpiContext::new(cpi_program, cpi_accounts)
+    }
+    
+    // to
+    fn into_transfer_to_to_owner_context(
+        &self,
+    ) -> CpiContext<'_, '_, '_, 'info, Transfer<'info>> {
+        let cpi_accounts = Transfer {
+            from: self.ddca_to_token_account.to_account_info().clone(),
+            to: self
+                .owner_to_token_account
+                .to_account_info()
+                .clone(),
+            authority: self.ddca_account.to_account_info().clone(),
+        };
+        let cpi_program = self.token_program.to_account_info();
+        CpiContext::new(cpi_program, cpi_accounts)
+    }
+
+    fn into_close_to_context(&self) -> CpiContext<'_, '_, '_, 'info, CloseAccount<'info>> {
+        let cpi_accounts = CloseAccount {
+            account: self.ddca_to_token_account.to_account_info().clone(),
+            destination: self.owner_account.to_account_info().clone(),
+            authority: self.ddca_account.to_account_info().clone(),
+        };
+        let cpi_program = self.token_program.to_account_info();
+        CpiContext::new(cpi_program, cpi_accounts)
+    }
+
+    // ddca
+    fn into_close_ddca_context(&self) -> CpiContext<'_, '_, '_, 'info, CloseAccount<'info>> {
+        let cpi_accounts = CloseAccount {
+            account: self.ddca_account.to_account_info().clone(),
+            destination: self.owner_account.to_account_info().clone(),
+            authority: self.ddca_account.to_account_info().clone(),
         };
         let cpi_program = self.token_program.to_account_info();
         CpiContext::new(cpi_program, cpi_accounts)
