@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::token::{ self, Mint, TokenAccount, Token, Transfer, CloseAccount };
 use anchor_spl::associated_token::AssociatedToken;
 use hybrid_liquidity_ag::cpi::accounts::Swap;
+use std::cmp;
 
 // Constants
 pub mod ddca_operating_account {
@@ -33,27 +34,16 @@ pub mod ddca {
 
     // pub fn create<'a, 'b, 'c, 'info>(
     //     ctx: Context<'a, 'b, 'c, 'info, CreateInputAccounts<'info>>,
-    pub fn create<'info>(
-        ctx: Context<'_, '_, '_, 'info, CreateInputAccounts<'info>>,
+    pub fn create(
+        ctx: Context<CreateInputAccounts>,
         block_height: u64, 
         pda_bump: u8,
         from_initial_amount: u64,
         from_amount_per_swap: u64,
         interval_in_seconds: u64,
-        first_swap_min_out_amount: u64,
-        first_swap_slippage: u8,
     ) -> ProgramResult {
 
-
         let start_ts = Clock::get()?.unix_timestamp as u64;
-        
-        // for i in &block_height.to_be_bytes() {
-        //     msg!("{}", i);
-        // }
-
-        // if ctx.remaining_accounts.len() == 0 {
-        //     return Err(ProgramError::Custom(1)); // Arbitrary error. TODO: create proper error
-        // }
 
         ctx.accounts.ddca_account.owner_acc_addr = *ctx.accounts.owner_account.key;
         ctx.accounts.ddca_account.from_mint = *ctx.accounts.from_mint.as_ref().key; //ctx.accounts.from_token_account.mint;
@@ -91,8 +81,8 @@ pub mod ddca {
             return Err(ErrorCode::InvalidAmounts.into());
         }
         
-        let swap_count: u64 = (from_initial_amount / from_amount_per_swap) - 1; // -1: first swap will occur in the current transaction
-        if swap_count == 0 {
+        let swap_count: u64 = from_initial_amount / from_amount_per_swap;
+        if swap_count == 1 {
             return Err(ErrorCode::InvalidSwapsCount.into());
         }
 
@@ -125,11 +115,65 @@ pub mod ddca {
             ],
         )?;
 
-        // transfer Token initial amount to ddca 'from' token account // TODO: Enable later
+        // transfer Token initial amount to ddca 'from' token account
+        let deposit_amount = spl_token::ui_amount_to_amount(from_initial_amount as f64, ctx.accounts.from_mint.decimals);
+        msg!("Depositing: {} of token: {} into the ddca", deposit_amount, ctx.accounts.from_mint.key());
         token::transfer(
             ctx.accounts.into_transfer_to_vault_context(),
-            from_initial_amount,
+            deposit_amount,
         )?;
+        
+        Ok(())
+    }
+
+    pub fn wake_and_swap<'info>(
+        ctx: Context<'_, '_, '_, 'info, WakeAndSwap<'info>>,
+        swap_min_out_amount: u64,
+        swap_slippage: u8,
+    ) -> ProgramResult {
+
+        // if ctx.remaining_accounts.len() == 0 {
+        //     return Err(ProgramError::Custom(1)); // Arbitrary error. TODO: create proper error
+        // }
+
+        // check paused
+        if ctx.accounts.ddca_account.is_paused {
+            return Err(ErrorCode::DdcaIsPaused.into());
+        }
+
+        // check balance
+        if ctx.accounts.from_token_account.amount < ctx.accounts.ddca_account.from_amount_per_swap {
+            return Err(ErrorCode::InsufficientBalanceForSwap.into());
+        }
+
+        // check schedule
+        let start_ts = ctx.accounts.ddca_account.start_ts;
+        let interval = ctx.accounts.ddca_account.interval_in_seconds;
+        let last_ts = ctx.accounts.ddca_account.last_completed_swap_ts;
+        let now_ts = Clock::get()?.unix_timestamp as u64;
+        let max_diff_in_secs = cmp::min(interval / 100, 3600); // make interval > 300 seconds (five minutes)
+        let prev_checkpoint = (now_ts - start_ts) / interval; // min is zero
+        let prev_ts = start_ts + prev_checkpoint * interval;
+        let next_checkpoint = prev_checkpoint + 1;
+        let next_ts = start_ts + next_checkpoint * interval;
+        let checkpoint_ts: u64;
+        msg!("DDCA schedule: {{ start_ts: {}, interval: {}, last_ts: {}, now_ts: {}, max_diff_in_secs: {}, low: {}, high: {}, low_ts: {}, high_ts: {} }}",
+                                start_ts, interval, last_ts, now_ts, max_diff_in_secs, prev_checkpoint, next_checkpoint, prev_ts, next_ts);
+
+        if last_ts != prev_ts && now_ts >= (prev_ts - max_diff_in_secs) && now_ts <= (prev_ts + max_diff_in_secs) {
+            checkpoint_ts = prev_ts;
+            msg!("valid schedule");
+        }
+        else if last_ts != next_ts && now_ts >= (next_ts - max_diff_in_secs) && now_ts <= (next_ts + max_diff_in_secs) {
+            checkpoint_ts = next_ts;
+            msg!("valid schedule");
+        }
+        else {
+            return Err(ErrorCode::InvalidSwapSchedule.into());
+        }
+        solana_program::log::sol_log_compute_units();
+        msg!("Executing scheduled swap at {}", checkpoint_ts);
+        ctx.accounts.ddca_account.last_completed_swap_ts = checkpoint_ts;
 
         // call hla to execute the first swap
         let hla_cpi_program = ctx.accounts.hla_program.clone();
@@ -145,7 +189,7 @@ pub mod ddca {
         };
 
         let seeds = &[
-            ctx.accounts.owner_account.key.as_ref(),
+            ctx.accounts.ddca_account.owner_acc_addr.as_ref(),
             &ctx.accounts.ddca_account.block_height.to_be_bytes(),
             b"ddca-seed",
             &[ctx.accounts.ddca_account.pda_bump],
@@ -156,7 +200,7 @@ pub mod ddca {
         let hla_cpi_ctx = CpiContext::new(hla_cpi_program, hla_cpi_accounts)
         .with_signer(seeds_sign)
         .with_remaining_accounts(ctx.remaining_accounts.to_vec());
-        hybrid_liquidity_ag::cpi::swap(hla_cpi_ctx, from_amount_per_swap, first_swap_min_out_amount, first_swap_slippage);
+        hybrid_liquidity_ag::cpi::swap(hla_cpi_ctx, ctx.accounts.ddca_account.from_amount_per_swap, swap_min_out_amount, swap_slippage);
 
         
         Ok(())
@@ -165,7 +209,7 @@ pub mod ddca {
 
 // DERIVE ACCOUNTS
 
-#[derive(Accounts, Clone)]
+#[derive(Accounts)]
 #[instruction(
     block_height: u64, 
     pda_bump: u8,
@@ -219,6 +263,32 @@ pub struct CreateInputAccounts<'info> {
         // associated_token::authority = ddca_operating_account, 
     )]
     pub operating_from_token_account: Box<Account<'info, TokenAccount>>,
+    // system and spl
+    pub rent: Sysvar<'info, Rent>,
+    pub clock: Sysvar<'info, Clock>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+}
+
+
+#[derive(Accounts)]
+// #[instruction(
+//     from_initial_amount: u64,
+//     from_amount_per_swap: u64,
+//     )]
+pub struct WakeAndSwap<'info> {
+    // ddca
+    #[account(mut)]
+    pub ddca_account: Account<'info, DdcaAccount>,
+    #[account(constraint = from_mint.key() == ddca_account.from_mint)]
+    pub from_mint:  Account<'info, Mint>,
+    #[account(mut)]
+    pub from_token_account: Box<Account<'info, TokenAccount>>,
+    #[account(constraint = to_mint.key() == ddca_account.to_mint)]
+    pub to_mint:  Account<'info, Mint>, 
+    #[account(mut)]
+    pub to_token_account: Box<Account<'info, TokenAccount>>,
     // Hybrid Liquidity Aggregator
     #[account(address = hla_program::ID)]
     pub hla_program: AccountInfo<'info>,
@@ -250,10 +320,11 @@ pub struct DdcaAccount {
     pub start_ts: u64, //8 bytes
     pub interval_in_seconds: u64, //8 bytes
     pub last_completed_swap_ts: u64, //8 bytes
+    pub is_paused: bool, //8 bytes
 }
 
 impl DdcaAccount {
-    pub const LEN: usize = 32 + 32 + 32 + 32 + 32 + 8 + 1 + 8 + 8 + 8 + 8 + 8;
+    pub const LEN: usize = 32 + 32 + 32 + 32 + 32 + 8 + 1 + 8 + 8 + 8 + 8 + 8 + 1;
 }
 
 //UTILS IMPL
@@ -296,4 +367,10 @@ pub enum ErrorCode {
     InvalidAmounts,
     #[msg("The number of recurring swaps must be greater than 1")]
     InvalidSwapsCount,
+    #[msg("This DDCA is paused")]
+    DdcaIsPaused,
+    #[msg("Insufficient balance for swap")]
+    InsufficientBalanceForSwap,
+    #[msg("This DDCA is not schedule for the provided time")]
+    InvalidSwapSchedule,
 }
