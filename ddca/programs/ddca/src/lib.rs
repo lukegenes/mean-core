@@ -486,17 +486,6 @@ impl<'info> CloseInputAccounts<'info> {
         let cpi_program = self.token_program.to_account_info();
         CpiContext::new(cpi_program, cpi_accounts)
     }
-
-    // ddca
-    fn into_close_ddca_context(&self) -> CpiContext<'_, '_, '_, 'info, CloseAccount<'info>> {
-        let cpi_accounts = CloseAccount {
-            account: self.ddca_account.to_account_info().clone(),
-            destination: self.owner_account.to_account_info().clone(),
-            authority: self.ddca_account.to_account_info().clone(),
-        };
-        let cpi_program = self.token_program.to_account_info();
-        CpiContext::new(cpi_program, cpi_accounts)
-    }
 }
 
 #[error]
