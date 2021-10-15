@@ -5,7 +5,7 @@ use crate::errors::*;
 use crate::utils::*;
 use crate::state::{SwapInfo, AGGREGATOR_FEE};
 
-pub fn swap<'a, 'b, 'c, 'info>(
+pub fn swap<'info>(
     swap_info: SwapInfo<'info>
 
 ) -> ProgramResult {
@@ -30,20 +30,20 @@ pub fn swap<'a, 'b, 'c, 'info>(
     Ok(())
 }
 
-fn get_swap_context<'a, 'b, 'c, 'info>(
+fn get_swap_context<'info>(
     swap_info: SwapInfo<'info>
 
-) -> Result<CpiContext<'a, 'b, 'c, 'info, Swap<'info>>> {
+) -> Result<CpiContext<'_, '_, '_, 'info, Swap<'info>>> {
 
     let acounts_iter = &mut swap_info.remaining_accounts.iter();
     let cpi_program_info = next_account_info(acounts_iter)?.clone();
     let swap_account_info = next_account_info(acounts_iter)?;
     let swap_authority_info = next_account_info(acounts_iter)?;
     let token_program_info = next_account_info(acounts_iter)?;
-    let clock_info = next_account_info(acounts_iter)?;
     let reserve_input_account_info = next_account_info(acounts_iter)?;
     let reserve_output_account_info = next_account_info(acounts_iter)?;
     let admin_destination_info = next_account_info(acounts_iter)?;
+    let clock_info = next_account_info(acounts_iter)?;
 
     let cpi_accounts = Swap {
         user: SwapUserContext {

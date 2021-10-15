@@ -5,7 +5,7 @@ use crate::errors::*;
 use crate::utils::*;
 use crate::state::*;
 
-pub fn swap<'a, 'b, 'c, 'info>(
+pub fn swap<'info>(
     swap_info: SwapInfo<'info>
 
 ) -> ProgramResult {

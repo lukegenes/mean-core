@@ -16,13 +16,15 @@ declare_id!("B6gLd2uyVQLZMdC1s9C4WR7ZP9fMhJNh7WZYcsibuzN3");
 pub mod hla {
     use super::*;
 
-    pub fn swap<'a, 'b, 'c, 'info>(
-        ctx: Context<'a, 'b, 'c, 'info, Swap<'info>>,
+    pub fn swap<'info>(
+        ctx: Context<'_, '_, '_, 'info, Swap<'info>>,
         from_amount: u64,
         min_out_amount: u64,
         slippage: u8
 
     ) -> ProgramResult {
+
+        msg!("Initializing swap");
 
         let hla_ops_account_key: Pubkey = state::HLA_OPS.parse().unwrap();
 
@@ -35,6 +37,8 @@ pub mod hla {
         let rem_accs_iter = &mut remaining_accounts.iter();
         let pool_account = next_account_info(rem_accs_iter)?;
         let pool_info = utils::get_pool(&pool_account.key)?;
+
+        msg!("Get pool info for {:?}", pool_account.key);
 
         if pool_info.account.ne(pool_account.key)
         {
@@ -55,6 +59,8 @@ pub mod hla {
             return Err(errors::ErrorCode::InvalidAmm.into());
         }
 
+        msg!("Copying swap accounts");
+
         let accounts = Swap {
             fee_payer: ctx.accounts.fee_payer.clone(),
             vault_account: ctx.accounts.vault_account.clone(),
@@ -67,12 +73,16 @@ pub mod hla {
             token_program_account: ctx.accounts.token_program_account.clone()
         };
 
+        msg!("Wrapping swap info");
+
         let swap_info = SwapInfo {
             accounts,
             remaining_accounts: ctx.remaining_accounts.to_vec(),
             from_amount,
             min_out_amount
         };
+
+        msg!("Executing swap");
 
         match pool_account.key.to_string().as_str() {
 
