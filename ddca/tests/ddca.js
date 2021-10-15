@@ -29,7 +29,7 @@ describe("ddca", () => {
   let splTokenBClient = null;
 
   let ownerTokenAccountAAddress = null;
-  const ownerTokenAccountAInitialBalance = 500;
+  const ownerTokenAccountAInitialBalance = 5000;
 
   const ddcaFromInitialDepositAmount = 100;
   const ddcaAmountPerSwap = 10;
@@ -260,7 +260,7 @@ describe("ddca", () => {
 
     let _ddcaFromTokenAccount = await splTokenAClient.getAccountInfo(ddcaFromTokenAccountAddress);
     assert.ok(_ddcaFromTokenAccount.state === 1);
-    assert.ok(_ddcaFromTokenAccount.amount.toNumber() === ddcaFromInitialDepositAmount);
+    assert.ok(_ddcaFromTokenAccount.amount.toNumber() === ddcaFromInitialDepositAmount * 10); // decimals = 1
     assert.ok(_ddcaFromTokenAccount.isInitialized);
     assert.ok(_ddcaFromTokenAccount.owner.equals(ddcaAccountPda));
     assert.ok(_ddcaFromTokenAccount.mint.equals(mintA.publicKey));
