@@ -10,7 +10,7 @@ pub mod orca;
 
 use crate::state::*;
 
-declare_id!("B6gLd2uyVQLZMdC1s9C4WR7ZP9fMhJNh7WZYcsibuzN3");
+declare_id!("EPa4WdYPcGGdwEbq425DMZukU2wDUE1RWAGrPbRYSLRE");
 
 #[program]
 pub mod hla {
@@ -62,7 +62,6 @@ pub mod hla {
         msg!("Copying swap accounts");
 
         let accounts = Swap {
-            fee_payer: ctx.accounts.fee_payer.clone(),
             vault_account: ctx.accounts.vault_account.clone(),
             from_token_mint: ctx.accounts.from_token_mint.clone(),
             from_token_account: ctx.accounts.from_token_account.clone(),

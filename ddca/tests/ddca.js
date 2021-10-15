@@ -15,7 +15,7 @@ describe("ddca", () => {
   anchor.setProvider(provider);
 
   //
-  const DDCA_OPERATING_ACCOUNT_ADDRESS = new PublicKey("3oSfkjQZKCneYvsCTZc9HViGAPqR8pYr4h9YeGB5ZxHf");
+  const DDCA_OPERATING_ACCOUNT_ADDRESS = new PublicKey("6u1Hc9AqC6AvpYDQcFjhMVqAwcQ83Kn5TVm6oWMjDDf1");
   const SYSTEM_PROGRAM_ID = anchor.web3.SystemProgram.programId;
   const LAMPORTS_PER_SOL = anchor.web3.LAMPORTS_PER_SOL;
   const program = anchor.workspace.Ddca;
@@ -29,14 +29,14 @@ describe("ddca", () => {
   let splTokenBClient = null;
 
   let ownerTokenAccountAAddress = null;
-  const ownerTokenAccountAInitialBalance = 500;
+  const ownerTokenAccountAInitialBalance = 5000;
 
-  const ddcaFromInitialAmount = 100;
-  const ddcaFromAmountPerSwap = 10;
+  const ddcaFromInitialDepositAmount = 100;
+  const ddcaAmountPerSwap = 10;
   const ddcaIntervalInSeconds = 5 * 60; //5 minutes
 
   // Hybrid Liquidity Aggregator accounts
-  const HLA_PROGRAM_ADDRESS = new PublicKey("B6gLd2uyVQLZMdC1s9C4WR7ZP9fMhJNh7WZYcsibuzN3");
+  const HLA_PROGRAM_ADDRESS = new PublicKey("EPa4WdYPcGGdwEbq425DMZukU2wDUE1RWAGrPbRYSLRE");
   const HLA_OPERATING_ACCOUNT_ADDRESS = new PublicKey("FZMd4pn9FsvMC55D4XQfaexJvKBtQpVuqMk5zuonLRDX");
   const hlaProtocolAddress = anchor.web3.Keypair.generate().publicKey;
   const hlaPoolAddress = anchor.web3.Keypair.generate().publicKey;
@@ -210,8 +210,8 @@ describe("ddca", () => {
     console.log();
 
     const createTx = await program.rpc.create(new anchor.BN(blockHeight), ddcaAccountPdaBump,
-      new anchor.BN(ddcaFromInitialAmount), new anchor.BN(ddcaFromAmountPerSwap), new anchor.BN(ddcaIntervalInSeconds), 
-      new anchor.BN(0), 0,
+      new anchor.BN(ddcaFromInitialDepositAmount), new anchor.BN(ddcaAmountPerSwap), new anchor.BN(ddcaIntervalInSeconds), 
+      // new anchor.BN(0), 0,
       {
         accounts: {
           // owner
@@ -224,12 +224,12 @@ describe("ddca", () => {
           toMint: mintB.publicKey,
           toTokenAccount: ddcaToTokenAccountAddress,
           operatingAccount: DDCA_OPERATING_ACCOUNT_ADDRESS,
-          // hybrid liquidity aggregator accounts
-          hlaProgram: HLA_PROGRAM_ADDRESS,
-          hlaOperatingAccount: HLA_OPERATING_ACCOUNT_ADDRESS,
-          hlaOperatingFromTokenAccount: hlaOperatingFromTokenAccountAddress,
-          // system accounts
           operatingFromTokenAccount: ddcaOperatingFromTokenAccountAddress,
+          // hybrid liquidity aggregator accounts
+          // hlaProgram: HLA_PROGRAM_ADDRESS,
+          // hlaOperatingAccount: HLA_OPERATING_ACCOUNT_ADDRESS,
+          // hlaOperatingFromTokenAccount: hlaOperatingFromTokenAccountAddress,
+          // system accounts
           rent: anchor.web3.SYSVAR_RENT_PUBKEY,
           clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
           systemProgram: SYSTEM_PROGRAM_ID,
@@ -239,11 +239,11 @@ describe("ddca", () => {
         // signers: [ownerAcc],
         instructions: instructions,
         // hybrid liquidity aggregator specific amm pool accounts
-        remainingAccounts: [
-          { pubkey: hlaPoolAddress, isWritable: false, isSigner: false },
-          { pubkey: hlaProtocolAddress, isWritable: false, isSigner: false },
-          { pubkey: hlaAmmAddress, isWritable: false, isSigner: false },
-        ],
+        // remainingAccounts: [
+        //   { pubkey: hlaPoolAddress, isWritable: false, isSigner: false },
+        //   { pubkey: hlaProtocolAddress, isWritable: false, isSigner: false },
+        //   { pubkey: hlaAmmAddress, isWritable: false, isSigner: false },
+        // ],
       }
     );
 
@@ -260,7 +260,7 @@ describe("ddca", () => {
 
     let _ddcaFromTokenAccount = await splTokenAClient.getAccountInfo(ddcaFromTokenAccountAddress);
     assert.ok(_ddcaFromTokenAccount.state === 1);
-    assert.ok(_ddcaFromTokenAccount.amount.toNumber() === ddcaFromInitialAmount);
+    assert.ok(_ddcaFromTokenAccount.amount.toNumber() === ddcaFromInitialDepositAmount * 10); // decimals = 1
     assert.ok(_ddcaFromTokenAccount.isInitialized);
     assert.ok(_ddcaFromTokenAccount.owner.equals(ddcaAccountPda));
     assert.ok(_ddcaFromTokenAccount.mint.equals(mintA.publicKey));

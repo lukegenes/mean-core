@@ -1,11 +1,11 @@
 [programs.localnet]
-hla = "B6gLd2uyVQLZMdC1s9C4WR7ZP9fMhJNh7WZYcsibuzN3"
+hybrid-liquidity-ag = "EPa4WdYPcGGdwEbq425DMZukU2wDUE1RWAGrPbRYSLRE"
 
 [programs.devnet]
-hla = "B6gLd2uyVQLZMdC1s9C4WR7ZP9fMhJNh7WZYcsibuzN3"
+hybrid-liquidity-ag = "EPa4WdYPcGGdwEbq425DMZukU2wDUE1RWAGrPbRYSLRE"
 
 [programs.mainnet]
-hla = "B6gLd2uyVQLZMdC1s9C4WR7ZP9fMhJNh7WZYcsibuzN3"
+hybrid-liquidity-ag = "EPa4WdYPcGGdwEbq425DMZukU2wDUE1RWAGrPbRYSLRE"
 
 [registry]
 url = "https://anchor.projectserum.com"
