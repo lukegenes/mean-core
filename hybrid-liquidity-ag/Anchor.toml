@@ -1,0 +1,18 @@
+[programs.localnet]
+hybrid-liquidity-ag = "EPa4WdYPcGGdwEbq425DMZukU2wDUE1RWAGrPbRYSLRE"
+
+[programs.devnet]
+hybrid-liquidity-ag = "EPa4WdYPcGGdwEbq425DMZukU2wDUE1RWAGrPbRYSLRE"
+
+[programs.mainnet]
+hybrid-liquidity-ag = "EPa4WdYPcGGdwEbq425DMZukU2wDUE1RWAGrPbRYSLRE"
+
+[registry]
+url = "https://anchor.projectserum.com"
+
+[provider]
+cluster = "localnet"
+wallet = "keys/wallet.json"
+
+[scripts]
+test = "mocha -t 1000000 tests/hla.ts"

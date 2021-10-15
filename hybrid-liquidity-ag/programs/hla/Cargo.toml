@@ -1,0 +1,22 @@
+[package]
+name = "hybrid-liquidity-ag"
+version = "0.1.0"
+description = "Hybrid Liquidity Aggregator"
+edition = "2018"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "hybrid_liquidity_ag"
+
+[features]
+no-entrypoint = []
+no-idl = []
+cpi = ["no-entrypoint"]
+default = []
+
+[dependencies]
+anchor-lang = "0.17.0"
+anchor-spl = "0.17.0"
+spl-token = { version = "3.2.0", features = ["no-entrypoint"] }
+spl-token-swap = { version = "2.1.0", features = ["no-entrypoint"] }
+stable-swap-anchor = { version = "1.4.4" }
