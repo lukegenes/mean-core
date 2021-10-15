@@ -15,7 +15,7 @@ describe("ddca", () => {
   anchor.setProvider(provider);
 
   //
-  const DDCA_OPERATING_ACCOUNT_ADDRESS = new PublicKey("3oSfkjQZKCneYvsCTZc9HViGAPqR8pYr4h9YeGB5ZxHf");
+  const DDCA_OPERATING_ACCOUNT_ADDRESS = new PublicKey("6u1Hc9AqC6AvpYDQcFjhMVqAwcQ83Kn5TVm6oWMjDDf1");
   const SYSTEM_PROGRAM_ID = anchor.web3.SystemProgram.programId;
   const LAMPORTS_PER_SOL = anchor.web3.LAMPORTS_PER_SOL;
   const program = anchor.workspace.Ddca;
@@ -211,7 +211,7 @@ describe("ddca", () => {
 
     const createTx = await program.rpc.create(new anchor.BN(blockHeight), ddcaAccountPdaBump,
       new anchor.BN(ddcaFromInitialDepositAmount), new anchor.BN(ddcaAmountPerSwap), new anchor.BN(ddcaIntervalInSeconds), 
-      new anchor.BN(0), 0,
+      // new anchor.BN(0), 0,
       {
         accounts: {
           // owner
@@ -224,12 +224,12 @@ describe("ddca", () => {
           toMint: mintB.publicKey,
           toTokenAccount: ddcaToTokenAccountAddress,
           operatingAccount: DDCA_OPERATING_ACCOUNT_ADDRESS,
-          // hybrid liquidity aggregator accounts
-          hlaProgram: HLA_PROGRAM_ADDRESS,
-          hlaOperatingAccount: HLA_OPERATING_ACCOUNT_ADDRESS,
-          hlaOperatingFromTokenAccount: hlaOperatingFromTokenAccountAddress,
-          // system accounts
           operatingFromTokenAccount: ddcaOperatingFromTokenAccountAddress,
+          // hybrid liquidity aggregator accounts
+          // hlaProgram: HLA_PROGRAM_ADDRESS,
+          // hlaOperatingAccount: HLA_OPERATING_ACCOUNT_ADDRESS,
+          // hlaOperatingFromTokenAccount: hlaOperatingFromTokenAccountAddress,
+          // system accounts
           rent: anchor.web3.SYSVAR_RENT_PUBKEY,
           clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
           systemProgram: SYSTEM_PROGRAM_ID,
@@ -239,11 +239,11 @@ describe("ddca", () => {
         // signers: [ownerAcc],
         instructions: instructions,
         // hybrid liquidity aggregator specific amm pool accounts
-        remainingAccounts: [
-          { pubkey: hlaPoolAddress, isWritable: false, isSigner: false },
-          { pubkey: hlaProtocolAddress, isWritable: false, isSigner: false },
-          { pubkey: hlaAmmAddress, isWritable: false, isSigner: false },
-        ],
+        // remainingAccounts: [
+        //   { pubkey: hlaPoolAddress, isWritable: false, isSigner: false },
+        //   { pubkey: hlaProtocolAddress, isWritable: false, isSigner: false },
+        //   { pubkey: hlaAmmAddress, isWritable: false, isSigner: false },
+        // ],
       }
     );
 

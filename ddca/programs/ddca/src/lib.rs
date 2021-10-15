@@ -6,7 +6,7 @@ use std::cmp;
 
 // Constants
 pub mod ddca_operating_account {
-    solana_program::declare_id!("3oSfkjQZKCneYvsCTZc9HViGAPqR8pYr4h9YeGB5ZxHf");
+    solana_program::declare_id!("6u1Hc9AqC6AvpYDQcFjhMVqAwcQ83Kn5TVm6oWMjDDf1");
 }
 
 // hybrid liquidity aggregator program
