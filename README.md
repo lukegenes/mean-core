@@ -15,10 +15,10 @@ To leverage the Mean Protocol Programs in your own dapp, go to the [Mean Protoco
 
 ## Program Catalog
 
-| Program | Description | Version
-| :-- | :-- | :--|
-| `money-streaming` | Implementation of the **[Money Streaming Protocol](https://docs.meanfi.com/platform/specifications/money-streaming-protocol)** |
-| `ddca` | Implementation of the **[DDCA Protocol]()** |
+| Program | Description
+| :-- | :-- |
+| `money-streaming` | Implementation of the **[Money Streaming Protocol](https://docs.meanfi.com/platform/specifications/money-streaming-protocol)**
+| `ddca` | Implementation of the **[DDCA Protocol]()**
 | `hybrid-liquidity-ag` | Implementation of the **[Hybrid Liquidity Aggregator Protocol]()**
 
 
