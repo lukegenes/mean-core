@@ -32,8 +32,6 @@ declare_id!("3nmm1awnyhABJdoA25MYVksxz1xnpUFeepJJyRTZfsyD");
 pub mod ddca {
     use super::*;
 
-    // pub fn create<'a, 'b, 'c, 'info>(
-    //     ctx: Context<'a, 'b, 'c, 'info, CreateInputAccounts<'info>>,
     pub fn create(
         ctx: Context<CreateInputAccounts>,
         block_height: u64, 
@@ -47,8 +45,10 @@ pub mod ddca {
 
         ctx.accounts.ddca_account.owner_acc_addr = *ctx.accounts.owner_account.key;
         ctx.accounts.ddca_account.from_mint = *ctx.accounts.from_mint.as_ref().key; //ctx.accounts.from_token_account.mint;
+        ctx.accounts.ddca_account.from_mint_decimals = ctx.accounts.from_mint.decimals;
         ctx.accounts.ddca_account.from_tacc_addr =  *ctx.accounts.from_token_account.to_account_info().key; //*ctx.accounts.from_token_account.as_ref().key;
         ctx.accounts.ddca_account.to_mint = *ctx.accounts.to_mint.as_ref().key;
+        ctx.accounts.ddca_account.to_mint_decimals = ctx.accounts.to_mint.decimals;
         ctx.accounts.ddca_account.to_tacc_addr =  *ctx.accounts.to_token_account.to_account_info().key;
         ctx.accounts.ddca_account.block_height = block_height;
         ctx.accounts.ddca_account.pda_bump = pda_bump;
@@ -80,7 +80,6 @@ pub mod ddca {
         if deposit_amount % amount_per_swap != 0 {
             return Err(ErrorCode::InvalidAmounts.into());
         }
-        
         let swap_count: u64 = deposit_amount / amount_per_swap;
         if swap_count == 1 {
             return Err(ErrorCode::InvalidSwapsCount.into());
@@ -116,8 +115,7 @@ pub mod ddca {
         )?;
 
         // transfer Token initial amount to ddca 'from' token account
-        let deposit_amount = spl_token::ui_amount_to_amount(deposit_amount as f64, ctx.accounts.from_mint.decimals);
-        msg!("Depositing: {} of token: {} into the ddca", deposit_amount, ctx.accounts.from_mint.key());
+        msg!("Depositing: {} of mint: {} into the ddca", deposit_amount, ctx.accounts.from_mint.key());
         token::transfer(
             ctx.accounts.into_transfer_to_vault_context(),
             deposit_amount,
@@ -133,7 +131,7 @@ pub mod ddca {
     ) -> ProgramResult {
 
         // if ctx.remaining_accounts.len() == 0 {
-        //     return Err(ProgramError::Custom(1)); // Arbitrary error. TODO: create proper error
+        //     return Err(ProgramError::Custom(1)); // TODO: create proper error
         // }
 
         // check paused
@@ -171,9 +169,10 @@ pub mod ddca {
         else {
             return Err(ErrorCode::InvalidSwapSchedule.into());
         }
-        solana_program::log::sol_log_compute_units();
-        msg!("Executing scheduled swap at {}", checkpoint_ts);
         ctx.accounts.ddca_account.last_completed_swap_ts = checkpoint_ts;
+        
+        msg!("Executing scheduled swap at {}", checkpoint_ts);
+        solana_program::log::sol_log_compute_units();
 
         // call hla to execute the first swap
         let hla_cpi_program = ctx.accounts.hla_program.clone();
@@ -267,7 +266,7 @@ pub struct CreateInputAccounts<'info> {
     pub owner_account: Signer<'info>,
     #[account(
         mut,
-        constraint = owner_from_token_account.amount >= deposit_amount  // TODO: enable later when I have enough balance
+        constraint = owner_from_token_account.amount >= deposit_amount
     )]
     pub owner_from_token_account: Box<Account<'info, TokenAccount>>,
     // ddca
@@ -383,8 +382,10 @@ pub struct CloseInputAccounts<'info> {
 pub struct DdcaAccount {
     pub owner_acc_addr: Pubkey, //32 bytes
     pub from_mint: Pubkey, //32 bytes
+    pub from_mint_decimals: u8, //1 bytes
     pub from_tacc_addr: Pubkey, //32 bytes
     pub to_mint: Pubkey, //32 bytes
+    pub to_mint_decimals: u8, //1 bytes
     pub to_tacc_addr: Pubkey, //32 bytes
     pub block_height: u64, //8 bytes
     pub pda_bump: u8, //1 byte
@@ -397,7 +398,7 @@ pub struct DdcaAccount {
 }
 
 impl DdcaAccount {
-    pub const LEN: usize = 32 + 32 + 32 + 32 + 32 + 8 + 1 + 8 + 8 + 8 + 8 + 8 + 1;
+    pub const LEN: usize = 32 + 32 + 1 + 32 + 32 + 1 + 32 + 8 + 1 + 8 + 8 + 8 + 8 + 8 + 1;
 }
 
 //UTILS IMPL
