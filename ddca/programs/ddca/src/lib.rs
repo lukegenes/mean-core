@@ -80,7 +80,8 @@ pub mod ddca {
         if deposit_amount % amount_per_swap != 0 {
             return Err(ErrorCode::InvalidAmounts.into());
         }
-        let swap_count: u64 = deposit_amount / amount_per_swap;
+        
+        let swap_count: u64 = deposit_amount.checked_div(amount_per_swap).unwrap();
         if swap_count == 1 {
             return Err(ErrorCode::InvalidSwapsCount.into());
         }
