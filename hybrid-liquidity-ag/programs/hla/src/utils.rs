@@ -20,10 +20,10 @@ pub fn get_pool(pool_account: &Pubkey) -> Result<PoolInfo> {
     Ok(lps[0].clone())
 }
 
-pub fn get_transfer_context<'a, 'b, 'c, 'info>(
+pub fn get_transfer_context<'info>(
     swap_info: SwapInfo<'info>
 
-) -> Result<CpiContext<'a, 'b, 'c, 'info, Transfer<'info>>> {
+) -> Result<CpiContext<'_, '_, '_, 'info, Transfer<'info>>> {
 
     let cpi_program = swap_info.accounts.token_program_account.clone();
     let cpi_accounts = Transfer {
