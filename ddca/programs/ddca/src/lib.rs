@@ -20,7 +20,8 @@ pub mod hla_ops_accountsss {
 // pub const CREATE_FLAT_LAMPORT_FEE: u64 = 10000;
 // pub const ADD_FUNDS_PERCENT_TOKEN_FEE: f64 = 0.003;
 // pub const CREATE_WITH_FUNDS_PERCENT_TOKEN_FEE: f64 = 0.003;
-pub const WITHDRAW_PERCENT_TOKEN_FEE: f64 = 0.005;
+pub const WITHDRAW_TOKEN_FEE_NUMERATOR: u64 = 50;
+pub const WITHDRAW_TOKEN_FEE_DENOMINATOR: u64 = 10000;
 // pub const STOP_FLAT_LAMPORT_FEE: u64 = 10000;
 // pub const START_FLAT_LAMPORT_FEE: u64 = 10000;
 pub const LAMPORTS_PER_SOL: u64 = 1000000000;
@@ -85,18 +86,6 @@ pub mod ddca {
         if swap_count == 1 {
             return Err(ErrorCode::InvalidSwapsCount.into());
         }
-
-        // // transfer Token percentage fee to the ddca operating account
-        // let from_mint_decimals = ctx.accounts.from_mint.decimals;
-        // // msg!("from_mint_decimals: {}", from_mint_decimals);
-        // let add_funds_fee = spl_token::ui_amount_to_amount(from_initial_amount as f64 * CREATE_WITH_FUNDS_PERCENT_TOKEN_FEE, from_mint_decimals);
-        // msg!("'create with funds' fee: {}", add_funds_fee);
-        // if add_funds_fee > 0 {
-        //     token::transfer(
-        //         ctx.accounts.into_transfer_fee_to_operating_context(),
-        //         add_funds_fee,
-        //     )?;
-        // }
 
         // transfer enough SOL gas budget to the ddca account to pay future recurring swaps fees (network + amm fees)
         let recurring_lamport_fees = swap_count * SINGLE_SWAP_MINIMUM_LAMPORT_GAS_FEE;
@@ -215,13 +204,36 @@ pub mod ddca {
             &[ctx.accounts.ddca_account.pda_bump],
         ];
 
+        // transfer withdraw fee to the ddca operating account
+
         // from
-        if ctx.accounts.ddca_from_token_account.amount > 0 {
+        let from_withdraw_fee = ctx.accounts.ddca_from_token_account.amount
+            .checked_mul(WITHDRAW_TOKEN_FEE_NUMERATOR)
+            .unwrap()
+            .checked_div(WITHDRAW_TOKEN_FEE_DENOMINATOR)
+            .unwrap();
+        msg!("withdraw 'from' fee: {}", from_withdraw_fee);
+        if from_withdraw_fee > 0 {
+            token::transfer(
+                ctx.accounts.into_transfer_from_fee_to_operating_context()
+                .with_signer(&[&seeds[..]]),
+                from_withdraw_fee,
+            )?;
+        }
+
+        let from_token_amount = {
+            if from_withdraw_fee > ctx.accounts.ddca_from_token_account.amount {
+                ctx.accounts.ddca_from_token_account.amount
+            }
+            else { ctx.accounts.ddca_from_token_account.amount - from_withdraw_fee }
+        };
+        msg!("transfering 'from' token blanace: {} to owner", from_token_amount);
+        if from_token_amount > 0 {
             token::transfer(
                 ctx.accounts
                     .into_transfer_from_to_owner_context()
                     .with_signer(&[&seeds[..]]),
-                ctx.accounts.ddca_from_token_account.amount,
+                    from_token_amount,
             )?;
         }
 
@@ -232,12 +244,33 @@ pub mod ddca {
         )?;
 
         // to
-        if ctx.accounts.ddca_to_token_account.amount > 0 {
+        let to_withdraw_fee = ctx.accounts.ddca_to_token_account.amount
+            .checked_mul(WITHDRAW_TOKEN_FEE_NUMERATOR)
+            .unwrap()
+            .checked_div(WITHDRAW_TOKEN_FEE_DENOMINATOR)
+            .unwrap();
+        if to_withdraw_fee > 0 {
+            msg!("'to' withdraw fee: {}", to_withdraw_fee);
+            token::transfer(
+                ctx.accounts.into_transfer_to_fee_to_operating_context()
+                .with_signer(&[&seeds[..]]),
+                to_withdraw_fee,
+            )?;
+        }
+
+        let to_token_amount = {
+            if to_withdraw_fee > ctx.accounts.ddca_to_token_account.amount {
+                ctx.accounts.ddca_to_token_account.amount
+            }
+            else { ctx.accounts.ddca_to_token_account.amount - to_withdraw_fee }
+        };
+        if to_token_amount > 0 {
+            msg!("transfering 'to' token blanace: {} to owner", to_token_amount);
             token::transfer(
                 ctx.accounts
                     .into_transfer_to_to_owner_context()
                     .with_signer(&[&seeds[..]]),
-                ctx.accounts.ddca_to_token_account.amount,
+                    to_token_amount,
             )?;
         }
 
@@ -437,6 +470,37 @@ impl<'info> CreateInputAccounts<'info> {
 }
 
 impl<'info> CloseInputAccounts<'info> {
+    // from fee
+    fn into_transfer_from_fee_to_operating_context(
+        &self,
+    ) -> CpiContext<'_, '_, '_, 'info, Transfer<'info>> {
+        let cpi_accounts = Transfer {
+            from: self.ddca_from_token_account.to_account_info().clone(),
+            to: self
+                .operating_from_token_account
+                .to_account_info()
+                .clone(),
+            authority: self.ddca_account.to_account_info().clone(),
+        };
+        let cpi_program = self.token_program.to_account_info();
+        CpiContext::new(cpi_program, cpi_accounts)
+    }
+    // to fee
+    fn into_transfer_to_fee_to_operating_context(
+        &self,
+    ) -> CpiContext<'_, '_, '_, 'info, Transfer<'info>> {
+        let cpi_accounts = Transfer {
+            from: self.ddca_to_token_account.to_account_info().clone(),
+            to: self
+                .operating_to_token_account
+                .to_account_info()
+                .clone(),
+            authority: self.ddca_account.to_account_info().clone(),
+        };
+        let cpi_program = self.token_program.to_account_info();
+        CpiContext::new(cpi_program, cpi_accounts)
+    }
+    
     // from
     fn into_transfer_from_to_owner_context(
         &self,
