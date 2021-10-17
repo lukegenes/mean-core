@@ -20,7 +20,8 @@ pub mod hla_ops_accountsss {
 // pub const CREATE_FLAT_LAMPORT_FEE: u64 = 10000;
 // pub const ADD_FUNDS_PERCENT_TOKEN_FEE: f64 = 0.003;
 // pub const CREATE_WITH_FUNDS_PERCENT_TOKEN_FEE: f64 = 0.003;
-pub const WITHDRAW_PERCENT_TOKEN_FEE: f64 = 0.005;
+pub const WITHDRAW_TOKEN_FEE_NUMERATOR: u64 = 50;
+pub const WITHDRAW_TOKEN_FEE_DENOMINATOR: u64 = 10000;
 // pub const STOP_FLAT_LAMPORT_FEE: u64 = 10000;
 // pub const START_FLAT_LAMPORT_FEE: u64 = 10000;
 pub const LAMPORTS_PER_SOL: u64 = 1000000000;
@@ -32,8 +33,6 @@ declare_id!("3nmm1awnyhABJdoA25MYVksxz1xnpUFeepJJyRTZfsyD");
 pub mod ddca {
     use super::*;
 
-    // pub fn create<'a, 'b, 'c, 'info>(
-    //     ctx: Context<'a, 'b, 'c, 'info, CreateInputAccounts<'info>>,
     pub fn create(
         ctx: Context<CreateInputAccounts>,
         block_height: u64, 
@@ -47,8 +46,10 @@ pub mod ddca {
 
         ctx.accounts.ddca_account.owner_acc_addr = *ctx.accounts.owner_account.key;
         ctx.accounts.ddca_account.from_mint = *ctx.accounts.from_mint.as_ref().key; //ctx.accounts.from_token_account.mint;
+        ctx.accounts.ddca_account.from_mint_decimals = ctx.accounts.from_mint.decimals;
         ctx.accounts.ddca_account.from_tacc_addr =  *ctx.accounts.from_token_account.to_account_info().key; //*ctx.accounts.from_token_account.as_ref().key;
         ctx.accounts.ddca_account.to_mint = *ctx.accounts.to_mint.as_ref().key;
+        ctx.accounts.ddca_account.to_mint_decimals = ctx.accounts.to_mint.decimals;
         ctx.accounts.ddca_account.to_tacc_addr =  *ctx.accounts.to_token_account.to_account_info().key;
         ctx.accounts.ddca_account.block_height = block_height;
         ctx.accounts.ddca_account.pda_bump = pda_bump;
@@ -81,22 +82,10 @@ pub mod ddca {
             return Err(ErrorCode::InvalidAmounts.into());
         }
         
-        let swap_count: u64 = deposit_amount / amount_per_swap;
+        let swap_count: u64 = deposit_amount.checked_div(amount_per_swap).unwrap();
         if swap_count == 1 {
             return Err(ErrorCode::InvalidSwapsCount.into());
         }
-
-        // // transfer Token percentage fee to the ddca operating account
-        // let from_mint_decimals = ctx.accounts.from_mint.decimals;
-        // // msg!("from_mint_decimals: {}", from_mint_decimals);
-        // let add_funds_fee = spl_token::ui_amount_to_amount(from_initial_amount as f64 * CREATE_WITH_FUNDS_PERCENT_TOKEN_FEE, from_mint_decimals);
-        // msg!("'create with funds' fee: {}", add_funds_fee);
-        // if add_funds_fee > 0 {
-        //     token::transfer(
-        //         ctx.accounts.into_transfer_fee_to_operating_context(),
-        //         add_funds_fee,
-        //     )?;
-        // }
 
         // transfer enough SOL gas budget to the ddca account to pay future recurring swaps fees (network + amm fees)
         let recurring_lamport_fees = swap_count * SINGLE_SWAP_MINIMUM_LAMPORT_GAS_FEE;
@@ -116,8 +105,7 @@ pub mod ddca {
         )?;
 
         // transfer Token initial amount to ddca 'from' token account
-        let deposit_amount = spl_token::ui_amount_to_amount(deposit_amount as f64, ctx.accounts.from_mint.decimals);
-        msg!("Depositing: {} of token: {} into the ddca", deposit_amount, ctx.accounts.from_mint.key());
+        msg!("Depositing: {} of mint: {} into the ddca", deposit_amount, ctx.accounts.from_mint.key());
         token::transfer(
             ctx.accounts.into_transfer_to_vault_context(),
             deposit_amount,
@@ -133,7 +121,7 @@ pub mod ddca {
     ) -> ProgramResult {
 
         // if ctx.remaining_accounts.len() == 0 {
-        //     return Err(ProgramError::Custom(1)); // Arbitrary error. TODO: create proper error
+        //     return Err(ProgramError::Custom(1)); // TODO: create proper error
         // }
 
         // check paused
@@ -171,9 +159,10 @@ pub mod ddca {
         else {
             return Err(ErrorCode::InvalidSwapSchedule.into());
         }
-        solana_program::log::sol_log_compute_units();
-        msg!("Executing scheduled swap at {}", checkpoint_ts);
         ctx.accounts.ddca_account.last_completed_swap_ts = checkpoint_ts;
+        
+        msg!("Executing scheduled swap at {}", checkpoint_ts);
+        solana_program::log::sol_log_compute_units();
 
         // call hla to execute the first swap
         let hla_cpi_program = ctx.accounts.hla_program.clone();
@@ -215,13 +204,36 @@ pub mod ddca {
             &[ctx.accounts.ddca_account.pda_bump],
         ];
 
+        // transfer withdraw fee to the ddca operating account
+
         // from
-        if ctx.accounts.ddca_from_token_account.amount > 0 {
+        let from_withdraw_fee = ctx.accounts.ddca_from_token_account.amount
+            .checked_mul(WITHDRAW_TOKEN_FEE_NUMERATOR)
+            .unwrap()
+            .checked_div(WITHDRAW_TOKEN_FEE_DENOMINATOR)
+            .unwrap();
+        msg!("withdraw 'from' fee: {}", from_withdraw_fee);
+        if from_withdraw_fee > 0 {
+            token::transfer(
+                ctx.accounts.into_transfer_from_fee_to_operating_context()
+                .with_signer(&[&seeds[..]]),
+                from_withdraw_fee,
+            )?;
+        }
+
+        let from_token_amount = {
+            if from_withdraw_fee > ctx.accounts.ddca_from_token_account.amount {
+                ctx.accounts.ddca_from_token_account.amount
+            }
+            else { ctx.accounts.ddca_from_token_account.amount - from_withdraw_fee }
+        };
+        msg!("transfering 'from' token blanace: {} to owner", from_token_amount);
+        if from_token_amount > 0 {
             token::transfer(
                 ctx.accounts
                     .into_transfer_from_to_owner_context()
                     .with_signer(&[&seeds[..]]),
-                ctx.accounts.ddca_from_token_account.amount,
+                    from_token_amount,
             )?;
         }
 
@@ -232,12 +244,33 @@ pub mod ddca {
         )?;
 
         // to
-        if ctx.accounts.ddca_to_token_account.amount > 0 {
+        let to_withdraw_fee = ctx.accounts.ddca_to_token_account.amount
+            .checked_mul(WITHDRAW_TOKEN_FEE_NUMERATOR)
+            .unwrap()
+            .checked_div(WITHDRAW_TOKEN_FEE_DENOMINATOR)
+            .unwrap();
+        if to_withdraw_fee > 0 {
+            msg!("'to' withdraw fee: {}", to_withdraw_fee);
+            token::transfer(
+                ctx.accounts.into_transfer_to_fee_to_operating_context()
+                .with_signer(&[&seeds[..]]),
+                to_withdraw_fee,
+            )?;
+        }
+
+        let to_token_amount = {
+            if to_withdraw_fee > ctx.accounts.ddca_to_token_account.amount {
+                ctx.accounts.ddca_to_token_account.amount
+            }
+            else { ctx.accounts.ddca_to_token_account.amount - to_withdraw_fee }
+        };
+        if to_token_amount > 0 {
+            msg!("transfering 'to' token blanace: {} to owner", to_token_amount);
             token::transfer(
                 ctx.accounts
                     .into_transfer_to_to_owner_context()
                     .with_signer(&[&seeds[..]]),
-                ctx.accounts.ddca_to_token_account.amount,
+                    to_token_amount,
             )?;
         }
 
@@ -267,7 +300,7 @@ pub struct CreateInputAccounts<'info> {
     pub owner_account: Signer<'info>,
     #[account(
         mut,
-        constraint = owner_from_token_account.amount >= deposit_amount  // TODO: enable later when I have enough balance
+        constraint = owner_from_token_account.amount >= deposit_amount
     )]
     pub owner_from_token_account: Box<Account<'info, TokenAccount>>,
     // ddca
@@ -383,8 +416,10 @@ pub struct CloseInputAccounts<'info> {
 pub struct DdcaAccount {
     pub owner_acc_addr: Pubkey, //32 bytes
     pub from_mint: Pubkey, //32 bytes
+    pub from_mint_decimals: u8, //1 bytes
     pub from_tacc_addr: Pubkey, //32 bytes
     pub to_mint: Pubkey, //32 bytes
+    pub to_mint_decimals: u8, //1 bytes
     pub to_tacc_addr: Pubkey, //32 bytes
     pub block_height: u64, //8 bytes
     pub pda_bump: u8, //1 byte
@@ -397,7 +432,7 @@ pub struct DdcaAccount {
 }
 
 impl DdcaAccount {
-    pub const LEN: usize = 32 + 32 + 32 + 32 + 32 + 8 + 1 + 8 + 8 + 8 + 8 + 8 + 1;
+    pub const LEN: usize = 32 + 32 + 1 + 32 + 32 + 1 + 32 + 8 + 1 + 8 + 8 + 8 + 8 + 8 + 1;
 }
 
 //UTILS IMPL
@@ -435,6 +470,37 @@ impl<'info> CreateInputAccounts<'info> {
 }
 
 impl<'info> CloseInputAccounts<'info> {
+    // from fee
+    fn into_transfer_from_fee_to_operating_context(
+        &self,
+    ) -> CpiContext<'_, '_, '_, 'info, Transfer<'info>> {
+        let cpi_accounts = Transfer {
+            from: self.ddca_from_token_account.to_account_info().clone(),
+            to: self
+                .operating_from_token_account
+                .to_account_info()
+                .clone(),
+            authority: self.ddca_account.to_account_info().clone(),
+        };
+        let cpi_program = self.token_program.to_account_info();
+        CpiContext::new(cpi_program, cpi_accounts)
+    }
+    // to fee
+    fn into_transfer_to_fee_to_operating_context(
+        &self,
+    ) -> CpiContext<'_, '_, '_, 'info, Transfer<'info>> {
+        let cpi_accounts = Transfer {
+            from: self.ddca_to_token_account.to_account_info().clone(),
+            to: self
+                .operating_to_token_account
+                .to_account_info()
+                .clone(),
+            authority: self.ddca_account.to_account_info().clone(),
+        };
+        let cpi_program = self.token_program.to_account_info();
+        CpiContext::new(cpi_program, cpi_accounts)
+    }
+    
     // from
     fn into_transfer_from_to_owner_context(
         &self,
