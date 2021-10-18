@@ -17,13 +17,8 @@ pub mod hla_ops_accountsss {
     solana_program::declare_id!("FZMd4pn9FsvMC55D4XQfaexJvKBtQpVuqMk5zuonLRDX");
 }
 
-// pub const CREATE_FLAT_LAMPORT_FEE: u64 = 10000;
-// pub const ADD_FUNDS_PERCENT_TOKEN_FEE: f64 = 0.003;
-// pub const CREATE_WITH_FUNDS_PERCENT_TOKEN_FEE: f64 = 0.003;
 pub const WITHDRAW_TOKEN_FEE_NUMERATOR: u64 = 50;
 pub const WITHDRAW_TOKEN_FEE_DENOMINATOR: u64 = 10000;
-// pub const STOP_FLAT_LAMPORT_FEE: u64 = 10000;
-// pub const START_FLAT_LAMPORT_FEE: u64 = 10000;
 pub const LAMPORTS_PER_SOL: u64 = 1000000000;
 pub const SINGLE_SWAP_MINIMUM_LAMPORT_GAS_FEE: u64 = 20000000; //20 million
 
@@ -57,26 +52,6 @@ pub mod ddca {
         ctx.accounts.ddca_account.amount_per_swap = amount_per_swap;
         ctx.accounts.ddca_account.interval_in_seconds = interval_in_seconds;
         ctx.accounts.ddca_account.start_ts = start_ts;
-
-        // if from_initial_amount == 0 {
-        //     // transfer LAMPORT flat fees to the ddca operating account
-        //     msg!("flat fees: transfering {} lamports from owner to operating account", CREATE_FLAT_LAMPORT_FEE);
-        //     let ix = anchor_lang::solana_program::system_instruction::transfer(
-        //         ctx.accounts.owner_account.key,
-        //         ctx.accounts.operating_account.key,
-        //         CREATE_FLAT_LAMPORT_FEE,
-        //     );
-
-        //     anchor_lang::solana_program::program::invoke(
-        //         &ix,
-        //         &[
-        //             ctx.accounts.owner_account.to_account_info(),
-        //             ctx.accounts.operating_account.to_account_info(),
-        //         ],
-        //     )?;
-
-        //     return Ok(());
-        // }
 
         if deposit_amount % amount_per_swap != 0 {
             return Err(ErrorCode::InvalidAmounts.into());
@@ -119,10 +94,6 @@ pub mod ddca {
         swap_min_out_amount: u64,
         swap_slippage: u8,
     ) -> ProgramResult {
-
-        // if ctx.remaining_accounts.len() == 0 {
-        //     return Err(ProgramError::Custom(1)); // TODO: create proper error
-        // }
 
         // check paused
         if ctx.accounts.ddca_account.is_paused {
@@ -333,15 +304,6 @@ pub struct CreateInputAccounts<'info> {
         associated_token::authority = ddca_account, 
         payer = owner_account)]
     pub to_token_account: Box<Account<'info, TokenAccount>>,
-    #[account(mut, address = ddca_operating_account::ID)]
-    pub operating_account: AccountInfo<'info>,
-    #[account(
-        mut,
-        //TODO: uncomment when https://github.com/project-serum/anchor/pull/843 is released
-        // associated_token::mint = from_mint, 
-        // associated_token::authority = ddca_operating_account, 
-    )]
-    pub operating_from_token_account: Box<Account<'info, TokenAccount>>,
     // system and spl
     pub rent: Sysvar<'info, Rent>,
     pub clock: Sysvar<'info, Clock>,
@@ -403,9 +365,19 @@ pub struct CloseInputAccounts<'info> {
     pub ddca_to_token_account: Box<Account<'info, TokenAccount>>,
     #[account(address = ddca_operating_account::ID)]
     pub operating_account: AccountInfo<'info>,
-    #[account( mut)]
+    #[account(
+        mut,
+        //TODO: uncomment when https://github.com/project-serum/anchor/pull/843 is released
+        // associated_token::mint = from_mint, 
+        // associated_token::authority = ddca_operating_account,
+    )]
     pub operating_from_token_account: Box<Account<'info, TokenAccount>>,
-    #[account( mut)]
+    #[account(
+        mut,
+        //TODO: uncomment when https://github.com/project-serum/anchor/pull/843 is released
+        // associated_token::mint = from_mint, 
+        // associated_token::authority = ddca_operating_account,
+    )]
     pub operating_to_token_account: Box<Account<'info, TokenAccount>>,
     pub token_program: Program<'info, Token>,
 }
@@ -445,21 +417,6 @@ impl<'info> CreateInputAccounts<'info> {
             from: self.owner_from_token_account.to_account_info().clone(),
             to: self
                 .from_token_account
-                .to_account_info()
-                .clone(),
-            authority: self.owner_account.to_account_info().clone(),
-        };
-        let cpi_program = self.token_program.to_account_info();
-        CpiContext::new(cpi_program, cpi_accounts)
-    }
-
-    fn into_transfer_fee_to_operating_context(
-        &self,
-    ) -> CpiContext<'_, '_, '_, 'info, Transfer<'info>> {
-        let cpi_accounts = Transfer {
-            from: self.owner_from_token_account.to_account_info().clone(),
-            to: self
-                .operating_from_token_account
                 .to_account_info()
                 .clone(),
             authority: self.owner_account.to_account_info().clone(),
