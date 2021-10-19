@@ -18,6 +18,7 @@ describe('hla', async() => {
     const blockTime = await provider.connection.getBlockTime(slot);
     const blockTimeBytes = new anchor.BN(blockTime).toBuffer('le', 8);
     const minBalance = await provider.connection.getMinimumBalanceForRentExemption(0);
+    
     const ddcaAccountSeed = [
       wallet.publicKey.toBuffer(),
       blockTimeBytes,

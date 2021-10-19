@@ -26,40 +26,29 @@ pub mod hla {
         msg!("Initializing swap");
         solana_program::log::sol_log_compute_units();
 
-        let hla_ops_account_key: Pubkey = HLA_OPS.parse().unwrap();
-
-        if hla_ops_account_key.ne(ctx.accounts.hla_ops_account.key)
-        {
-            return Err(errors::ErrorCode::InvalidOpsAccount.into());
-        }
-
-        let remaining_accounts = ctx.remaining_accounts.clone();
-        let rem_accs_iter = &mut remaining_accounts.iter();
+        let rem_accs_iter = &mut ctx.remaining_accounts.iter();
         let pool_account = next_account_info(rem_accs_iter)?;
-        let pool_info = utils::get_pool(&pool_account.key)?;
+        let pool_account_address = &pool_account.key.to_string();
+        let pool_info = utils::get_pool(pool_account_address.as_str())?;
 
-        msg!("Get pool info for {:?}", pool_account.key);
-
-        if pool_info.account.ne(pool_account.key)
+        if pool_info.account.ne(pool_account.key.to_string().as_str())
         {
             return Err(errors::ErrorCode::InvalidPool.into());
         }
 
         let protocol_account = next_account_info(rem_accs_iter)?;        
 
-        if pool_info.protocol_account.ne(protocol_account.key)
+        if pool_info.protocol_account.ne(protocol_account.key.to_string().as_str())
         {
             return Err(errors::ErrorCode::InvalidProtocol.into());
         }
 
-        let amm_account = next_account_info(rem_accs_iter)?;    
+        let amm_account = next_account_info(rem_accs_iter)?;   
 
-        if pool_info.amm_account.ne(amm_account.key)
+        if pool_info.amm_account.ne(amm_account.key.to_string().as_str())
         {
             return Err(errors::ErrorCode::InvalidAmm.into());
         }
-
-        msg!("Wrapping swap info");
 
         let swap_info = SwapInfo {
             accounts: ctx.accounts.clone(),
@@ -68,12 +57,10 @@ pub mod hla {
             min_out_amount
         };
 
-        msg!("Executing swap");
+        match pool_account_address.as_str() {
 
-        match pool_account.key.to_string().as_str() {
-
-            SABER => { saber::swap(swap_info) },
-            ORCA => { orca::swap(swap_info) },
+            SABER => saber::swap(swap_info),
+            // ORCA => { orca::swap(swap_info) },
     
             _ => return Err(errors::ErrorCode::PoolNotFound.into()),
         }

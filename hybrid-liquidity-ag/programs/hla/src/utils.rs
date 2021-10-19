@@ -4,13 +4,14 @@ use crate::state::*;
 use crate::data::*;
 use crate::errors::*;
 
-pub fn get_pool(pool_account: &Pubkey) -> Result<PoolInfo> {
+pub fn get_pool(pool_account: &str) -> Result<PoolInfo> {
     let pools = get_pools();
     let lps = pools
         .iter()
         .filter(|p| p.account.eq(pool_account))
-        .map(|p| (*p).clone())
+        .map(|p| p.clone())
         .collect::<Vec<PoolInfo>>();
+
     
     if lps.len() == 0
     {

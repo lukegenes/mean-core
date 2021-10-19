@@ -10,6 +10,7 @@ pub fn swap<'info>(
 
 ) -> ProgramResult {
 
+    msg!("Intializing SABER Swap");
     let swap_ctx = get_swap_context(swap_info.clone())?;
 
     let _swap = stable_swap_anchor::swap(

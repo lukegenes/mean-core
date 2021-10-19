@@ -1,7 +1,6 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::*;
 
-pub const HLA_OPS: &str = "FZMd4pn9FsvMC55D4XQfaexJvKBtQpVuqMk5zuonLRDX";
 pub const RAYDIUM: &str = "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8";
 pub const ORCA: &str = "9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP";
 pub const SABER: &str = "SSwpkEEcbUqx4vtoEByFjSkhKdCT862DNVb52nZg1UZ";
@@ -9,12 +8,16 @@ pub const MERCURIAL: &str = "MERLuDFBMmsHnsBPZw2sDQZHvXFMwp8EdjudcU2HKky";
 pub const SERUM: &str = "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin";
 pub const AGGREGATOR_FEE: f64 = 0.05;
 
+pub mod hla_ops_account {
+    solana_program::declare_id!("FZMd4pn9FsvMC55D4XQfaexJvKBtQpVuqMk5zuonLRDX");
+}
+
 #[derive(Clone, Debug)]
-pub struct PoolInfo {
-    pub name: String,
-    pub account: Pubkey,
-    pub protocol_account: Pubkey,
-    pub amm_account: Pubkey
+pub struct PoolInfo<'info> {
+    pub name: &'info str,
+    pub account: &'info str,
+    pub protocol_account: &'info str,
+    pub amm_account: &'info str
 }
 
 #[derive(Accounts, Clone)]
@@ -26,7 +29,7 @@ pub struct PoolInfo {
     )
 ]
 pub struct Swap<'info> {
-    #[account(mut)]
+    #[account(mut, signer)]
     pub vault_account: AccountInfo<'info>,
     pub from_token_mint: Account<'info, Mint>,
     #[account(mut)]
@@ -34,7 +37,7 @@ pub struct Swap<'info> {
     pub to_token_mint: Account<'info, Mint>,
     #[account(mut)]
     pub to_token_account: Account<'info, TokenAccount>,
-    #[account(mut)]
+    #[account(mut, address = hla_ops_account::ID)]
     pub hla_ops_account: AccountInfo<'info>,
     #[account(mut)]
     pub hla_ops_token_account: Account<'info, TokenAccount>,
