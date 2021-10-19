@@ -6,3 +6,4 @@ target
 keys
 node_modules
 test-ledger
+tests/main.ts

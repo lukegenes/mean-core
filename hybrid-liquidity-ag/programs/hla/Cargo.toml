@@ -1,12 +1,12 @@
 [package]
-name = "hybrid-liquidity-ag"
+name = "hla"
 version = "0.1.0"
 description = "Hybrid Liquidity Aggregator"
 edition = "2018"
 
 [lib]
 crate-type = ["cdylib", "lib"]
-name = "hybrid_liquidity_ag"
+name = "hla"
 
 [features]
 no-entrypoint = []

@@ -27,10 +27,12 @@ pub struct PoolInfo {
 ]
 pub struct Swap<'info> {
     #[account(mut)]
-    pub vault_account: AccountInfo<'info>,
+    pub vault_account: Signer<'info>,
     pub from_token_mint: CpiAccount<'info, Mint>,
+    #[account(mut)]
     pub from_token_account: CpiAccount<'info, TokenAccount>,
     pub to_token_mint: CpiAccount<'info, Mint>,
+    #[account(mut)]
     pub to_token_account: CpiAccount<'info, TokenAccount>,
     #[account(mut)]
     pub hla_ops_account: AccountInfo<'info>,

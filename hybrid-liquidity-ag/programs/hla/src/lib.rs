@@ -59,23 +59,10 @@ pub mod hla {
             return Err(errors::ErrorCode::InvalidAmm.into());
         }
 
-        msg!("Copying swap accounts");
-
-        let accounts = Swap {
-            vault_account: ctx.accounts.vault_account.clone(),
-            from_token_mint: ctx.accounts.from_token_mint.clone(),
-            from_token_account: ctx.accounts.from_token_account.clone(),
-            to_token_mint: ctx.accounts.to_token_mint.clone(),
-            to_token_account: ctx.accounts.to_token_account.clone(),
-            hla_ops_account: ctx.accounts.hla_ops_account.clone(),
-            hla_ops_token_account: ctx.accounts.hla_ops_token_account.clone(),
-            token_program_account: ctx.accounts.token_program_account.clone()
-        };
-
         msg!("Wrapping swap info");
 
         let swap_info = SwapInfo {
-            accounts,
+            accounts: ctx.accounts.clone(),
             remaining_accounts: ctx.remaining_accounts.to_vec(),
             from_amount,
             min_out_amount

@@ -42,18 +42,18 @@ pub fn swap<'info>(
     )?;
 
     let accounts = [
-        program_info.clone(),
-        token_program_account_info.clone(),
-        token_swap_info.clone(),
-        swap_authority_info.clone(),
-        swap_info.accounts.vault_account.clone(), // CHECK
-        swap_info.accounts.from_token_account.to_account_info().clone(), // CHECK
-        pool_source_account_info.clone(),
-        pool_destination_account_info.clone(),
-        swap_info.accounts.to_token_account.to_account_info().clone(), // CHECK
-        pool_mint_account_info.clone(),
-        fee_account_info.clone(),
-        host_fee_account_info.clone()
+        program_info,
+        token_program_account_info,
+        token_swap_info,
+        swap_authority_info,
+        swap_info.accounts.vault_account.to_account_info(), // CHECK
+        swap_info.accounts.from_token_account.to_account_info(), // CHECK
+        pool_source_account_info,
+        pool_destination_account_info,
+        swap_info.accounts.to_token_account.to_account_info(), // CHECK
+        pool_mint_account_info,
+        fee_account_info,
+        host_fee_account_info
     ];
 
     solana_program::program::invoke_signed(
