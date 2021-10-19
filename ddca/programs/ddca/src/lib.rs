@@ -11,9 +11,9 @@ pub mod ddca_operating_account {
 
 // hybrid liquidity aggregator program
 pub mod hla_program {
-    solana_program::declare_id!("EPa4WdYPcGGdwEbq425DMZukU2wDUE1RWAGrPbRYSLRE");
+    solana_program::declare_id!("B6gLd2uyVQLZMdC1s9C4WR7ZP9fMhJNh7WZYcsibuzN3");
 }
-pub mod hla_ops_accountsss {
+pub mod hla_ops_accounts {
     solana_program::declare_id!("FZMd4pn9FsvMC55D4XQfaexJvKBtQpVuqMk5zuonLRDX");
 }
 
@@ -368,7 +368,7 @@ pub struct WakeAndSwapInputAccounts<'info> {
     // Hybrid Liquidity Aggregator
     #[account(address = hla_program::ID)]
     pub hla_program: AccountInfo<'info>,
-    #[account(mut, address = hla_ops_accountsss::ID)]
+    #[account(mut, address = hla_ops_accounts::ID)]
     pub hla_operating_account: AccountInfo<'info>,
     #[account(mut)]
     pub hla_operating_from_token_account: Box<Account<'info, TokenAccount>>,
