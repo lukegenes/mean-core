@@ -14,9 +14,6 @@ no-idl = []
 cpi = ["no-entrypoint"]
 default = []
 
-[net]
-git-fetch-with-cli = true
-
 [dependencies]
 anchor-lang = "0.17.0"
 anchor-spl = "0.17.0"

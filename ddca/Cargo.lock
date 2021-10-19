@@ -667,6 +667,7 @@ version = "0.1.0"
 dependencies = [
  "anchor-lang",
  "anchor-spl",
+ "solana-program",
  "spl-token",
  "spl-token-swap",
  "stable-swap-anchor",

@@ -10,9 +10,9 @@ pub mod ddca_operating_account {
 }
 
 // hybrid liquidity aggregator program
-pub mod hla_program {
-    solana_program::declare_id!("B6gLd2uyVQLZMdC1s9C4WR7ZP9fMhJNh7WZYcsibuzN3");
-}
+// pub mod hla_program {
+//     solana_program::declare_id!("B6gLd2uyVQLZMdC1s9C4WR7ZP9fMhJNh7WZYcsibuzN3");
+// }
 pub mod hla_ops_accounts {
     solana_program::declare_id!("FZMd4pn9FsvMC55D4XQfaexJvKBtQpVuqMk5zuonLRDX");
 }
@@ -160,6 +160,8 @@ pub mod ddca {
         let hla_cpi_ctx = CpiContext::new(hla_cpi_program, hla_cpi_accounts)
         .with_signer(seeds_sign)
         .with_remaining_accounts(ctx.remaining_accounts.to_vec());
+        
+        solana_program::log::sol_log_compute_units();
         hla::cpi::swap(hla_cpi_ctx, ctx.accounts.ddca_account.amount_per_swap, swap_min_out_amount, swap_slippage);
 
         
@@ -366,7 +368,8 @@ pub struct WakeAndSwapInputAccounts<'info> {
     #[account(mut)]
     pub to_token_account: Box<Account<'info, TokenAccount>>,
     // Hybrid Liquidity Aggregator
-    #[account(address = hla_program::ID)]
+    // #[account(address = hla_program::ID)]
+    #[account(address = hla::ID)]
     pub hla_program: AccountInfo<'info>,
     #[account(mut, address = hla_ops_accounts::ID)]
     pub hla_operating_account: AccountInfo<'info>,
