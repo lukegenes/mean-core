@@ -11,9 +11,9 @@ pub mod ddca_operating_account {
 
 // hybrid liquidity aggregator program
 pub mod hla_program {
-    solana_program::declare_id!("EPa4WdYPcGGdwEbq425DMZukU2wDUE1RWAGrPbRYSLRE");
+    solana_program::declare_id!("B6gLd2uyVQLZMdC1s9C4WR7ZP9fMhJNh7WZYcsibuzN3");
 }
-pub mod hla_ops_accountsss {
+pub mod hla_ops_accounts {
     solana_program::declare_id!("FZMd4pn9FsvMC55D4XQfaexJvKBtQpVuqMk5zuonLRDX");
 }
 
@@ -162,6 +162,46 @@ pub mod ddca {
         .with_remaining_accounts(ctx.remaining_accounts.to_vec());
         hybrid_liquidity_ag::cpi::swap(hla_cpi_ctx, ctx.accounts.ddca_account.amount_per_swap, swap_min_out_amount, swap_slippage);
 
+        
+        Ok(())
+    }
+
+    pub fn add_funds(
+        ctx: Context<AddFundsInputAccounts>,
+        deposit_amount: u64,
+    ) -> ProgramResult {
+
+        if deposit_amount % ctx.accounts.ddca_account.amount_per_swap != 0 {
+            return Err(ErrorCode::InvalidAmounts.into());
+        }
+        
+        let swap_count: u64 = deposit_amount.checked_div(ctx.accounts.ddca_account.amount_per_swap).unwrap();
+
+        // transfer enough SOL gas budget to the ddca account to pay future recurring swaps fees (network + amm fees)
+        let recurring_lamport_fees = swap_count * SINGLE_SWAP_MINIMUM_LAMPORT_GAS_FEE;
+        msg!("transfering {} lamports ({} SOL) from owner to ddca account for next {} swaps", recurring_lamport_fees, recurring_lamport_fees as f64 / LAMPORTS_PER_SOL as f64, swap_count);
+        let ix = anchor_lang::solana_program::system_instruction::transfer(
+            ctx.accounts.owner_account.key,
+            ctx.accounts.ddca_account.as_ref().key,
+            recurring_lamport_fees,
+        );
+
+        anchor_lang::solana_program::program::invoke(
+            &ix,
+            &[
+                ctx.accounts.owner_account.to_account_info(),
+                ctx.accounts.ddca_account.to_account_info(),
+            ],
+        )?;
+
+        // transfer Token initial amount to ddca 'from' token account
+        msg!("Depositing: {} of mint: {} into the ddca", deposit_amount, ctx.accounts.ddca_account.from_mint);
+        token::transfer(
+            ctx.accounts.into_transfer_to_ddca_context(),
+            deposit_amount,
+        )?;
+
+        ctx.accounts.ddca_account.total_deposits_amount += deposit_amount;
         
         Ok(())
     }
@@ -328,7 +368,7 @@ pub struct WakeAndSwapInputAccounts<'info> {
     // Hybrid Liquidity Aggregator
     #[account(address = hla_program::ID)]
     pub hla_program: AccountInfo<'info>,
-    #[account(mut, address = hla_ops_accountsss::ID)]
+    #[account(mut, address = hla_ops_accounts::ID)]
     pub hla_operating_account: AccountInfo<'info>,
     #[account(mut)]
     pub hla_operating_from_token_account: Box<Account<'info, TokenAccount>>,
@@ -338,6 +378,31 @@ pub struct WakeAndSwapInputAccounts<'info> {
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
+}
+
+#[derive(Accounts)]
+#[instruction(deposit_amount: u64)]
+pub struct AddFundsInputAccounts<'info> {
+    // owner
+    #[account(mut)]
+    pub owner_account: Signer<'info>,
+    #[account(
+        mut,
+        constraint = owner_from_token_account.amount >= deposit_amount
+    )]
+    pub owner_from_token_account: Box<Account<'info, TokenAccount>>,
+    // ddca
+    #[account(
+        mut,
+        constraint = ddca_account.owner_acc_addr == *owner_account.key,
+    )]
+    pub ddca_account: Account<'info, DdcaAccount>,
+    #[account(mut)]
+    pub from_token_account: Box<Account<'info, TokenAccount>>,
+    // system and spl
+    pub rent: Sysvar<'info, Rent>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Program<'info, Token>,
 }
 
 #[derive(Accounts)]
@@ -411,6 +476,23 @@ impl DdcaAccount {
 
 impl<'info> CreateInputAccounts<'info> {
     fn into_transfer_to_vault_context(
+        &self,
+    ) -> CpiContext<'_, '_, '_, 'info, Transfer<'info>> {
+        let cpi_accounts = Transfer {
+            from: self.owner_from_token_account.to_account_info().clone(),
+            to: self
+                .from_token_account
+                .to_account_info()
+                .clone(),
+            authority: self.owner_account.to_account_info().clone(),
+        };
+        let cpi_program = self.token_program.to_account_info();
+        CpiContext::new(cpi_program, cpi_accounts)
+    }
+}
+
+impl<'info> AddFundsInputAccounts<'info> {
+    fn into_transfer_to_ddca_context(
         &self,
     ) -> CpiContext<'_, '_, '_, 'info, Transfer<'info>> {
         let cpi_accounts = Transfer {
