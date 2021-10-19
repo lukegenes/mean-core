@@ -10,7 +10,7 @@ pub mod orca;
 
 use crate::state::*;
 
-declare_id!("EPa4WdYPcGGdwEbq425DMZukU2wDUE1RWAGrPbRYSLRE");
+declare_id!("B6gLd2uyVQLZMdC1s9C4WR7ZP9fMhJNh7WZYcsibuzN3");
 
 #[program]
 pub mod hla {
