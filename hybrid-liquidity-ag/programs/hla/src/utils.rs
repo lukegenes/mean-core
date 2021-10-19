@@ -4,13 +4,14 @@ use crate::state::*;
 use crate::data::*;
 use crate::errors::*;
 
-pub fn get_pool(pool_account: &Pubkey) -> Result<PoolInfo> {
+pub fn get_pool(pool_account: &str) -> Result<PoolInfo> {
     let pools = get_pools();
     let lps = pools
         .iter()
         .filter(|p| p.account.eq(pool_account))
-        .map(|p| (*p).clone())
+        .map(|p| p.clone())
         .collect::<Vec<PoolInfo>>();
+
     
     if lps.len() == 0
     {
@@ -25,11 +26,11 @@ pub fn get_transfer_context<'info>(
 
 ) -> Result<CpiContext<'_, '_, '_, 'info, Transfer<'info>>> {
 
-    let cpi_program = swap_info.accounts.token_program_account.clone();
+    let cpi_program = swap_info.accounts.token_program_account;
     let cpi_accounts = Transfer {
-        from: swap_info.accounts.from_token_account.to_account_info().clone(),
-        to: swap_info.accounts.hla_ops_token_account.to_account_info().clone(),
-        authority: swap_info.accounts.hla_ops_account.clone()
+        from: swap_info.accounts.from_token_account.to_account_info(),
+        to: swap_info.accounts.hla_ops_token_account.to_account_info(),
+        authority: swap_info.accounts.hla_ops_account
     };
 
     Ok(CpiContext::new(

@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{ self, Mint, TokenAccount, Token, Transfer, CloseAccount };
 use anchor_spl::associated_token::AssociatedToken;
-use hybrid_liquidity_ag::cpi::accounts::Swap;
+use hla::cpi::accounts::Swap;
 use std::cmp;
 
 // Constants
@@ -10,20 +10,15 @@ pub mod ddca_operating_account {
 }
 
 // hybrid liquidity aggregator program
-pub mod hla_program {
-    solana_program::declare_id!("EPa4WdYPcGGdwEbq425DMZukU2wDUE1RWAGrPbRYSLRE");
-}
-pub mod hla_ops_accountsss {
+// pub mod hla_program {
+//     solana_program::declare_id!("B6gLd2uyVQLZMdC1s9C4WR7ZP9fMhJNh7WZYcsibuzN3");
+// }
+pub mod hla_ops_accounts {
     solana_program::declare_id!("FZMd4pn9FsvMC55D4XQfaexJvKBtQpVuqMk5zuonLRDX");
 }
 
-// pub const CREATE_FLAT_LAMPORT_FEE: u64 = 10000;
-// pub const ADD_FUNDS_PERCENT_TOKEN_FEE: f64 = 0.003;
-// pub const CREATE_WITH_FUNDS_PERCENT_TOKEN_FEE: f64 = 0.003;
 pub const WITHDRAW_TOKEN_FEE_NUMERATOR: u64 = 50;
 pub const WITHDRAW_TOKEN_FEE_DENOMINATOR: u64 = 10000;
-// pub const STOP_FLAT_LAMPORT_FEE: u64 = 10000;
-// pub const START_FLAT_LAMPORT_FEE: u64 = 10000;
 pub const LAMPORTS_PER_SOL: u64 = 1000000000;
 pub const SINGLE_SWAP_MINIMUM_LAMPORT_GAS_FEE: u64 = 20000000; //20 million
 
@@ -57,26 +52,6 @@ pub mod ddca {
         ctx.accounts.ddca_account.amount_per_swap = amount_per_swap;
         ctx.accounts.ddca_account.interval_in_seconds = interval_in_seconds;
         ctx.accounts.ddca_account.start_ts = start_ts;
-
-        // if from_initial_amount == 0 {
-        //     // transfer LAMPORT flat fees to the ddca operating account
-        //     msg!("flat fees: transfering {} lamports from owner to operating account", CREATE_FLAT_LAMPORT_FEE);
-        //     let ix = anchor_lang::solana_program::system_instruction::transfer(
-        //         ctx.accounts.owner_account.key,
-        //         ctx.accounts.operating_account.key,
-        //         CREATE_FLAT_LAMPORT_FEE,
-        //     );
-
-        //     anchor_lang::solana_program::program::invoke(
-        //         &ix,
-        //         &[
-        //             ctx.accounts.owner_account.to_account_info(),
-        //             ctx.accounts.operating_account.to_account_info(),
-        //         ],
-        //     )?;
-
-        //     return Ok(());
-        // }
 
         if deposit_amount % amount_per_swap != 0 {
             return Err(ErrorCode::InvalidAmounts.into());
@@ -120,10 +95,6 @@ pub mod ddca {
         swap_slippage: u8,
     ) -> ProgramResult {
 
-        // if ctx.remaining_accounts.len() == 0 {
-        //     return Err(ProgramError::Custom(1)); // TODO: create proper error
-        // }
-
         // check paused
         if ctx.accounts.ddca_account.is_paused {
             return Err(ErrorCode::DdcaIsPaused.into());
@@ -145,23 +116,23 @@ pub mod ddca {
         let next_checkpoint = prev_checkpoint + 1;
         let next_ts = start_ts + next_checkpoint * interval;
         let checkpoint_ts: u64;
-        msg!("DDCA schedule: {{ start_ts: {}, interval: {}, last_ts: {}, now_ts: {}, max_diff_in_secs: {}, low: {}, high: {}, low_ts: {}, high_ts: {} }}",
-                                start_ts, interval, last_ts, now_ts, max_diff_in_secs, prev_checkpoint, next_checkpoint, prev_ts, next_ts);
+        // msg!("DDCA schedule: {{ start_ts: {}, interval: {}, last_ts: {}, now_ts: {}, max_diff_in_secs: {}, low: {}, high: {}, low_ts: {}, high_ts: {} }}",
+        //                         start_ts, interval, last_ts, now_ts, max_diff_in_secs, prev_checkpoint, next_checkpoint, prev_ts, next_ts);
 
         if last_ts != prev_ts && now_ts >= (prev_ts - max_diff_in_secs) && now_ts <= (prev_ts + max_diff_in_secs) {
             checkpoint_ts = prev_ts;
-            msg!("valid schedule");
+            // msg!("valid schedule");
         }
         else if last_ts != next_ts && now_ts >= (next_ts - max_diff_in_secs) && now_ts <= (next_ts + max_diff_in_secs) {
             checkpoint_ts = next_ts;
-            msg!("valid schedule");
+            // msg!("valid schedule");
         }
         else {
             return Err(ErrorCode::InvalidSwapSchedule.into());
         }
         ctx.accounts.ddca_account.last_completed_swap_ts = checkpoint_ts;
         
-        msg!("Executing scheduled swap at {}", checkpoint_ts);
+        // msg!("Executing scheduled swap at {}", checkpoint_ts);
         solana_program::log::sol_log_compute_units();
 
         // call hla to execute the first swap
@@ -189,8 +160,50 @@ pub mod ddca {
         let hla_cpi_ctx = CpiContext::new(hla_cpi_program, hla_cpi_accounts)
         .with_signer(seeds_sign)
         .with_remaining_accounts(ctx.remaining_accounts.to_vec());
-        hybrid_liquidity_ag::cpi::swap(hla_cpi_ctx, ctx.accounts.ddca_account.amount_per_swap, swap_min_out_amount, swap_slippage);
+        
+        solana_program::log::sol_log_compute_units();
+        hla::cpi::swap(hla_cpi_ctx, ctx.accounts.ddca_account.amount_per_swap, swap_min_out_amount, swap_slippage);
 
+        
+        Ok(())
+    }
+
+    pub fn add_funds(
+        ctx: Context<AddFundsInputAccounts>,
+        deposit_amount: u64,
+    ) -> ProgramResult {
+
+        if deposit_amount % ctx.accounts.ddca_account.amount_per_swap != 0 {
+            return Err(ErrorCode::InvalidAmounts.into());
+        }
+        
+        let swap_count: u64 = deposit_amount.checked_div(ctx.accounts.ddca_account.amount_per_swap).unwrap();
+
+        // transfer enough SOL gas budget to the ddca account to pay future recurring swaps fees (network + amm fees)
+        let recurring_lamport_fees = swap_count * SINGLE_SWAP_MINIMUM_LAMPORT_GAS_FEE;
+        msg!("transfering {} lamports ({} SOL) from owner to ddca account for next {} swaps", recurring_lamport_fees, recurring_lamport_fees as f64 / LAMPORTS_PER_SOL as f64, swap_count);
+        let ix = anchor_lang::solana_program::system_instruction::transfer(
+            ctx.accounts.owner_account.key,
+            ctx.accounts.ddca_account.as_ref().key,
+            recurring_lamport_fees,
+        );
+
+        anchor_lang::solana_program::program::invoke(
+            &ix,
+            &[
+                ctx.accounts.owner_account.to_account_info(),
+                ctx.accounts.ddca_account.to_account_info(),
+            ],
+        )?;
+
+        // transfer Token initial amount to ddca 'from' token account
+        msg!("Depositing: {} of mint: {} into the ddca", deposit_amount, ctx.accounts.ddca_account.from_mint);
+        token::transfer(
+            ctx.accounts.into_transfer_to_ddca_context(),
+            deposit_amount,
+        )?;
+
+        ctx.accounts.ddca_account.total_deposits_amount += deposit_amount;
         
         Ok(())
     }
@@ -333,15 +346,6 @@ pub struct CreateInputAccounts<'info> {
         associated_token::authority = ddca_account, 
         payer = owner_account)]
     pub to_token_account: Box<Account<'info, TokenAccount>>,
-    #[account(mut, address = ddca_operating_account::ID)]
-    pub operating_account: AccountInfo<'info>,
-    #[account(
-        mut,
-        //TODO: uncomment when https://github.com/project-serum/anchor/pull/843 is released
-        // associated_token::mint = from_mint, 
-        // associated_token::authority = ddca_operating_account, 
-    )]
-    pub operating_from_token_account: Box<Account<'info, TokenAccount>>,
     // system and spl
     pub rent: Sysvar<'info, Rent>,
     pub clock: Sysvar<'info, Clock>,
@@ -364,9 +368,10 @@ pub struct WakeAndSwapInputAccounts<'info> {
     #[account(mut)]
     pub to_token_account: Box<Account<'info, TokenAccount>>,
     // Hybrid Liquidity Aggregator
-    #[account(address = hla_program::ID)]
+    // #[account(address = hla_program::ID)]
+    #[account(address = hla::ID)]
     pub hla_program: AccountInfo<'info>,
-    #[account(mut, address = hla_ops_accountsss::ID)]
+    #[account(mut, address = hla_ops_accounts::ID)]
     pub hla_operating_account: AccountInfo<'info>,
     #[account(mut)]
     pub hla_operating_from_token_account: Box<Account<'info, TokenAccount>>,
@@ -376,6 +381,31 @@ pub struct WakeAndSwapInputAccounts<'info> {
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
+}
+
+#[derive(Accounts)]
+#[instruction(deposit_amount: u64)]
+pub struct AddFundsInputAccounts<'info> {
+    // owner
+    #[account(mut)]
+    pub owner_account: Signer<'info>,
+    #[account(
+        mut,
+        constraint = owner_from_token_account.amount >= deposit_amount
+    )]
+    pub owner_from_token_account: Box<Account<'info, TokenAccount>>,
+    // ddca
+    #[account(
+        mut,
+        constraint = ddca_account.owner_acc_addr == *owner_account.key,
+    )]
+    pub ddca_account: Account<'info, DdcaAccount>,
+    #[account(mut)]
+    pub from_token_account: Box<Account<'info, TokenAccount>>,
+    // system and spl
+    pub rent: Sysvar<'info, Rent>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Program<'info, Token>,
 }
 
 #[derive(Accounts)]
@@ -403,9 +433,19 @@ pub struct CloseInputAccounts<'info> {
     pub ddca_to_token_account: Box<Account<'info, TokenAccount>>,
     #[account(address = ddca_operating_account::ID)]
     pub operating_account: AccountInfo<'info>,
-    #[account( mut)]
+    #[account(
+        mut,
+        //TODO: uncomment when https://github.com/project-serum/anchor/pull/843 is released
+        // associated_token::mint = from_mint, 
+        // associated_token::authority = ddca_operating_account,
+    )]
     pub operating_from_token_account: Box<Account<'info, TokenAccount>>,
-    #[account( mut)]
+    #[account(
+        mut,
+        //TODO: uncomment when https://github.com/project-serum/anchor/pull/843 is released
+        // associated_token::mint = from_mint, 
+        // associated_token::authority = ddca_operating_account,
+    )]
     pub operating_to_token_account: Box<Account<'info, TokenAccount>>,
     pub token_program: Program<'info, Token>,
 }
@@ -452,14 +492,16 @@ impl<'info> CreateInputAccounts<'info> {
         let cpi_program = self.token_program.to_account_info();
         CpiContext::new(cpi_program, cpi_accounts)
     }
+}
 
-    fn into_transfer_fee_to_operating_context(
+impl<'info> AddFundsInputAccounts<'info> {
+    fn into_transfer_to_ddca_context(
         &self,
     ) -> CpiContext<'_, '_, '_, 'info, Transfer<'info>> {
         let cpi_accounts = Transfer {
             from: self.owner_from_token_account.to_account_info().clone(),
             to: self
-                .operating_from_token_account
+                .from_token_account
                 .to_account_info()
                 .clone(),
             authority: self.owner_account.to_account_info().clone(),

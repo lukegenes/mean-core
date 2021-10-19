@@ -10,9 +10,10 @@ pub fn swap<'info>(
 
 ) -> ProgramResult {
 
+    msg!("Intializing SABER Swap");
     let swap_ctx = get_swap_context(swap_info.clone())?;
 
-    stable_swap_anchor::swap(
+    let _swap = stable_swap_anchor::swap(
         swap_ctx, 
         swap_info.from_amount, 
         swap_info.min_out_amount
@@ -36,7 +37,7 @@ fn get_swap_context<'info>(
 ) -> Result<CpiContext<'_, '_, '_, 'info, Swap<'info>>> {
 
     let acounts_iter = &mut swap_info.remaining_accounts.iter();
-    let cpi_program_info = next_account_info(acounts_iter)?.clone();
+    let cpi_program_info = next_account_info(acounts_iter)?;
     let swap_account_info = next_account_info(acounts_iter)?;
     let swap_authority_info = next_account_info(acounts_iter)?;
     let token_program_info = next_account_info(acounts_iter)?;
@@ -47,27 +48,27 @@ fn get_swap_context<'info>(
 
     let cpi_accounts = Swap {
         user: SwapUserContext {
-            swap: swap_account_info.clone(),
-            swap_authority: swap_authority_info.clone(),
-            user_authority: swap_info.accounts.vault_account.clone(), // CHECK
-            token_program: token_program_info.clone(),
-            clock: clock_info.clone()
+            swap: swap_account_info.to_account_info(),
+            swap_authority: swap_authority_info.to_account_info(),
+            user_authority: swap_info.accounts.vault_account.to_account_info(), // CHECK
+            token_program: token_program_info.to_account_info(),
+            clock: clock_info.to_account_info()
         },
         input: SwapToken {
-            user: swap_info.accounts.from_token_account.to_account_info().clone(), // CHECK
-            reserve: reserve_input_account_info.clone()
+            user: swap_info.accounts.from_token_account.to_account_info(), // CHECK
+            reserve: reserve_input_account_info.to_account_info()
         },
         output: SwapOutput {
             user_token: SwapToken {
-                user: swap_info.accounts.to_token_account.to_account_info().clone(), // CHECK
-                reserve: reserve_output_account_info.clone()
+                user: swap_info.accounts.to_token_account.to_account_info(), // CHECK
+                reserve: reserve_output_account_info.to_account_info()
             },
-            fees: admin_destination_info.clone()
+            fees: admin_destination_info.to_account_info()
         }
     };
 
     Ok(CpiContext::new(
-        cpi_program_info, 
+        cpi_program_info.to_account_info(), 
         cpi_accounts
     ))
 }
