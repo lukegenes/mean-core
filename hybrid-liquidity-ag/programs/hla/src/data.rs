@@ -1,4 +1,3 @@
-use anchor_lang::prelude::*;
 use crate::state::*;
 
 pub fn get_pools() -> Vec<PoolInfo> {

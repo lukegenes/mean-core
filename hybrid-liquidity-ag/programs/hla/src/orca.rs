@@ -1,7 +1,6 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::*;
 use spl_token_swap::*;
-use crate::errors::*;
 use crate::utils::*;
 use crate::state::*;
 
@@ -56,7 +55,7 @@ pub fn swap<'info>(
         host_fee_account_info
     ];
 
-    solana_program::program::invoke_signed(
+    let _result = solana_program::program::invoke_signed(
         &swap_ix,
         &accounts,
         &[signer_seed],
