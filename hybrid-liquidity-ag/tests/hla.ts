@@ -72,7 +72,6 @@ describe('hla', async() => {
       slippage,
       {
         accounts: {
-          feePayer: wallet.publicKey,
           vaultAccount: ddcaAccount,
           fromTokenMint: USDC,
           fromTokenAccount: ownerFromAccount,

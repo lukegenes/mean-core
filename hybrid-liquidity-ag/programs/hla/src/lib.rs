@@ -1,5 +1,4 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{TokenAccount, Mint};
 
 pub mod errors;
 pub mod utils;
@@ -20,13 +19,14 @@ pub mod hla {
         ctx: Context<'_, '_, '_, 'info, Swap<'info>>,
         from_amount: u64,
         min_out_amount: u64,
-        slippage: u8
+        _slippage: u8
 
     ) -> ProgramResult {
 
         msg!("Initializing swap");
+        solana_program::log::sol_log_compute_units();
 
-        let hla_ops_account_key: Pubkey = state::HLA_OPS.parse().unwrap();
+        let hla_ops_account_key: Pubkey = HLA_OPS.parse().unwrap();
 
         if hla_ops_account_key.ne(ctx.accounts.hla_ops_account.key)
         {

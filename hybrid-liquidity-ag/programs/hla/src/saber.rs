@@ -12,7 +12,7 @@ pub fn swap<'info>(
 
     let swap_ctx = get_swap_context(swap_info.clone())?;
 
-    stable_swap_anchor::swap(
+    let _swap = stable_swap_anchor::swap(
         swap_ctx, 
         swap_info.from_amount, 
         swap_info.min_out_amount
