@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{ self, Mint, TokenAccount, Token, Transfer, CloseAccount };
 use anchor_spl::associated_token::AssociatedToken;
-use hybrid_liquidity_ag::cpi::accounts::Swap;
+use hla::cpi::accounts::Swap;
 use std::cmp;
 
 // Constants
@@ -10,9 +10,9 @@ pub mod ddca_operating_account {
 }
 
 // hybrid liquidity aggregator program
-pub mod hla_program {
-    solana_program::declare_id!("B6gLd2uyVQLZMdC1s9C4WR7ZP9fMhJNh7WZYcsibuzN3");
-}
+// pub mod hla_program {
+//     solana_program::declare_id!("B6gLd2uyVQLZMdC1s9C4WR7ZP9fMhJNh7WZYcsibuzN3");
+// }
 pub mod hla_ops_accounts {
     solana_program::declare_id!("FZMd4pn9FsvMC55D4XQfaexJvKBtQpVuqMk5zuonLRDX");
 }
@@ -116,23 +116,23 @@ pub mod ddca {
         let next_checkpoint = prev_checkpoint + 1;
         let next_ts = start_ts + next_checkpoint * interval;
         let checkpoint_ts: u64;
-        msg!("DDCA schedule: {{ start_ts: {}, interval: {}, last_ts: {}, now_ts: {}, max_diff_in_secs: {}, low: {}, high: {}, low_ts: {}, high_ts: {} }}",
-                                start_ts, interval, last_ts, now_ts, max_diff_in_secs, prev_checkpoint, next_checkpoint, prev_ts, next_ts);
+        // msg!("DDCA schedule: {{ start_ts: {}, interval: {}, last_ts: {}, now_ts: {}, max_diff_in_secs: {}, low: {}, high: {}, low_ts: {}, high_ts: {} }}",
+        //                         start_ts, interval, last_ts, now_ts, max_diff_in_secs, prev_checkpoint, next_checkpoint, prev_ts, next_ts);
 
         if last_ts != prev_ts && now_ts >= (prev_ts - max_diff_in_secs) && now_ts <= (prev_ts + max_diff_in_secs) {
             checkpoint_ts = prev_ts;
-            msg!("valid schedule");
+            // msg!("valid schedule");
         }
         else if last_ts != next_ts && now_ts >= (next_ts - max_diff_in_secs) && now_ts <= (next_ts + max_diff_in_secs) {
             checkpoint_ts = next_ts;
-            msg!("valid schedule");
+            // msg!("valid schedule");
         }
         else {
             return Err(ErrorCode::InvalidSwapSchedule.into());
         }
         ctx.accounts.ddca_account.last_completed_swap_ts = checkpoint_ts;
         
-        msg!("Executing scheduled swap at {}", checkpoint_ts);
+        // msg!("Executing scheduled swap at {}", checkpoint_ts);
         solana_program::log::sol_log_compute_units();
 
         // call hla to execute the first swap
@@ -160,7 +160,9 @@ pub mod ddca {
         let hla_cpi_ctx = CpiContext::new(hla_cpi_program, hla_cpi_accounts)
         .with_signer(seeds_sign)
         .with_remaining_accounts(ctx.remaining_accounts.to_vec());
-        hybrid_liquidity_ag::cpi::swap(hla_cpi_ctx, ctx.accounts.ddca_account.amount_per_swap, swap_min_out_amount, swap_slippage);
+        
+        solana_program::log::sol_log_compute_units();
+        hla::cpi::swap(hla_cpi_ctx, ctx.accounts.ddca_account.amount_per_swap, swap_min_out_amount, swap_slippage);
 
         
         Ok(())
@@ -366,7 +368,8 @@ pub struct WakeAndSwapInputAccounts<'info> {
     #[account(mut)]
     pub to_token_account: Box<Account<'info, TokenAccount>>,
     // Hybrid Liquidity Aggregator
-    #[account(address = hla_program::ID)]
+    // #[account(address = hla_program::ID)]
+    #[account(address = hla::ID)]
     pub hla_program: AccountInfo<'info>,
     #[account(mut, address = hla_ops_accounts::ID)]
     pub hla_operating_account: AccountInfo<'info>,
