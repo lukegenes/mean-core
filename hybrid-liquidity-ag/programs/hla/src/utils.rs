@@ -30,7 +30,7 @@ pub fn get_transfer_context<'info>(
     let cpi_accounts = Transfer {
         from: swap_info.accounts.from_token_account.to_account_info(),
         to: swap_info.accounts.hla_ops_token_account.to_account_info(),
-        authority: swap_info.accounts.hla_ops_account
+        authority: swap_info.accounts.vault_account
     };
 
     Ok(CpiContext::new(

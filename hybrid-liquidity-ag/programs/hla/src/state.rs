@@ -1,5 +1,4 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::*;
 
 pub const RAYDIUM: &str = "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8";
 pub const ORCA: &str = "9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP";
@@ -31,16 +30,16 @@ pub struct PoolInfo<'info> {
 pub struct Swap<'info> {
     #[account(mut, signer)]
     pub vault_account: AccountInfo<'info>,
-    pub from_token_mint: Account<'info, Mint>,
+    pub from_token_mint: AccountInfo<'info>,
     #[account(mut)]
-    pub from_token_account: Account<'info, TokenAccount>,
-    pub to_token_mint: Account<'info, Mint>,
+    pub from_token_account: AccountInfo<'info>,
+    pub to_token_mint: AccountInfo<'info>,
     #[account(mut)]
-    pub to_token_account: Account<'info, TokenAccount>,
+    pub to_token_account: AccountInfo<'info>,
     #[account(mut, address = hla_ops_account::ID)]
     pub hla_ops_account: AccountInfo<'info>,
     #[account(mut)]
-    pub hla_ops_token_account: Account<'info, TokenAccount>,
+    pub hla_ops_token_account: AccountInfo<'info>,
     pub token_program_account: AccountInfo<'info>
 }
 

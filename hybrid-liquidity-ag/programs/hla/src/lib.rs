@@ -23,9 +23,6 @@ pub mod hla {
 
     ) -> ProgramResult {
 
-        msg!("Initializing swap");
-        solana_program::log::sol_log_compute_units();
-
         let rem_accs_iter = &mut ctx.remaining_accounts.iter();
         let pool_account = next_account_info(rem_accs_iter)?;
         let pool_account_address = &pool_account.key.to_string();
@@ -57,12 +54,14 @@ pub mod hla {
             min_out_amount
         };
 
-        match pool_account_address.as_str() {
+        let _result = match protocol_account.key.to_string().as_str() {
 
             SABER => saber::swap(swap_info),
-            // ORCA => { orca::swap(swap_info) },
+            ORCA => orca::swap(swap_info),
     
             _ => return Err(errors::ErrorCode::PoolNotFound.into()),
-        }
+        };
+
+        Ok(())
     }
 }
