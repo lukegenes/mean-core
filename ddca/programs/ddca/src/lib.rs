@@ -38,6 +38,15 @@ pub mod ddca {
         interval_in_seconds: u64,
     ) -> ProgramResult {
 
+        if deposit_amount % amount_per_swap != 0 {
+            return Err(ErrorCode::InvalidAmounts.into());
+        }
+        
+        let swap_count: u64 = deposit_amount.checked_div(amount_per_swap).unwrap();
+        if swap_count == 1 {
+            return Err(ErrorCode::InvalidSwapsCount.into());
+        }
+
         let start_ts = Clock::get()?.unix_timestamp as u64;
 
         ctx.accounts.ddca_account.owner_acc_addr = *ctx.accounts.owner_account.key;
@@ -53,15 +62,6 @@ pub mod ddca {
         ctx.accounts.ddca_account.amount_per_swap = amount_per_swap;
         ctx.accounts.ddca_account.interval_in_seconds = interval_in_seconds;
         ctx.accounts.ddca_account.start_ts = start_ts;
-
-        if deposit_amount % amount_per_swap != 0 {
-            return Err(ErrorCode::InvalidAmounts.into());
-        }
-        
-        let swap_count: u64 = deposit_amount.checked_div(amount_per_swap).unwrap();
-        if swap_count == 1 {
-            return Err(ErrorCode::InvalidSwapsCount.into());
-        }
 
         // transfer enough SOL gas budget to the ddca account to pay future recurring swaps fees (network + amm fees)
         let recurring_lamport_fees = swap_count * SINGLE_SWAP_MINIMUM_LAMPORT_GAS_FEE;
@@ -116,20 +116,20 @@ pub mod ddca {
         let interval = ctx.accounts.ddca_account.interval_in_seconds;
         let last_ts = ctx.accounts.ddca_account.last_completed_swap_ts;
         let now_ts = Clock::get()?.unix_timestamp as u64;
-        let max_diff_in_secs = cmp::min(interval / 100, 3600); // +/-1% up to 3600 sec (ok for min interval = 5 min)
+        let max_delta_in_secs = cmp::min(interval / 100, 3600); // +/-1% up to 3600 sec (ok for min interval = 5 min)
         let prev_checkpoint = (now_ts - start_ts) / interval;
         let prev_ts = start_ts + prev_checkpoint * interval;
         let next_checkpoint = prev_checkpoint + 1;
         let next_ts = start_ts + next_checkpoint * interval;
         let checkpoint_ts: u64;
-        // msg!("DDCA schedule: {{ start_ts: {}, interval: {}, last_ts: {}, now_ts: {}, max_diff_in_secs: {}, low: {}, high: {}, low_ts: {}, high_ts: {} }}",
-        //                         start_ts, interval, last_ts, now_ts, max_diff_in_secs, prev_checkpoint, next_checkpoint, prev_ts, next_ts);
+        // msg!("DDCA schedule: {{ start_ts: {}, interval: {}, last_ts: {}, now_ts: {}, max_delta_in_secs: {}, low: {}, high: {}, low_ts: {}, high_ts: {} }}",
+        //                         start_ts, interval, last_ts, now_ts, max_delta_in_secs, prev_checkpoint, next_checkpoint, prev_ts, next_ts);
 
-        if last_ts != prev_ts && now_ts >= (prev_ts - max_diff_in_secs) && now_ts <= (prev_ts + max_diff_in_secs) {
+        if last_ts != prev_ts && now_ts >= (prev_ts - max_delta_in_secs) && now_ts <= (prev_ts + max_delta_in_secs) {
             checkpoint_ts = prev_ts;
             // msg!("valid schedule");
         }
-        else if last_ts != next_ts && now_ts >= (next_ts - max_diff_in_secs) && now_ts <= (next_ts + max_diff_in_secs) {
+        else if last_ts != next_ts && now_ts >= (next_ts - max_delta_in_secs) && now_ts <= (next_ts + max_delta_in_secs) {
             checkpoint_ts = next_ts;
             // msg!("valid schedule");
         }
@@ -332,7 +332,7 @@ pub struct CreateInputAccounts<'info> {
         payer = owner_account, 
         space = 8 + DdcaAccount::LEN,
         constraint = amount_per_swap > 0,
-        constraint = interval_in_seconds >= 300, // minimum inverval is 5 min
+        constraint = interval_in_seconds >= 7 * 24 * 60 * 60, // minimum inverval: 1 week
     )]
     pub ddca_account: Account<'info, DdcaAccount>,
     pub from_mint:  Account<'info, Mint>, 
