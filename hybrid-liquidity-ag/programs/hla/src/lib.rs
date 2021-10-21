@@ -19,7 +19,7 @@ pub mod hla {
         ctx: Context<'_, '_, '_, 'info, Swap<'info>>,
         from_amount: u64,
         min_out_amount: u64,
-        _slippage: u8
+        _slippage: u64
 
     ) -> ProgramResult {
 
