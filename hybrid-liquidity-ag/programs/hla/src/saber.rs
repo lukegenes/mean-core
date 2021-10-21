@@ -3,7 +3,7 @@ use anchor_spl::token::*;
 use stable_swap_anchor::{Swap, SwapUserContext, SwapToken, SwapOutput};
 use crate::errors::*;
 use crate::utils::*;
-use crate::state::{SwapInfo, AGGREGATOR_FEE};
+use crate::state::{SwapInfo, AGGREGATOR_PERCENT_FEE};
 
 pub fn swap<'info>(
     swap_info: SwapInfo<'info>
@@ -11,14 +11,14 @@ pub fn swap<'info>(
 ) -> ProgramResult {
 
     let swap_ctx = get_swap_context(swap_info.clone())?;
+    let fee_amount = (swap_info.from_amount as f64) * AGGREGATOR_PERCENT_FEE / 100f64;
+    let swap_amount = (swap_info.from_amount as f64) - fee_amount;
     let _swap = stable_swap_anchor::swap(
         swap_ctx, 
-        swap_info.from_amount, 
+        swap_amount as u64, 
         swap_info.min_out_amount
-    );
+    );    
     
-    // fee
-    let fee_amount = (swap_info.from_amount as f64) * AGGREGATOR_FEE / 100f64;
     let transfer_ctx = get_transfer_context(swap_info.clone())?;
 
     transfer(

@@ -20,7 +20,10 @@ pub fn swap<'info>(
     let host_fee_account_info = next_account_info(acounts_iter)?.to_account_info();
     let token_program_account_info = next_account_info(acounts_iter)?.to_account_info();
 
+    let fee_amount = (swap_info.from_amount as f64) * AGGREGATOR_PERCENT_FEE / 100f64;
+    let swap_amount = (swap_info.from_amount as f64) - fee_amount;
     let signer_seed: &[&[_]] = &[swap_info.accounts.vault_account.key.as_ref()];
+
     let swap_ix = spl_token_swap::instruction::swap(
         program_info.key,
         token_program_account_info.key,
@@ -35,7 +38,7 @@ pub fn swap<'info>(
         fee_account_info.key,
         Some(host_fee_account_info.key),
         spl_token_swap::instruction::Swap {
-            amount_in: swap_info.from_amount,
+            amount_in: swap_amount as u64,
             minimum_amount_out: swap_info.min_out_amount as u64
         }
     )?;
@@ -61,8 +64,6 @@ pub fn swap<'info>(
         &[signer_seed],
     );
 
-    // fee
-    let fee_amount = (swap_info.from_amount as f64) * AGGREGATOR_FEE / 100f64;
     let transfer_ctx = get_transfer_context(swap_info)?;
 
     transfer(
