@@ -92,7 +92,7 @@ pub mod ddca {
     pub fn wake_and_swap<'info>(
         ctx: Context<'_, '_, '_, 'info, WakeAndSwapInputAccounts<'info>>,
         swap_min_out_amount: u64,
-        swap_slippage: u8,
+        swap_slippage: u64,
     ) -> ProgramResult {
 
         // check paused
@@ -133,7 +133,7 @@ pub mod ddca {
         ctx.accounts.ddca_account.last_completed_swap_ts = checkpoint_ts;
         
         // msg!("Executing scheduled swap at {}", checkpoint_ts);
-        solana_program::log::sol_log_compute_units();
+        // solana_program::log::sol_log_compute_units();
 
         // call hla to execute the first swap
         let hla_cpi_program = ctx.accounts.hla_program.clone();
@@ -161,9 +161,7 @@ pub mod ddca {
         .with_signer(seeds_sign)
         .with_remaining_accounts(ctx.remaining_accounts.to_vec());
         
-        solana_program::log::sol_log_compute_units();
         hla::cpi::swap(hla_cpi_ctx, ctx.accounts.ddca_account.amount_per_swap, swap_min_out_amount, swap_slippage);
-
         
         Ok(())
     }
