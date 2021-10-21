@@ -21,6 +21,7 @@ pub const WITHDRAW_TOKEN_FEE_NUMERATOR: u64 = 50;
 pub const WITHDRAW_TOKEN_FEE_DENOMINATOR: u64 = 10000;
 pub const LAMPORTS_PER_SOL: u64 = 1000000000;
 pub const SINGLE_SWAP_MINIMUM_LAMPORT_GAS_FEE: u64 = 20000000; //20 million
+pub const SWAP_MAX_PERCENT_SLIPPAGE: u64 = 100; // 1 %
 
 declare_id!("3nmm1awnyhABJdoA25MYVksxz1xnpUFeepJJyRTZfsyD");
 
@@ -98,6 +99,11 @@ pub mod ddca {
         // check paused
         if ctx.accounts.ddca_account.is_paused {
             return Err(ErrorCode::DdcaIsPaused.into());
+        }
+
+        // check slippage non-negative and up to max %
+        if swap_slippage == 0 || swap_slippage > SWAP_MAX_PERCENT_SLIPPAGE {
+            return Err(ErrorCode::InvalidSwapSlippage.into());
         }
 
         // check balance
@@ -354,6 +360,9 @@ pub struct CreateInputAccounts<'info> {
 
 #[derive(Accounts)]
 pub struct WakeAndSwapInputAccounts<'info> {
+    // owner
+    #[account(mut)]
+    pub owner_account: Signer<'info>,
     // ddca
     #[account(mut)]
     pub ddca_account: Account<'info, DdcaAccount>,
@@ -606,4 +615,6 @@ pub enum ErrorCode {
     InsufficientBalanceForSwap,
     #[msg("This DDCA is not schedule for the provided time")]
     InvalidSwapSchedule,
+    #[msg("Invalid swap slippage")]
+    InvalidSwapSlippage,
 }
