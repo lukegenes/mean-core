@@ -48,17 +48,17 @@ fn get_swap_context<'info>(
         user: SwapUserContext {
             swap: swap_account_info.to_account_info(),
             swap_authority: swap_authority_info.to_account_info(),
-            user_authority: swap_info.accounts.vault_account.to_account_info(), // CHECK
+            user_authority: swap_info.accounts.vault_account.to_account_info(),
             token_program: swap_info.accounts.token_program_account.to_account_info(),
             clock: clock_info.to_account_info()
         },
         input: SwapToken {
-            user: swap_info.accounts.from_token_account.to_account_info(), // CHECK
+            user: swap_info.accounts.from_token_account.to_account_info(),
             reserve: reserve_input_account_info.to_account_info()
         },
         output: SwapOutput {
             user_token: SwapToken {
-                user: swap_info.accounts.to_token_account.to_account_info(), // CHECK
+                user: swap_info.accounts.to_token_account.to_account_info(),
                 reserve: reserve_output_account_info.to_account_info()
             },
             fees: admin_destination_info.to_account_info()
