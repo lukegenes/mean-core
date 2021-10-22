@@ -671,6 +671,7 @@ dependencies = [
  "spl-token",
  "spl-token-swap",
  "stable-swap-anchor",
+ "stable-swap-client",
 ]
 
 [[package]]

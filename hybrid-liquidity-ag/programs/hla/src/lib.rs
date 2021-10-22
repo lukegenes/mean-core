@@ -19,7 +19,7 @@ pub mod hla {
         ctx: Context<'_, '_, '_, 'info, Swap<'info>>,
         from_amount: u64,
         min_out_amount: u64,
-        _slippage: u8
+        _slippage: u64
 
     ) -> ProgramResult {
 
@@ -54,14 +54,12 @@ pub mod hla {
             min_out_amount
         };
 
-        let _result = match protocol_account.key.to_string().as_str() {
+        match protocol_account.key.to_string().as_str() {
 
             SABER => saber::swap(swap_info),
             ORCA => orca::swap(swap_info),
     
             _ => return Err(errors::ErrorCode::PoolNotFound.into()),
-        };
-
-        Ok(())
+        }
     }
 }

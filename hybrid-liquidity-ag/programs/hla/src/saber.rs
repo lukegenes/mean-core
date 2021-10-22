@@ -3,7 +3,7 @@ use anchor_spl::token::*;
 use stable_swap_anchor::{Swap, SwapUserContext, SwapToken, SwapOutput};
 use crate::errors::*;
 use crate::utils::*;
-use crate::state::{SwapInfo, AGGREGATOR_FEE};
+use crate::state::{SwapInfo, AGGREGATOR_PERCENT_FEE};
 
 pub fn swap<'info>(
     swap_info: SwapInfo<'info>
@@ -11,14 +11,14 @@ pub fn swap<'info>(
 ) -> ProgramResult {
 
     let swap_ctx = get_swap_context(swap_info.clone())?;
+    let fee_amount = (swap_info.from_amount as f64) * AGGREGATOR_PERCENT_FEE / 100f64;
+    let swap_amount = (swap_info.from_amount as f64) - fee_amount;
     let _swap = stable_swap_anchor::swap(
         swap_ctx, 
-        swap_info.from_amount, 
+        swap_amount as u64, 
         swap_info.min_out_amount
-    );
+    );    
     
-    // fee
-    let fee_amount = (swap_info.from_amount as f64) * AGGREGATOR_FEE / 100f64;
     let transfer_ctx = get_transfer_context(swap_info.clone())?;
 
     transfer(
@@ -48,17 +48,17 @@ fn get_swap_context<'info>(
         user: SwapUserContext {
             swap: swap_account_info.to_account_info(),
             swap_authority: swap_authority_info.to_account_info(),
-            user_authority: swap_info.accounts.vault_account.to_account_info(), // CHECK
+            user_authority: swap_info.accounts.vault_account.to_account_info(),
             token_program: swap_info.accounts.token_program_account.to_account_info(),
             clock: clock_info.to_account_info()
         },
         input: SwapToken {
-            user: swap_info.accounts.from_token_account.to_account_info(), // CHECK
+            user: swap_info.accounts.from_token_account.to_account_info(),
             reserve: reserve_input_account_info.to_account_info()
         },
         output: SwapOutput {
             user_token: SwapToken {
-                user: swap_info.accounts.to_token_account.to_account_info(), // CHECK
+                user: swap_info.accounts.to_token_account.to_account_info(),
                 reserve: reserve_output_account_info.to_account_info()
             },
             fees: admin_destination_info.to_account_info()
