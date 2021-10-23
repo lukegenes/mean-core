@@ -62,6 +62,7 @@ pub mod ddca {
         ctx.accounts.ddca_account.amount_per_swap = amount_per_swap;
         ctx.accounts.ddca_account.interval_in_seconds = interval_in_seconds;
         ctx.accounts.ddca_account.start_ts = start_ts;
+        ctx.accounts.ddca_account.last_deposit_ts = start_ts;
 
         // transfer enough SOL gas budget to the ddca account to pay future recurring swaps fees (network + amm fees)
         let recurring_lamport_fees = swap_count * SINGLE_SWAP_MINIMUM_LAMPORT_GAS_FEE;
@@ -136,10 +137,16 @@ pub mod ddca {
         else {
             return Err(ErrorCode::InvalidSwapSchedule.into());
         }
+
         ctx.accounts.ddca_account.last_completed_swap_ts = checkpoint_ts;
+        ctx.accounts.ddca_account.swap_count += 1;
+
+        // Token balances before the trade.
+        let from_amount_before = token::accessor::amount(&ctx.accounts.from_token_account.to_account_info())?;
+        let to_amount_before = token::accessor::amount(&ctx.accounts.to_token_account.to_account_info())?;
         
         // msg!("Executing scheduled swap at {}", checkpoint_ts);
-        // solana_program::log::sol_log_compute_units();
+        solana_program::log::sol_log_compute_units();
 
         // call hla to execute the first swap
         let hla_cpi_program = ctx.accounts.hla_program.clone();
@@ -167,7 +174,21 @@ pub mod ddca {
         .with_signer(seeds_sign)
         .with_remaining_accounts(ctx.remaining_accounts.to_vec());
         
+        solana_program::log::sol_log_compute_units();
         hla::cpi::swap(hla_cpi_ctx, ctx.accounts.ddca_account.amount_per_swap, swap_min_out_amount, swap_slippage);
+
+        // Token balances after the trade.
+        let from_amount_after = token::accessor::amount(&ctx.accounts.from_token_account.to_account_info())?;
+        let to_amount_after = token::accessor::amount(&ctx.accounts.to_token_account.to_account_info())?;
+ 
+        //  Calculate the delta, i.e. the amount swapped.
+        let from_amount_delta = from_amount_before.checked_sub(from_amount_after).unwrap();
+        let to_amount_delta = to_amount_after.checked_sub(to_amount_before).unwrap();
+        let swap_rate = to_amount_delta.checked_div(from_amount_delta).unwrap();
+         
+         ctx.accounts.ddca_account.swap_avg_rate = 
+            ctx.accounts.ddca_account.swap_avg_rate + 
+            swap_rate.checked_sub(ctx.accounts.ddca_account.swap_avg_rate).unwrap().checked_div(ctx.accounts.ddca_account.swap_count + 1).unwrap();
         
         Ok(())
     }
@@ -330,7 +351,7 @@ pub struct CreateInputAccounts<'info> {
             ],
         bump = pda_bump,
         payer = owner_account, 
-        space = 8 + DdcaAccount::LEN,
+        space = 500, // 8 + DdcaAccount::LEN,
         constraint = amount_per_swap > 0,
         constraint = interval_in_seconds >= 7 * 24 * 60 * 60, // minimum inverval: 1 week
     )]
@@ -475,11 +496,15 @@ pub struct DdcaAccount {
     pub start_ts: u64, //8 bytes
     pub interval_in_seconds: u64, //8 bytes
     pub last_completed_swap_ts: u64, //8 bytes
-    pub is_paused: bool, //8 bytes
+    pub is_paused: bool, //1 bytes
+    
+    pub swap_count: u64, //8 bytes
+    pub swap_avg_rate: u64, //8 bytes
+    pub last_deposit_ts: u64 //8 bytes
 }
 
 impl DdcaAccount {
-    pub const LEN: usize = 32 + 32 + 1 + 32 + 32 + 1 + 32 + 8 + 1 + 8 + 8 + 8 + 8 + 8 + 1;
+    pub const LEN: usize = 32 + 32 + 1 + 32 + 32 + 1 + 32 + 8 + 1 + 8 + 8 + 8 + 8 + 8 + 1 + 8 + 8 + 8;
 }
 
 //UTILS IMPL
