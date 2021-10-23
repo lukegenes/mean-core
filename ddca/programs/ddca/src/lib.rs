@@ -229,7 +229,9 @@ pub mod ddca {
         )?;
 
         ctx.accounts.ddca_account.total_deposits_amount += deposit_amount;
-        
+        let deposit_ts = Clock::get()?.unix_timestamp as u64;
+        ctx.accounts.ddca_account.last_deposit_ts = deposit_ts;
+
         Ok(())
     }
 
@@ -432,6 +434,7 @@ pub struct AddFundsInputAccounts<'info> {
     pub from_token_account: Box<Account<'info, TokenAccount>>,
     // system and spl
     pub rent: Sysvar<'info, Rent>,
+    pub clock: Sysvar<'info, Clock>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
 }
