@@ -10,7 +10,7 @@ The Mean Protocol is maintained by the Mean DAO and is deployed on the Solana Bl
 * For detailed documentation, please read the Developer Docs 👉 https://docs.meanfi.com/platform/developers
 
 An example of a web3 Dapp implementing the different programs in the Mean Protocol is [MeanFi](https://meanfi.com). 
-Repository for MeanFi UI --> https://github.com/mean-dao/meanfi-ui
+Repository for MeanFi UI 👉 **[HERE](https://github.com/mean-dao/meanfi-ui)** 
 
 To leverage the Mean Protocol Programs in your own dapp, go to the [Mean Protocol SDK repo](https://github.com/mean-dao/mean-sdk), and follow the instructions there.
 
