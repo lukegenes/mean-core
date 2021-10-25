@@ -228,8 +228,8 @@ pub mod ddca {
             ],
         )?;
 
-        // transfer Token initial amount to ddca 'from' token account
-        msg!("Depositing: {} of mint: {} into the ddca", deposit_amount, ctx.accounts.ddca_account.from_mint);
+        // transfer Token amount to ddca 'from' token account
+        msg!("depositing: {} of mint: {} into the ddca", deposit_amount, ctx.accounts.ddca_account.from_mint);
         token::transfer(
             ctx.accounts.into_transfer_to_ddca_context(),
             deposit_amount,
@@ -238,6 +238,52 @@ pub mod ddca {
         ctx.accounts.ddca_account.total_deposits_amount += deposit_amount;
         let deposit_ts = Clock::get()?.unix_timestamp as u64;
         ctx.accounts.ddca_account.last_deposit_ts = deposit_ts;
+
+        Ok(())
+    }
+
+    pub fn withdraw(
+        ctx: Context<WithdrawInputAccounts>,
+        withdraw_amount: u64,) -> ProgramResult {
+        
+        let seeds = &[
+            ctx.accounts.owner_account.key.as_ref(),
+            &ctx.accounts.ddca_account.block_height.to_be_bytes(),
+            b"ddca-seed",
+            &[ctx.accounts.ddca_account.pda_bump],
+        ];
+
+        // transfer withdraw fee from ddca 'to' token account to operating 'to' token account
+        let to_withdraw_fee = withdraw_amount
+            .checked_mul(WITHDRAW_TOKEN_FEE_NUMERATOR)
+            .unwrap()
+            .checked_div(WITHDRAW_TOKEN_FEE_DENOMINATOR)
+            .unwrap();
+        if to_withdraw_fee > 0 {
+            msg!("'to' withdraw fee: {}", to_withdraw_fee);
+            token::transfer(
+                ctx.accounts.into_transfer_to_fee_to_operating_context()
+                .with_signer(&[&seeds[..]]),
+                to_withdraw_fee,
+            )?;
+        }
+
+        // Transferring from ddca 'to' token account to onwer 'to' token account
+        let to_token_amount = {
+            if to_withdraw_fee > withdraw_amount {
+                withdraw_amount
+            }
+            else { withdraw_amount - to_withdraw_fee }
+        };
+        if to_token_amount > 0 {
+            msg!("transfering 'to' token blanace: {} to owner", to_token_amount);
+            token::transfer(
+                ctx.accounts
+                    .into_transfer_to_to_owner_context()
+                    .with_signer(&[&seeds[..]]),
+                    to_token_amount,
+            )?;
+        }
 
         Ok(())
     }
@@ -444,6 +490,39 @@ pub struct AddFundsInputAccounts<'info> {
     pub clock: Sysvar<'info, Clock>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+}
+
+#[derive(Accounts)]
+#[instruction(withdraw_amount: u64)]
+pub struct WithdrawInputAccounts<'info> {
+    pub owner_account: Signer<'info>,
+    #[account(mut)]
+    pub owner_to_token_account: Box<Account<'info, TokenAccount>>,
+    #[account(
+        mut,
+        constraint = ddca_account.owner_acc_addr == *owner_account.key,
+    )]
+    pub ddca_account: Account<'info, DdcaAccount>,
+    #[account(
+        mut,
+        constraint = withdraw_amount > 0,
+        constraint = ddca_to_token_account.amount >= withdraw_amount
+    )]
+    pub ddca_to_token_account: Box<Account<'info, TokenAccount>>,
+    #[account(address = ddca_operating_account::ID)]
+    pub operating_account: AccountInfo<'info>,
+    #[account(
+        mut,
+        //TODO: uncomment when https://github.com/project-serum/anchor/pull/843 is released
+        // associated_token::mint = from_mint, 
+        // associated_token::authority = ddca_operating_account,
+    )]
+    pub operating_to_token_account: Box<Account<'info, TokenAccount>>,
+    pub rent: Sysvar<'info, Rent>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
 }
 
 #[derive(Accounts)]
@@ -547,6 +626,40 @@ impl<'info> AddFundsInputAccounts<'info> {
                 .to_account_info()
                 .clone(),
             authority: self.owner_account.to_account_info().clone(),
+        };
+        let cpi_program = self.token_program.to_account_info();
+        CpiContext::new(cpi_program, cpi_accounts)
+    }
+}
+
+impl<'info> WithdrawInputAccounts<'info> {
+    // to fee
+    fn into_transfer_to_fee_to_operating_context(
+        &self,
+    ) -> CpiContext<'_, '_, '_, 'info, Transfer<'info>> {
+        let cpi_accounts = Transfer {
+            from: self.ddca_to_token_account.to_account_info().clone(),
+            to: self
+                .operating_to_token_account
+                .to_account_info()
+                .clone(),
+            authority: self.ddca_account.to_account_info().clone(),
+        };
+        let cpi_program = self.token_program.to_account_info();
+        CpiContext::new(cpi_program, cpi_accounts)
+    }
+    
+    // to
+    fn into_transfer_to_to_owner_context(
+        &self,
+    ) -> CpiContext<'_, '_, '_, 'info, Transfer<'info>> {
+        let cpi_accounts = Transfer {
+            from: self.ddca_to_token_account.to_account_info().clone(),
+            to: self
+                .owner_to_token_account
+                .to_account_info()
+                .clone(),
+            authority: self.ddca_account.to_account_info().clone(),
         };
         let cpi_program = self.token_program.to_account_info();
         CpiContext::new(cpi_program, cpi_accounts)
