@@ -9,10 +9,11 @@ The Mean Protocol is maintained by the Mean DAO and is deployed on the Solana Bl
 * The **Mean Protocol** is in active development and the programs are subject to change
 * For detailed documentation, please read the Developer Docs 👉 https://docs.meanfi.com/platform/developers
 
-An example of a web3 Dapp implementing the different programs in the Mean Protocol is [MeanFi](https://meanfi.com). 
-Repository for MeanFi UI 👉 **[HERE](https://github.com/mean-dao/meanfi-ui)** 
-
-To leverage the Mean Protocol Programs in your own dapp, go to the [Mean Protocol SDK repo](https://github.com/mean-dao/mean-sdk), and follow the instructions there.
+### Related Repos
+![Mean Repos](https://user-images.githubusercontent.com/714487/138731452-a87355e0-5579-4da9-bb12-3aa90c526a8c.png)
+- Repo for Mean Protocol SDKs 👉 **[HERE](https://github.com/mean-dao/mean-sdk)** (how to use instructions there)
+- Repo for MeanFi UI 👉 **[HERE](https://github.com/mean-dao/meanfi-ui)** 
+[MeanFi](https://meanfi.com) is a web3 app implementing the different programs in the Mean Protocol 
 
 ## Program Catalog
 
@@ -33,11 +34,15 @@ The Money Streaming Program is an implementation of the protocol built and deplo
 
 Decentralized Dollar Cost Averaging (DDCA) is great to help people become regular investors every day. Decentralized DCA gives account owners a way to automate their investment strategy without the dependence on a centralized entity like Coinbase or Robinhood.
 
-The DDCA Program is an implementation of the **[DDCA Protocol]()** on the Solana blockchain.
+The DDCA Program is an implementation of the **[DDCA Protocol]()** on the Solana blockchain with address `3nmm1awnyhABJdoA25MYVksxz1xnpUFeepJJyRTZfsyD` on [Mainnet Beta](https://explorer.solana.com/address/3nmm1awnyhABJdoA25MYVksxz1xnpUFeepJJyRTZfsyD).
 
 
 ### Hybrid Liquidity Aggregator
 
-The Hybrid Liquidity Aggregator is a phenomenal tool to help your users access massive liquidity from multiple protocols and optimize their routing, fees, slippage, and pricing impact. This is useful if you want to guarantee the best swap prices across multiple Automated Market Makers (AMMs) and Serum's CLOB without having to manually implement each of them. One program to rule them all.
+The Hybrid Liquidity Aggregator (HLA) is a phenomenal tool to help your users access massive liquidity from multiple protocols and optimize their routing, fees, slippage, and pricing impact. This is useful if you want to guarantee the best swap prices across multiple Automated Market Makers (AMMs) and Serum's CLOB without having to manually implement each of them. One program to rule them all.
 
-The HLA Program is an implementation of the **[Hybrid Liquidity Aggregator Protocol]()** on the Solana blockchain. It currently supports Serum's CLOB and AMMs from Raydium, Orca, Saber and Mercurial.
+The HLA Program is an implementation of the **[Hybrid Liquidity Aggregator Protocol]()** on the Solana blockchain. It currently supports Serum's CLOB and the Raydium, Orca, Saber and Mercurial AMMs.
+
+The HLA has 2 parts:
+- A client side aggregator (you can find it on the Mean SDK repo)
+- An on-chain aggregator (found on this repo, WIP) with address `B6gLd2uyVQLZMdC1s9C4WR7ZP9fMhJNh7WZYcsibuzN3` on [Mainnet Beta](https://explorer.solana.com/address/B6gLd2uyVQLZMdC1s9C4WR7ZP9fMhJNh7WZYcsibuzN3).
