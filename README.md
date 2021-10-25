@@ -44,5 +44,5 @@ The Hybrid Liquidity Aggregator (HLA) is a phenomenal tool to help your users ac
 The HLA Program is an implementation of the **[Hybrid Liquidity Aggregator Protocol]()** on the Solana blockchain. It currently supports Serum's CLOB and the Raydium, Orca, Saber and Mercurial AMMs.
 
 The HLA has 2 parts:
-- A client side aggregator (you can find it on the Mean SDK repo)
+- A client side aggregator (you can find it on the [Mean SDK repo](https://github.com/mean-dao/mean-sdk))
 - An on-chain aggregator (found on this repo, WIP) with address `B6gLd2uyVQLZMdC1s9C4WR7ZP9fMhJNh7WZYcsibuzN3` on [Mainnet Beta](https://explorer.solana.com/address/B6gLd2uyVQLZMdC1s9C4WR7ZP9fMhJNh7WZYcsibuzN3).
