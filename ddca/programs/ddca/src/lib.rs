@@ -3,6 +3,7 @@ use anchor_spl::token::{ self, Mint, TokenAccount, Token, Transfer, CloseAccount
 use anchor_spl::associated_token::AssociatedToken;
 use hla::cpi::accounts::Swap;
 use std::cmp;
+use std::convert::TryFrom;
 
 // Constants
 pub mod ddca_operating_account {
@@ -138,9 +139,6 @@ pub mod ddca {
             return Err(ErrorCode::InvalidSwapSchedule.into());
         }
 
-        ctx.accounts.ddca_account.last_completed_swap_ts = checkpoint_ts;
-        ctx.accounts.ddca_account.swap_count += 1;
-
         // Token balances before the trade.
         let from_amount_before = token::accessor::amount(&ctx.accounts.from_token_account.to_account_info())?;
         let to_amount_before = token::accessor::amount(&ctx.accounts.to_token_account.to_account_info())?;
@@ -184,11 +182,20 @@ pub mod ddca {
         //  Calculate the delta, i.e. the amount swapped.
         let from_amount_delta = from_amount_before.checked_sub(from_amount_after).unwrap();
         let to_amount_delta = to_amount_after.checked_sub(to_amount_before).unwrap();
-        let swap_rate = to_amount_delta.checked_div(from_amount_delta).unwrap();
+
+        let swap_rate =  u64::try_from(
+            (to_amount_delta as u128)
+            .checked_mul(10u128.pow(ctx.accounts.ddca_account.from_mint_decimals.into())).unwrap()
+            .checked_div(from_amount_delta.into()).unwrap()
+        ).unwrap();
          
-         ctx.accounts.ddca_account.swap_avg_rate = 
-            ctx.accounts.ddca_account.swap_avg_rate + 
-            swap_rate.checked_sub(ctx.accounts.ddca_account.swap_avg_rate).unwrap().checked_div(ctx.accounts.ddca_account.swap_count + 1).unwrap();
+        ctx.accounts.ddca_account.swap_avg_rate +=
+            swap_rate
+            .checked_sub(ctx.accounts.ddca_account.swap_avg_rate).unwrap()
+            .checked_div(ctx.accounts.ddca_account.swap_count + 1).unwrap();
+
+        ctx.accounts.ddca_account.last_completed_swap_ts = checkpoint_ts;
+        ctx.accounts.ddca_account.swap_count += 1;
         
         Ok(())
     }
