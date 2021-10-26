@@ -632,21 +632,30 @@ impl<'info> AddFundsInputAccounts<'info> {
     }
 }
 
+fn to_transfer_from_ddca_cpi_context<'x, 'y, 'z, 'info>(
+    ddca_source: &Box<Account<'info, TokenAccount>>, 
+    dest: &Box<Account<'info, TokenAccount>>, 
+    ddca: &Account<'info, DdcaAccount>, 
+    token_program: &Program<'info, Token>
+) -> CpiContext<'x, 'y, 'z, 'info, Transfer<'info>> {
+        let cpi_accounts = Transfer {
+            from: ddca_source.to_account_info().clone(),
+            to: dest
+                .to_account_info()
+                .clone(),
+            authority: ddca.to_account_info().clone(),
+        };
+        let cpi_program = token_program.to_account_info();
+        CpiContext::new(cpi_program, cpi_accounts)
+    
+}
+
 impl<'info> WithdrawInputAccounts<'info> {
     // to fee
     fn into_transfer_to_fee_to_operating_context(
         &self,
     ) -> CpiContext<'_, '_, '_, 'info, Transfer<'info>> {
-        let cpi_accounts = Transfer {
-            from: self.ddca_to_token_account.to_account_info().clone(),
-            to: self
-                .operating_to_token_account
-                .to_account_info()
-                .clone(),
-            authority: self.ddca_account.to_account_info().clone(),
-        };
-        let cpi_program = self.token_program.to_account_info();
-        CpiContext::new(cpi_program, cpi_accounts)
+        to_transfer_from_ddca_cpi_context(&self.ddca_to_token_account, &self.operating_to_token_account, &self.ddca_account, &self.token_program)
     }
     
     // to
@@ -671,47 +680,20 @@ impl<'info> CloseInputAccounts<'info> {
     fn into_transfer_from_fee_to_operating_context(
         &self,
     ) -> CpiContext<'_, '_, '_, 'info, Transfer<'info>> {
-        let cpi_accounts = Transfer {
-            from: self.ddca_from_token_account.to_account_info().clone(),
-            to: self
-                .operating_from_token_account
-                .to_account_info()
-                .clone(),
-            authority: self.ddca_account.to_account_info().clone(),
-        };
-        let cpi_program = self.token_program.to_account_info();
-        CpiContext::new(cpi_program, cpi_accounts)
+        to_transfer_from_ddca_cpi_context(&self.ddca_from_token_account, &self.operating_from_token_account, &self.ddca_account, &self.token_program)
     }
     // to fee
     fn into_transfer_to_fee_to_operating_context(
         &self,
     ) -> CpiContext<'_, '_, '_, 'info, Transfer<'info>> {
-        let cpi_accounts = Transfer {
-            from: self.ddca_to_token_account.to_account_info().clone(),
-            to: self
-                .operating_to_token_account
-                .to_account_info()
-                .clone(),
-            authority: self.ddca_account.to_account_info().clone(),
-        };
-        let cpi_program = self.token_program.to_account_info();
-        CpiContext::new(cpi_program, cpi_accounts)
+        to_transfer_from_ddca_cpi_context(&self.ddca_to_token_account, &self.operating_to_token_account, &self.ddca_account, &self.token_program)
     }
     
     // from
     fn into_transfer_from_to_owner_context(
         &self,
     ) -> CpiContext<'_, '_, '_, 'info, Transfer<'info>> {
-        let cpi_accounts = Transfer {
-            from: self.ddca_from_token_account.to_account_info().clone(),
-            to: self
-                .owner_from_token_account
-                .to_account_info()
-                .clone(),
-            authority: self.ddca_account.to_account_info().clone(),
-        };
-        let cpi_program = self.token_program.to_account_info();
-        CpiContext::new(cpi_program, cpi_accounts)
+        to_transfer_from_ddca_cpi_context(&self.ddca_from_token_account, &self.owner_from_token_account, &self.ddca_account, &self.token_program)
     }
 
     fn into_close_from_context(&self) -> CpiContext<'_, '_, '_, 'info, CloseAccount<'info>> {
@@ -728,16 +710,7 @@ impl<'info> CloseInputAccounts<'info> {
     fn into_transfer_to_to_owner_context(
         &self,
     ) -> CpiContext<'_, '_, '_, 'info, Transfer<'info>> {
-        let cpi_accounts = Transfer {
-            from: self.ddca_to_token_account.to_account_info().clone(),
-            to: self
-                .owner_to_token_account
-                .to_account_info()
-                .clone(),
-            authority: self.ddca_account.to_account_info().clone(),
-        };
-        let cpi_program = self.token_program.to_account_info();
-        CpiContext::new(cpi_program, cpi_accounts)
+        to_transfer_from_ddca_cpi_context(&self.ddca_to_token_account, &self.owner_to_token_account, &self.ddca_account, &self.token_program)
     }
 
     fn into_close_to_context(&self) -> CpiContext<'_, '_, '_, 'info, CloseAccount<'info>> {
