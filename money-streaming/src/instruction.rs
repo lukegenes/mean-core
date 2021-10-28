@@ -169,12 +169,12 @@ pub enum StreamInstruction {
     /// 1. `[writable]` The source token account
     /// 2. `[writable]` The destination token account.
     /// 3. `[writable]` The associated token mint account
-    /// 4. `[writable]` The Money Streaming Program operating ccount (Fees account).
+    /// 4. `[writable]` The Money Streaming Program operating account (Fees account).
     /// 5. `[writable]` The Money Streaming Protocol operating token account.
     /// 6. `[]` The Token Program account.
     Transfer {
         amount: f64
-    }
+    },
 }
 
 impl StreamInstruction {
@@ -323,7 +323,7 @@ impl StreamInstruction {
             &Self::Transfer { amount } => {
                 buf.push(10);
                 buf.extend_from_slice(&amount.to_le_bytes());
-            }
+            },
         };
 
         buf
