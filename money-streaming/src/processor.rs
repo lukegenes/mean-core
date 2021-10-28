@@ -206,7 +206,7 @@ impl Processor {
                     program_id,
                     amount
                 )
-            },
+            }        
         }
     }
 
@@ -703,14 +703,14 @@ impl Processor {
         }
 
         let escrow_unvested_amount = stream.total_deposits - stream.total_withdrawals - escrow_vested_amount;
-        let amount = recover_amount_percent * escrow_unvested_amount / 100f64; // The amount calculated by the percent of the pool that the contributor owns
-        let transfer_amount = amount - fee;
 
-        if transfer_amount > escrow_unvested_amount
+        if recover_amount > escrow_unvested_amount
         {
             return Err(StreamError::NotAllowedRecoverableAmount.into());
         }
-
+        
+        // The amount calculated by the percent of the pool that the contributor owns
+        let amount = recover_amount_percent * escrow_unvested_amount / 100f64;
         // Transfer tokens to contributor        
         let contributor_mint = spl_token::state::Mint::unpack_from_slice(&contributor_mint_account_info.data.borrow())?;
         let contributor_mint_pow = num_traits::pow(10f64, contributor_mint.decimals.into());
@@ -741,7 +741,7 @@ impl Processor {
             contributor_token_account_info.key,
             treasury_account_info.key,
             &[],
-            (transfer_amount * contributor_mint_pow) as u64
+            (amount * contributor_mint_pow) as u64
         )?;
 
         invoke_signed(&contributor_transfer_ix, 
@@ -756,12 +756,12 @@ impl Processor {
         );
 
         msg!("Transfer {:?} tokens to: {:?}",
-            transfer_amount, 
+            amount, 
             (*contributor_token_account_info.key).to_string()
         );
 
         // Update the stream
-        stream.total_deposits -= transfer_amount;
+        stream.total_deposits -= amount;
         // Save
         Stream::pack_into_slice(&stream, &mut stream_account_info.data.borrow_mut());
 
@@ -871,7 +871,6 @@ impl Processor {
 
         let _escrow_unvested_amount = stream.total_deposits - stream.total_withdrawals - escrow_vested_amount;
         let fee = WITHDRAW_PERCENT_FEE * withdrawal_amount / 100f64;
-        let transfer_amount = withdrawal_amount - fee;
         let beneficiary_mint = spl_token::state::Mint::unpack_from_slice(&beneficiary_mint_account_info.data.borrow())?;
         let beneficiary_mint_pow = num_traits::pow(10f64, beneficiary_mint.decimals.into());
 
@@ -903,7 +902,7 @@ impl Processor {
             beneficiary_token_account_info.key,
             treasury_account_info.key,
             &[],
-            (transfer_amount * beneficiary_mint_pow) as u64
+            (withdrawal_amount * beneficiary_mint_pow) as u64
         )?;
 
         invoke_signed(&transfer_ix, 
@@ -918,7 +917,7 @@ impl Processor {
         );
 
         msg!("Transfer {:?} tokens to: {:?}",
-            transfer_amount, 
+            withdrawal_amount, 
             (*beneficiary_token_account_info.key).to_string()
         );
 
@@ -1488,7 +1487,6 @@ impl Processor {
         if escrow_unvested_amount > 0.0
         {
             // Crediting escrow unvested amount to the contributor
-            let transfer_amount = escrow_unvested_amount - CLOSE_STREAM_FLAT_FEE;            
             let treasury = Treasury::unpack_from_slice(&treasury_account_info.data.borrow())?;
             let (treasury_pool_address, treasury_pool_bump_seed) = Pubkey::find_program_address(
                 &[
@@ -1516,7 +1514,7 @@ impl Processor {
                 treasurer_token_account_info.key,
                 treasury_account_info.key,
                 &[],
-                (transfer_amount * mint_pow) as u64
+                (escrow_unvested_amount * mint_pow) as u64
             )?;
 
             invoke_signed(&transfer_ix, 
@@ -1531,7 +1529,7 @@ impl Processor {
             );
 
             msg!("Transfer {:?} tokens to: {:?}",
-                transfer_amount, 
+                escrow_unvested_amount, 
                 (*treasurer_token_account_info.key).to_string()
             );
         }
@@ -1841,7 +1839,7 @@ impl Processor {
         ]);
 
         msg!("Transfer {:?} tokens to: {:?}",
-            amount, 
+            transfer_amount, 
             (*destination_token_account_info.key).to_string()
         );
 
