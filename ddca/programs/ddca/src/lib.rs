@@ -474,7 +474,8 @@ pub struct AddFundsInputAccounts<'info> {
     pub owner_account: Signer<'info>,
     #[account(
         mut,
-        constraint = owner_from_token_account.amount >= deposit_amount
+        constraint = deposit_amount > 0,
+        constraint = owner_from_token_account.amount >= deposit_amount,
     )]
     pub owner_from_token_account: Box<Account<'info, TokenAccount>>,
     // ddca
