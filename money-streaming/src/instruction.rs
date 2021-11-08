@@ -47,12 +47,11 @@ pub enum StreamInstruction {
     /// 6. `[]` The treasury mint account (the mint of the treasury pool token)
     /// 7. `[writable]` The stream account (The stream contract account).
     /// 8.  [writable] The Money Streaming Program operating account (Fees account).
-    /// 9.  [writable] The Money Streaming Program operating token account.
-    /// 10.  [] The Money Streaming Program account.
-    /// 11. `[]` The Associated Token Program account.
-    /// 12. `[]` The Token Program account.
-    /// 13. `[]` The System Program account.
-    /// 14. `[]` Rent sysvar account.
+    /// 9.  [] The Money Streaming Program account.
+    /// 10. `[]` The Associated Token Program account.
+    /// 11. `[]` The Token Program account.
+    /// 12. `[]` The System Program account.
+    /// 13. `[]` Rent sysvar account.
     AddFunds {
         contribution_amount: f64,
         funded_on_utc: u64,
@@ -162,19 +161,6 @@ pub enum StreamInstruction {
         treasury_block_height: u64,
         treasury_base_address: Pubkey
     },
-
-    /// Transfers a specific amount of tokens between 2 accounts
-    ///
-    /// 0. `[signer]` The source account
-    /// 1. `[writable]` The source token account
-    /// 2. `[writable]` The destination token account.
-    /// 3. `[writable]` The associated token mint account
-    /// 4. `[writable]` The Money Streaming Program operating account (Fees account).
-    /// 5. `[writable]` The Money Streaming Protocol operating token account.
-    /// 6. `[]` The Token Program account.
-    Transfer {
-        amount: f64
-    },
 }
 
 impl StreamInstruction {
@@ -197,7 +183,6 @@ impl StreamInstruction {
             7 => Self::unpack_answer_update(result)?,
             8 => Ok(Self::CloseStream)?,
             9 => Self::unpack_create_treasury(result)?,
-            10 => Self::unpack_transfer(result)?,
 
             _ => return Err(StreamError::InvalidStreamInstruction.into()),
         })
@@ -318,11 +303,6 @@ impl StreamInstruction {
 
                 buf.extend_from_slice(&treasury_block_height.to_le_bytes());
                 buf.extend_from_slice(treasury_base_address.as_ref());
-            },
-
-            &Self::Transfer { amount } => {
-                buf.push(10);
-                buf.extend_from_slice(&amount.to_le_bytes());
             },
         };
 
@@ -464,14 +444,6 @@ impl StreamInstruction {
             treasury_block_height,
             treasury_base_address
         })
-    }
-
-    fn unpack_transfer(input: &[u8]) -> Result<Self, StreamError> {
-
-        let (amount, _result) = input.split_at(8);
-        let amount = Self::unpack_f64(amount)?;
-
-        Ok(Self::Transfer { amount })
     }
 
     fn unpack_pubkey(input: &[u8]) -> Result<(Pubkey, &[u8]), StreamError> {
@@ -651,38 +623,4 @@ impl StreamInstruction {
     ];
 
     Ok(Instruction { program_id: *program_id, accounts, data })
- }
-
- pub fn transfer(
-     source_address: Pubkey,
-     source_token_address: Pubkey,
-     destination_token_address: Pubkey,
-     mint_address: Pubkey,
-    //  msp_ops_address: Pubkey,
-     program_id: &Pubkey,
-     amount: f64
-
- ) -> Result<Instruction, StreamError> {
-
-    if let Err(_error) = check_program_account(program_id) {
-        return Err(StreamError::IncorrectProgramId.into());
-    }
-
-    let data = StreamInstruction::Transfer { amount }.pack();
-    let accounts = vec![
-        AccountMeta::new_readonly(source_address, true),
-        AccountMeta::new(source_token_address, false),
-        AccountMeta::new(destination_token_address, false),
-        AccountMeta::new(mint_address, false),
-        // AccountMeta::new(msp_ops_address, false),
-        // AccountMeta::new_readonly(*program_id, false),
-        AccountMeta::new_readonly(spl_token::id(), false),
-        // AccountMeta::new_readonly(solana_program::system_program::id(), false)
-    ];
-
-    Ok(Instruction { 
-        program_id: *program_id, 
-        accounts, 
-        data 
-    })
  }

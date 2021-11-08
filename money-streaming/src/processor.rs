@@ -20,7 +20,7 @@ use crate::{
     state::{ Stream, StreamTerms, Treasury },
     constants::{ 
         CREATE_STREAM_FLAT_FEE,
-        ADD_FUNDS_PERCENT_FEE,
+        ADD_FUNDS_FLAT_FEE,
         WITHDRAW_PERCENT_FEE,
         PROPOSE_UPDATE_FLAT_FEE,
         CLOSE_STREAM_FLAT_FEE,
@@ -196,17 +196,7 @@ impl Processor {
                     treasury_block_height,
                     treasury_base_address
                 )
-            },
-
-            StreamInstruction::Transfer { amount } => {
-                msg!("Instruction: Transfer");
-
-                Self::process_transfer(
-                    accounts, 
-                    program_id,
-                    amount
-                )
-            }        
+            }    
         }
     }
 
@@ -337,7 +327,6 @@ impl Processor {
         let treasury_mint_account_info = next_account_info(account_info_iter)?;
         let stream_account_info = next_account_info(account_info_iter)?;
         let msp_ops_account_info = next_account_info(account_info_iter)?;
-        let msp_ops_token_account_info = next_account_info(account_info_iter)?;
         let msp_account_info = next_account_info(account_info_iter)?;
         let token_program_account_info = next_account_info(account_info_iter)?;
         let associated_token_program_account_info = next_account_info(account_info_iter)?;
@@ -418,10 +407,7 @@ impl Processor {
             );
         }
 
-        let fee = ADD_FUNDS_PERCENT_FEE * contribution_amount / 100f64;
-        let amount = contribution_amount - fee;
         let treasury = Treasury::unpack_from_slice(&treasury_account_info.data.borrow())?;
-
         let (treasury_pool_address, treasury_pool_bump_seed) = Pubkey::find_program_address(
             &[
                 treasury.treasury_base_address.as_ref(),
@@ -489,7 +475,7 @@ impl Processor {
                 contributor_treasury_token_account_info.key,
                 treasury_account_info.key,
                 &[],
-                (amount * treasury_pow) as u64
+                (contribution_amount * treasury_pow) as u64
             )?;
 
             invoke_signed(&mint_to_ix,
@@ -503,7 +489,7 @@ impl Processor {
             )?;
 
             msg!("Minting {:?} treasury pool tokens to: {:?}", 
-                amount, 
+                contribution_amount, 
                 (*contributor_treasury_token_account_info.key).to_string()
             );
         }
@@ -517,7 +503,7 @@ impl Processor {
             treasury_token_account_info.key,
             contributor_account_info.key,
             &[],
-            (amount * beneficiary_pow) as u64
+            (contribution_amount * beneficiary_pow) as u64
         )?;
 
         invoke(&transfer_ix, &[
@@ -528,11 +514,11 @@ impl Processor {
         ]);
 
         msg!("Transfer {:?} tokens to: {:?}",
-            amount, 
+            contribution_amount, 
             (*contributor_token_account_info.key).to_string()
         );
 
-        stream.total_deposits += amount;
+        stream.total_deposits += contribution_amount;
 
         if stream.funded_on_utc == 0 // First time the stream is being funded
         {
@@ -550,62 +536,23 @@ impl Processor {
         // Save
         Stream::pack_into_slice(&stream, &mut stream_account_info.data.borrow_mut());
 
-        // Create the Money Streaming Program operations token account if not exists
-        let msp_ops_token_address = spl_associated_token_account::get_associated_token_address(
+        // Pay fees
+        let fees_lamports = ADD_FUNDS_FLAT_FEE * (LAMPORTS_PER_SOL as f64);
+        let fees_transfer_ix = system_instruction::transfer(
+            contributor_account_info.key,
             msp_ops_account_info.key,
-            beneficiary_mint_account_info.key
+            fees_lamports as u64
         );
 
-        if msp_ops_token_address != *msp_ops_token_account_info.key 
-        {
-            return Err(StreamError::InvalidMspOpsToken.into());
-        }
-
-        if *msp_ops_token_account_info.owner != *token_program_account_info.key
-        {
-            let create_msp_associated_token_ix = spl_associated_token_account::create_associated_token_account(
-                contributor_account_info.key,
-                msp_ops_account_info.key,
-                beneficiary_mint_account_info.key
-            );
-
-            invoke(&create_msp_associated_token_ix, &[
-                associated_token_program_account_info.clone(),
-                contributor_account_info.clone(),
-                msp_ops_token_account_info.clone(),
-                msp_ops_account_info.clone(),
-                beneficiary_mint_account_info.clone(),
-                system_account_info.clone(),
-                token_program_account_info.clone(),
-                rent_account_info.clone()
-            ]);
-
-            msg!(
-                "Money Streaming Program associated token account created at: {:?} address", 
-                (*msp_ops_token_account_info.key).to_string()
-            );
-        }
-
-        // Pay fees
-        let fees_ix = spl_token::instruction::transfer(
-            token_program_account_info.key,
-            contributor_token_account_info.key,
-            msp_ops_token_account_info.key,
-            contributor_account_info.key,
-            &[],
-            (fee * beneficiary_pow) as u64
-        )?;
-
-        invoke(&fees_ix, &[
+        invoke(&fees_transfer_ix, &[
             contributor_account_info.clone(),
-            contributor_token_account_info.clone(),
-            msp_ops_token_account_info.clone(),
-            token_program_account_info.clone()
+            msp_ops_account_info.clone(),
+            system_account_info.clone()
         ]);
 
-        msg!("Transfer {:?} tokens of fee to: {:?}",
-            fee, 
-            (*msp_ops_token_account_info.key).to_string()
+        msg!("Transfer {:?} lamports of fee to: {:?}", 
+            fees_lamports, 
+            (*msp_ops_account_info.key).to_string()
         );
 
         Ok(())
@@ -1793,78 +1740,6 @@ impl Processor {
             (*msp_ops_account_info.key).to_string()
         );
         
-        Ok(())
-    }
-
-    fn process_transfer(
-        accounts: &[AccountInfo],
-        _program_id: &Pubkey,
-        amount: f64
-        
-    ) -> ProgramResult {
-
-        let account_info_iter = &mut accounts.iter();
-        let source_account_info = next_account_info(account_info_iter)?;
-        let source_token_account_info = next_account_info(account_info_iter)?;
-        let destination_token_account_info = next_account_info(account_info_iter)?;
-        let mint_account_info = next_account_info(account_info_iter)?;
-        let _msp_ops_account_info = next_account_info(account_info_iter)?;
-        let msp_ops_token_account_info = next_account_info(account_info_iter)?;
-        let token_program_account_info = next_account_info(account_info_iter)?;
-
-        if !source_account_info.is_signer 
-        {
-            return Err(StreamError::MissingInstructionSignature.into());
-        }
-
-        let mint = spl_token::state::Mint::unpack_from_slice(&mint_account_info.data.borrow())?;
-        let pow = num_traits::pow(10f64, mint.decimals.into());
-        let fee = ADD_FUNDS_PERCENT_FEE * amount / 100f64;
-        let transfer_amount = amount - fee;
-        // Transfer
-        let transfer_ix = spl_token::instruction::transfer(
-            token_program_account_info.key,
-            source_token_account_info.key,
-            destination_token_account_info.key,
-            source_account_info.key,
-            &[],
-            (transfer_amount * pow) as u64
-        )?;
-
-        invoke(&transfer_ix, &[
-            source_account_info.clone(),
-            source_token_account_info.clone(),
-            destination_token_account_info.clone(),
-            token_program_account_info.clone()
-        ]);
-
-        msg!("Transfer {:?} tokens to: {:?}",
-            transfer_amount, 
-            (*destination_token_account_info.key).to_string()
-        );
-
-        // Pay fees
-        let fees_ix = spl_token::instruction::transfer(
-            token_program_account_info.key,
-            source_token_account_info.key,
-            msp_ops_token_account_info.key,
-            source_account_info.key,
-            &[],
-            (fee * pow) as u64
-        )?;
-
-        invoke(&fees_ix, &[
-            source_account_info.clone(),
-            source_token_account_info.clone(),
-            msp_ops_token_account_info.clone(),
-            token_program_account_info.clone()
-        ]);
-
-        msg!("Transfer {:?} tokens of fee to: {:?}",
-            fee, 
-            (*msp_ops_token_account_info.key).to_string()
-        );
-
         Ok(())
     }
 }
