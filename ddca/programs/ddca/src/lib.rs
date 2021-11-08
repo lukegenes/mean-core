@@ -48,7 +48,18 @@ pub mod ddca {
             return Err(ErrorCode::InvalidSwapsCount.into());
         }
 
-        let start_ts = Clock::get()?.unix_timestamp as u64;
+        let mut start_ts = Clock::get()?.unix_timestamp as u64;
+        let current_slot = Clock::get()?.slot;
+
+        if interval_in_seconds < 3600 { // less than 1 hour
+            if interval_in_seconds != 5 * 60 && interval_in_seconds != 10 * 60 && interval_in_seconds != 15 * 60 && interval_in_seconds != 20 * 60 && interval_in_seconds != 30 * 60 {
+                return Err(ErrorCode::InvalidInterval.into());
+            }
+            let seconds_past_hour = start_ts % 3600;
+            if seconds_past_hour % interval_in_seconds != 0 {
+                start_ts = (start_ts / 3600) * 3600 + ((seconds_past_hour / interval_in_seconds) + 1) * interval_in_seconds;
+            }
+        }
 
         ctx.accounts.ddca_account.owner_acc_addr = *ctx.accounts.owner_account.key;
         ctx.accounts.ddca_account.from_mint = *ctx.accounts.from_mint.as_ref().key; //ctx.accounts.from_token_account.mint;
@@ -63,7 +74,10 @@ pub mod ddca {
         ctx.accounts.ddca_account.amount_per_swap = amount_per_swap;
         ctx.accounts.ddca_account.interval_in_seconds = interval_in_seconds;
         ctx.accounts.ddca_account.start_ts = start_ts;
-        ctx.accounts.ddca_account.last_deposit_ts = start_ts;
+        ctx.accounts.ddca_account.created_slot = current_slot;
+        ctx.accounts.ddca_account.last_deposit_slot = current_slot;
+        ctx.accounts.ddca_account.owner_acc_addr = *ctx.accounts.owner_account.key;
+        ctx.accounts.ddca_account.wake_acc_addr = *ctx.accounts.wake_account.key;
 
         // transfer enough SOL gas budget to the ddca account to pay future recurring swaps fees (network + amm fees)
         let recurring_lamport_fees = swap_count * SINGLE_SWAP_MINIMUM_LAMPORT_GAS_FEE;
@@ -83,11 +97,18 @@ pub mod ddca {
         )?;
 
         // transfer Token initial amount to ddca 'from' token account
-        msg!("Depositing: {} of mint: {} into the ddca", deposit_amount, ctx.accounts.from_mint.key());
+        msg!("depositing: {} of mint: {} into the ddca", deposit_amount, ctx.accounts.from_mint.key());
         token::transfer(
             ctx.accounts.into_transfer_to_vault_context(),
             deposit_amount,
         )?;
+
+        // fund wake account for next swap
+        let signature_fee_plus_rent = Rent::get()?.minimum_balance(0) + 2 * Fees::get()?.fee_calculator.lamports_per_signature;
+        msg!("transfering {} lamports ({} SOL) from ddca to wake account for next swap", signature_fee_plus_rent, signature_fee_plus_rent as f64 / LAMPORTS_PER_SOL as f64);
+
+        **ctx.accounts.ddca_account.to_account_info().try_borrow_mut_lamports()? -= signature_fee_plus_rent;
+        **ctx.accounts.wake_account.to_account_info().try_borrow_mut_lamports()? += signature_fee_plus_rent;
         
         Ok(())
     }
@@ -116,27 +137,31 @@ pub mod ddca {
         // check schedule
         let start_ts = ctx.accounts.ddca_account.start_ts;
         let interval = ctx.accounts.ddca_account.interval_in_seconds;
-        let last_ts = ctx.accounts.ddca_account.last_completed_swap_ts;
+        let last_completed_ts = ctx.accounts.ddca_account.last_completed_swap_ts;
         let now_ts = Clock::get()?.unix_timestamp as u64;
-        let max_delta_in_secs = cmp::min(interval / 100, 3600); // +/-1% up to 3600 sec (ok for min interval = 5 min)
+        let max_delta_in_secs = cmp::max(cmp::min(interval / 20, 9000), 60); // +/-5% min: 1 min, max: 2.5 hours (ok for min interval = 5 min)
         let prev_checkpoint = (now_ts - start_ts) / interval;
         let prev_ts = start_ts + prev_checkpoint * interval;
         let next_checkpoint = prev_checkpoint + 1;
         let next_ts = start_ts + next_checkpoint * interval;
         let checkpoint_ts: u64;
-        // msg!("DDCA schedule: {{ start_ts: {}, interval: {}, last_ts: {}, now_ts: {}, max_delta_in_secs: {}, low: {}, high: {}, low_ts: {}, high_ts: {} }}",
-        //                         start_ts, interval, last_ts, now_ts, max_delta_in_secs, prev_checkpoint, next_checkpoint, prev_ts, next_ts);
+        msg!("DDCA schedule: {{ start_ts: {}, interval: {}, last_ts: {}, now_ts: {}, max_delta_in_secs: {}, low: {}, high: {}, low_ts: {}, high_ts: {} }}",
+                                start_ts, interval, last_completed_ts, now_ts, max_delta_in_secs, prev_checkpoint, next_checkpoint, prev_ts, next_ts);
 
-        if last_ts != prev_ts && now_ts >= (prev_ts - max_delta_in_secs) && now_ts <= (prev_ts + max_delta_in_secs) {
+        if now_ts >= (prev_ts - max_delta_in_secs) && now_ts <= (prev_ts + max_delta_in_secs) {
             checkpoint_ts = prev_ts;
             // msg!("valid schedule");
         }
-        else if last_ts != next_ts && now_ts >= (next_ts - max_delta_in_secs) && now_ts <= (next_ts + max_delta_in_secs) {
+        else if now_ts >= (next_ts - max_delta_in_secs) && now_ts <= (next_ts + max_delta_in_secs) {
             checkpoint_ts = next_ts;
             // msg!("valid schedule");
         }
         else {
             return Err(ErrorCode::InvalidSwapSchedule.into());
+        }
+
+        if last_completed_ts == checkpoint_ts {
+            return Err(ErrorCode::SwapAlreadyCompleted.into());
         }
 
         // Token balances before the trade.
@@ -188,14 +213,37 @@ pub mod ddca {
             .checked_mul(10u128.pow(ctx.accounts.ddca_account.from_mint_decimals.into())).unwrap()
             .checked_div(from_amount_delta.into()).unwrap()
         ).unwrap();
-         
-        ctx.accounts.ddca_account.swap_avg_rate +=
-            swap_rate
-            .checked_sub(ctx.accounts.ddca_account.swap_avg_rate).unwrap()
-            .checked_div(ctx.accounts.ddca_account.swap_count + 1).unwrap();
+
+        ctx.accounts.ddca_account.swap_avg_rate = {
+            if swap_rate >= ctx.accounts.ddca_account.swap_avg_rate {
+                ctx.accounts.ddca_account.swap_avg_rate + 
+                swap_rate
+                .checked_sub(ctx.accounts.ddca_account.swap_avg_rate).unwrap()
+                .checked_div(ctx.accounts.ddca_account.swap_count + 1).unwrap()
+            }
+            else {
+                ctx.accounts.ddca_account.swap_avg_rate -
+                ctx.accounts.ddca_account.swap_avg_rate
+                .checked_sub(swap_rate).unwrap()
+                .checked_div(ctx.accounts.ddca_account.swap_count + 1).unwrap()
+            }
+        };
 
         ctx.accounts.ddca_account.last_completed_swap_ts = checkpoint_ts;
         ctx.accounts.ddca_account.swap_count += 1;
+
+        let total_swaps_count: u64 = ctx.accounts.ddca_account.total_deposits_amount
+            .checked_div(ctx.accounts.ddca_account.amount_per_swap).unwrap();
+
+        if ctx.accounts.ddca_account.swap_count == total_swaps_count {
+            ctx.accounts.ddca_account.is_paused = true;
+        } else {
+            let lamports_per_signature = Fees::get()?.fee_calculator.lamports_per_signature;
+            msg!("transfering {} lamports ({} SOL) from ddca to wake account for next swap", lamports_per_signature, lamports_per_signature as f64 / LAMPORTS_PER_SOL as f64);
+
+            **ctx.accounts.ddca_account.to_account_info().try_borrow_mut_lamports()? -= lamports_per_signature;
+            **ctx.accounts.wake_account.to_account_info().try_borrow_mut_lamports()? += lamports_per_signature;
+        }
         
         Ok(())
     }
@@ -235,9 +283,18 @@ pub mod ddca {
             deposit_amount,
         )?;
 
+        Fees::get()?.fee_calculator.lamports_per_signature;
+
         ctx.accounts.ddca_account.total_deposits_amount += deposit_amount;
-        let deposit_ts = Clock::get()?.unix_timestamp as u64;
-        ctx.accounts.ddca_account.last_deposit_ts = deposit_ts;
+        ctx.accounts.ddca_account.last_deposit_ts = Clock::get()?.unix_timestamp as u64;
+        ctx.accounts.ddca_account.last_deposit_slot =  Clock::get()?.slot;
+
+        // fund wake account for next swap
+        let signature_fee = Fees::get()?.fee_calculator.lamports_per_signature;
+        msg!("transfering {} lamports ({} SOL) from ddca to wake account for next swap", signature_fee, signature_fee as f64 / LAMPORTS_PER_SOL as f64);
+
+        **ctx.accounts.ddca_account.to_account_info().try_borrow_mut_lamports()? -= signature_fee;
+        **ctx.accounts.wake_account.to_account_info().try_borrow_mut_lamports()? += signature_fee;
 
         Ok(())
     }
@@ -426,6 +483,8 @@ pub struct CreateInputAccounts<'info> {
         associated_token::authority = ddca_account, 
         payer = owner_account)]
     pub to_token_account: Box<Account<'info, TokenAccount>>,
+    #[account(mut)]
+    pub wake_account: AccountInfo<'info>,
     // system and spl
     pub rent: Sysvar<'info, Rent>,
     pub clock: Sysvar<'info, Clock>,
@@ -436,11 +495,19 @@ pub struct CreateInputAccounts<'info> {
 
 #[derive(Accounts)]
 pub struct WakeAndSwapInputAccounts<'info> {
-    // owner
-    #[account(mut)]
-    pub owner_account: Signer<'info>,
+    // // owner
+    // #[account(mut)]
+    // pub owner_account: Signer<'info>,
+    #[account(
+        mut,
+        // address = ddca_account.wake_acc_addr,
+        constraint = *wake_account.key == ddca_account.owner_acc_addr || *wake_account.key == ddca_account.wake_acc_addr,
+    )]
+    pub wake_account: Signer<'info>,
     // ddca
-    #[account(mut)]
+    #[account(
+        mut,
+    )]
     pub ddca_account: Account<'info, DdcaAccount>,
     #[account(constraint = from_mint.key() == ddca_account.from_mint)]
     pub from_mint:  Account<'info, Mint>,
@@ -474,7 +541,8 @@ pub struct AddFundsInputAccounts<'info> {
     pub owner_account: Signer<'info>,
     #[account(
         mut,
-        constraint = owner_from_token_account.amount >= deposit_amount
+        constraint = deposit_amount > 0,
+        constraint = owner_from_token_account.amount >= deposit_amount,
     )]
     pub owner_from_token_account: Box<Account<'info, TokenAccount>>,
     // ddca
@@ -485,6 +553,11 @@ pub struct AddFundsInputAccounts<'info> {
     pub ddca_account: Account<'info, DdcaAccount>,
     #[account(mut)]
     pub from_token_account: Box<Account<'info, TokenAccount>>,
+    #[account(
+        mut,
+        address = ddca_account.wake_acc_addr
+    )]
+    pub wake_account: AccountInfo<'info>,
     // system and spl
     pub rent: Sysvar<'info, Rent>,
     pub clock: Sysvar<'info, Clock>,
@@ -589,11 +662,14 @@ pub struct DdcaAccount {
     
     pub swap_count: u64, //8 bytes
     pub swap_avg_rate: u64, //8 bytes
-    pub last_deposit_ts: u64 //8 bytes
+    pub last_deposit_ts: u64, //8 bytes
+    pub wake_acc_addr: Pubkey, //32 bytes
+    pub created_slot: u64, //8 bytes
+    pub last_deposit_slot: u64, //8 bytes
 }
 
 impl DdcaAccount {
-    pub const LEN: usize = 32 + 32 + 1 + 32 + 32 + 1 + 32 + 8 + 1 + 8 + 8 + 8 + 8 + 8 + 1 + 8 + 8 + 8;
+    pub const LEN: usize = 32 + 32 + 1 + 32 + 32 + 1 + 32 + 8 + 1 + 8 + 8 + 8 + 8 + 8 + 1 + 8 + 8 + 8 + 32 + 8 + 8; // 6x32 + 11x8 + 4x1 = 284 (max = 492)
 }
 
 //UTILS IMPL
@@ -738,4 +814,8 @@ pub enum ErrorCode {
     InvalidSwapSchedule,
     #[msg("Invalid swap slippage")]
     InvalidSwapSlippage,
+    #[msg("Invalid interval")]
+    InvalidInterval,
+    #[msg("A swap for this time window was already completed")]
+    SwapAlreadyCompleted,
 }
