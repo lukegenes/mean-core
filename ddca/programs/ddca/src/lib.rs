@@ -49,6 +49,7 @@ pub mod ddca {
         }
 
         let start_ts = Clock::get()?.unix_timestamp as u64;
+        let current_slot = Clock::get()?.slot;
 
         ctx.accounts.ddca_account.owner_acc_addr = *ctx.accounts.owner_account.key;
         ctx.accounts.ddca_account.from_mint = *ctx.accounts.from_mint.as_ref().key; //ctx.accounts.from_token_account.mint;
@@ -63,7 +64,10 @@ pub mod ddca {
         ctx.accounts.ddca_account.amount_per_swap = amount_per_swap;
         ctx.accounts.ddca_account.interval_in_seconds = interval_in_seconds;
         ctx.accounts.ddca_account.start_ts = start_ts;
-        ctx.accounts.ddca_account.last_deposit_ts = start_ts;
+        ctx.accounts.ddca_account.created_slot = current_slot;
+        ctx.accounts.ddca_account.last_deposit_slot = current_slot;
+        ctx.accounts.ddca_account.owner_acc_addr = *ctx.accounts.owner_account.key;
+        ctx.accounts.ddca_account.wake_acc_addr = *ctx.accounts.wake_account.key;
 
         // transfer enough SOL gas budget to the ddca account to pay future recurring swaps fees (network + amm fees)
         let recurring_lamport_fees = swap_count * SINGLE_SWAP_MINIMUM_LAMPORT_GAS_FEE;
@@ -83,11 +87,18 @@ pub mod ddca {
         )?;
 
         // transfer Token initial amount to ddca 'from' token account
-        msg!("Depositing: {} of mint: {} into the ddca", deposit_amount, ctx.accounts.from_mint.key());
+        msg!("depositing: {} of mint: {} into the ddca", deposit_amount, ctx.accounts.from_mint.key());
         token::transfer(
             ctx.accounts.into_transfer_to_vault_context(),
             deposit_amount,
         )?;
+
+        // fund wake account for next swap
+        let signature_fee_plus_rent = Rent::get()?.minimum_balance(0) + 2 * Fees::get()?.fee_calculator.lamports_per_signature;
+        msg!("transfering {} lamports ({} SOL) from ddca to wake account for next swap", signature_fee_plus_rent, signature_fee_plus_rent as f64 / LAMPORTS_PER_SOL as f64);
+
+        **ctx.accounts.ddca_account.to_account_info().try_borrow_mut_lamports()? -= signature_fee_plus_rent;
+        **ctx.accounts.wake_account.to_account_info().try_borrow_mut_lamports()? += signature_fee_plus_rent;
         
         Ok(())
     }
@@ -196,6 +207,19 @@ pub mod ddca {
 
         ctx.accounts.ddca_account.last_completed_swap_ts = checkpoint_ts;
         ctx.accounts.ddca_account.swap_count += 1;
+
+        let total_swaps_count: u64 = ctx.accounts.ddca_account.total_deposits_amount
+            .checked_div(ctx.accounts.ddca_account.amount_per_swap).unwrap();
+
+        if ctx.accounts.ddca_account.swap_count == total_swaps_count {
+            ctx.accounts.ddca_account.is_paused = true;
+        } else {
+            let lamports_per_signature = Fees::get()?.fee_calculator.lamports_per_signature;
+            msg!("transfering {} lamports ({} SOL) from ddca to wake account for next swap", lamports_per_signature, lamports_per_signature as f64 / LAMPORTS_PER_SOL as f64);
+
+            **ctx.accounts.ddca_account.to_account_info().try_borrow_mut_lamports()? -= lamports_per_signature;
+            **ctx.accounts.wake_account.to_account_info().try_borrow_mut_lamports()? += lamports_per_signature;
+        }
         
         Ok(())
     }
@@ -235,9 +259,18 @@ pub mod ddca {
             deposit_amount,
         )?;
 
+        Fees::get()?.fee_calculator.lamports_per_signature;
+
         ctx.accounts.ddca_account.total_deposits_amount += deposit_amount;
-        let deposit_ts = Clock::get()?.unix_timestamp as u64;
-        ctx.accounts.ddca_account.last_deposit_ts = deposit_ts;
+        ctx.accounts.ddca_account.last_deposit_ts = Clock::get()?.unix_timestamp as u64;
+        ctx.accounts.ddca_account.last_deposit_slot =  Clock::get()?.slot;
+
+        // fund wake account for next swap
+        let signature_fee = Fees::get()?.fee_calculator.lamports_per_signature;
+        msg!("transfering {} lamports ({} SOL) from ddca to wake account for next swap", signature_fee, signature_fee as f64 / LAMPORTS_PER_SOL as f64);
+
+        **ctx.accounts.ddca_account.to_account_info().try_borrow_mut_lamports()? -= signature_fee;
+        **ctx.accounts.wake_account.to_account_info().try_borrow_mut_lamports()? += signature_fee;
 
         Ok(())
     }
@@ -426,6 +459,8 @@ pub struct CreateInputAccounts<'info> {
         associated_token::authority = ddca_account, 
         payer = owner_account)]
     pub to_token_account: Box<Account<'info, TokenAccount>>,
+    #[account(mut)]
+    pub wake_account: AccountInfo<'info>,
     // system and spl
     pub rent: Sysvar<'info, Rent>,
     pub clock: Sysvar<'info, Clock>,
@@ -436,11 +471,19 @@ pub struct CreateInputAccounts<'info> {
 
 #[derive(Accounts)]
 pub struct WakeAndSwapInputAccounts<'info> {
-    // owner
-    #[account(mut)]
-    pub owner_account: Signer<'info>,
+    // // owner
+    // #[account(mut)]
+    // pub owner_account: Signer<'info>,
+    #[account(
+        mut,
+        // address = ddca_account.wake_acc_addr,
+        constraint = *wake_account.key == ddca_account.owner_acc_addr || *wake_account.key == ddca_account.wake_acc_addr,
+    )]
+    pub wake_account: Signer<'info>,
     // ddca
-    #[account(mut)]
+    #[account(
+        mut,
+    )]
     pub ddca_account: Account<'info, DdcaAccount>,
     #[account(constraint = from_mint.key() == ddca_account.from_mint)]
     pub from_mint:  Account<'info, Mint>,
@@ -486,6 +529,11 @@ pub struct AddFundsInputAccounts<'info> {
     pub ddca_account: Account<'info, DdcaAccount>,
     #[account(mut)]
     pub from_token_account: Box<Account<'info, TokenAccount>>,
+    #[account(
+        mut,
+        address = ddca_account.wake_acc_addr
+    )]
+    pub wake_account: AccountInfo<'info>,
     // system and spl
     pub rent: Sysvar<'info, Rent>,
     pub clock: Sysvar<'info, Clock>,
@@ -590,11 +638,14 @@ pub struct DdcaAccount {
     
     pub swap_count: u64, //8 bytes
     pub swap_avg_rate: u64, //8 bytes
-    pub last_deposit_ts: u64 //8 bytes
+    pub last_deposit_ts: u64, //8 bytes
+    pub wake_acc_addr: Pubkey, //32 bytes
+    pub created_slot: u64, //8 bytes
+    pub last_deposit_slot: u64, //8 bytes
 }
 
 impl DdcaAccount {
-    pub const LEN: usize = 32 + 32 + 1 + 32 + 32 + 1 + 32 + 8 + 1 + 8 + 8 + 8 + 8 + 8 + 1 + 8 + 8 + 8;
+    pub const LEN: usize = 32 + 32 + 1 + 32 + 32 + 1 + 32 + 8 + 1 + 8 + 8 + 8 + 8 + 8 + 1 + 8 + 8 + 8 + 32 + 8 + 8; // 6x32 + 11x8 + 4x1 = 284 (max = 492)
 }
 
 //UTILS IMPL
