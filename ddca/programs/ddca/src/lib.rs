@@ -137,7 +137,7 @@ pub mod ddca {
         // check schedule
         let start_ts = ctx.accounts.ddca_account.start_ts;
         let interval = ctx.accounts.ddca_account.interval_in_seconds;
-        let last_ts = ctx.accounts.ddca_account.last_completed_swap_ts;
+        let last_completed_ts = ctx.accounts.ddca_account.last_completed_swap_ts;
         let now_ts = Clock::get()?.unix_timestamp as u64;
         let max_delta_in_secs = cmp::max(cmp::min(interval / 20, 9000), 60); // +/-5% min: 1 min, max: 2.5 hours (ok for min interval = 5 min)
         let prev_checkpoint = (now_ts - start_ts) / interval;
@@ -146,18 +146,22 @@ pub mod ddca {
         let next_ts = start_ts + next_checkpoint * interval;
         let checkpoint_ts: u64;
         msg!("DDCA schedule: {{ start_ts: {}, interval: {}, last_ts: {}, now_ts: {}, max_delta_in_secs: {}, low: {}, high: {}, low_ts: {}, high_ts: {} }}",
-                                start_ts, interval, last_ts, now_ts, max_delta_in_secs, prev_checkpoint, next_checkpoint, prev_ts, next_ts);
+                                start_ts, interval, last_completed_ts, now_ts, max_delta_in_secs, prev_checkpoint, next_checkpoint, prev_ts, next_ts);
 
-        if last_ts != prev_ts && now_ts >= (prev_ts - max_delta_in_secs) && now_ts <= (prev_ts + max_delta_in_secs) {
+        if now_ts >= (prev_ts - max_delta_in_secs) && now_ts <= (prev_ts + max_delta_in_secs) {
             checkpoint_ts = prev_ts;
             // msg!("valid schedule");
         }
-        else if last_ts != next_ts && now_ts >= (next_ts - max_delta_in_secs) && now_ts <= (next_ts + max_delta_in_secs) {
+        else if now_ts >= (next_ts - max_delta_in_secs) && now_ts <= (next_ts + max_delta_in_secs) {
             checkpoint_ts = next_ts;
             // msg!("valid schedule");
         }
         else {
             return Err(ErrorCode::InvalidSwapSchedule.into());
+        }
+
+        if last_completed_ts == checkpoint_ts {
+            return Err(ErrorCode::SwapAlreadyCompleted.into());
         }
 
         // Token balances before the trade.
@@ -812,4 +816,6 @@ pub enum ErrorCode {
     InvalidSwapSlippage,
     #[msg("Invalid interval")]
     InvalidInterval,
+    #[msg("A swap for this time window was already completed")]
+    SwapAlreadyCompleted,
 }
