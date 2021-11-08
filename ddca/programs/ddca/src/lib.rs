@@ -48,8 +48,18 @@ pub mod ddca {
             return Err(ErrorCode::InvalidSwapsCount.into());
         }
 
-        let start_ts = Clock::get()?.unix_timestamp as u64;
+        let mut start_ts = Clock::get()?.unix_timestamp as u64;
         let current_slot = Clock::get()?.slot;
+
+        if interval_in_seconds < 3600 { // less than 1 hour
+            if interval_in_seconds != 5 * 60 && interval_in_seconds != 10 * 60 && interval_in_seconds != 15 * 60 && interval_in_seconds != 20 * 60 && interval_in_seconds != 30 * 60 {
+                return Err(ErrorCode::InvalidInterval.into());
+            }
+            let seconds_past_hour = start_ts % 3600;
+            if seconds_past_hour % interval_in_seconds != 0 {
+                start_ts = (start_ts / 3600) * 3600 + ((seconds_past_hour / interval_in_seconds) + 1) * interval_in_seconds;
+            }
+        }
 
         ctx.accounts.ddca_account.owner_acc_addr = *ctx.accounts.owner_account.key;
         ctx.accounts.ddca_account.from_mint = *ctx.accounts.from_mint.as_ref().key; //ctx.accounts.from_token_account.mint;
@@ -129,14 +139,14 @@ pub mod ddca {
         let interval = ctx.accounts.ddca_account.interval_in_seconds;
         let last_ts = ctx.accounts.ddca_account.last_completed_swap_ts;
         let now_ts = Clock::get()?.unix_timestamp as u64;
-        let max_delta_in_secs = cmp::min(interval / 100, 3600); // +/-1% up to 3600 sec (ok for min interval = 5 min)
+        let max_delta_in_secs = cmp::max(cmp::min(interval / 20, 9000), 60); // +/-5% min: 1 min, max: 2.5 hours (ok for min interval = 5 min)
         let prev_checkpoint = (now_ts - start_ts) / interval;
         let prev_ts = start_ts + prev_checkpoint * interval;
         let next_checkpoint = prev_checkpoint + 1;
         let next_ts = start_ts + next_checkpoint * interval;
         let checkpoint_ts: u64;
-        // msg!("DDCA schedule: {{ start_ts: {}, interval: {}, last_ts: {}, now_ts: {}, max_delta_in_secs: {}, low: {}, high: {}, low_ts: {}, high_ts: {} }}",
-        //                         start_ts, interval, last_ts, now_ts, max_delta_in_secs, prev_checkpoint, next_checkpoint, prev_ts, next_ts);
+        msg!("DDCA schedule: {{ start_ts: {}, interval: {}, last_ts: {}, now_ts: {}, max_delta_in_secs: {}, low: {}, high: {}, low_ts: {}, high_ts: {} }}",
+                                start_ts, interval, last_ts, now_ts, max_delta_in_secs, prev_checkpoint, next_checkpoint, prev_ts, next_ts);
 
         if last_ts != prev_ts && now_ts >= (prev_ts - max_delta_in_secs) && now_ts <= (prev_ts + max_delta_in_secs) {
             checkpoint_ts = prev_ts;
@@ -199,11 +209,21 @@ pub mod ddca {
             .checked_mul(10u128.pow(ctx.accounts.ddca_account.from_mint_decimals.into())).unwrap()
             .checked_div(from_amount_delta.into()).unwrap()
         ).unwrap();
-         
-        ctx.accounts.ddca_account.swap_avg_rate +=
-            swap_rate
-            .checked_sub(ctx.accounts.ddca_account.swap_avg_rate).unwrap()
-            .checked_div(ctx.accounts.ddca_account.swap_count + 1).unwrap();
+
+        ctx.accounts.ddca_account.swap_avg_rate = {
+            if swap_rate >= ctx.accounts.ddca_account.swap_avg_rate {
+                ctx.accounts.ddca_account.swap_avg_rate + 
+                swap_rate
+                .checked_sub(ctx.accounts.ddca_account.swap_avg_rate).unwrap()
+                .checked_div(ctx.accounts.ddca_account.swap_count + 1).unwrap()
+            }
+            else {
+                ctx.accounts.ddca_account.swap_avg_rate -
+                ctx.accounts.ddca_account.swap_avg_rate
+                .checked_sub(swap_rate).unwrap()
+                .checked_div(ctx.accounts.ddca_account.swap_count + 1).unwrap()
+            }
+        };
 
         ctx.accounts.ddca_account.last_completed_swap_ts = checkpoint_ts;
         ctx.accounts.ddca_account.swap_count += 1;
@@ -790,4 +810,6 @@ pub enum ErrorCode {
     InvalidSwapSchedule,
     #[msg("Invalid swap slippage")]
     InvalidSwapSlippage,
+    #[msg("Invalid interval")]
+    InvalidInterval,
 }
