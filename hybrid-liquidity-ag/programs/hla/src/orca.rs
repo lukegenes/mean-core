@@ -1,7 +1,5 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::*;
 use spl_token_swap::*;
-use crate::utils::*;
 use crate::state::*;
 
 pub fn swap<'info>(
@@ -10,8 +8,9 @@ pub fn swap<'info>(
 ) -> ProgramResult {
 
     let acounts_iter = &mut swap_info.remaining_accounts.iter();
+    
+    let protocol_account_info = next_account_info(acounts_iter)?;
     let pool_account_info = next_account_info(acounts_iter)?;
-    let cpi_program_info = next_account_info(acounts_iter)?;
     let swap_account_info = next_account_info(acounts_iter)?;
     let swap_authority_info = next_account_info(acounts_iter)?;
     let pool_source_account_info = next_account_info(acounts_iter)?;
@@ -22,7 +21,7 @@ pub fn swap<'info>(
     let swap_amount = (swap_info.from_amount as f64) - fee_amount;
 
     let swap_ix = spl_token_swap::instruction::swap(
-        cpi_program_info.key,
+        protocol_account_info.key,
         swap_info.accounts.token_program_account.key,
         swap_account_info.key,
         swap_authority_info.key,
@@ -43,7 +42,7 @@ pub fn swap<'info>(
     let _result = solana_program::program::invoke_signed(
         &swap_ix,
         &[
-            cpi_program_info.to_account_info(),
+            protocol_account_info.to_account_info(),
             swap_info.accounts.token_program_account.to_account_info(),
             swap_account_info.to_account_info(),
             swap_authority_info.to_account_info(),
@@ -57,13 +56,6 @@ pub fn swap<'info>(
         ],
         &[]
     );
-
-    let transfer_ctx = get_transfer_context(swap_info)?;
-
-    transfer(
-        transfer_ctx,
-        fee_amount as u64
-    )?;
 
     Ok(())
 }

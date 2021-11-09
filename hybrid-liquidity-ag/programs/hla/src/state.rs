@@ -13,10 +13,8 @@ pub mod hla_ops_account {
 
 #[derive(Clone, Debug)]
 pub struct PoolInfo<'info> {
-    pub name: &'info str,
     pub account: &'info str,
-    pub protocol_account: &'info str,
-    pub amm_account: &'info str
+    pub protocol_account: &'info str
 }
 
 #[derive(Accounts, Clone)]

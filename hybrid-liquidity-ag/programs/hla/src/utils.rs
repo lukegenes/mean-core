@@ -4,21 +4,24 @@ use crate::state::*;
 use crate::data::*;
 use crate::errors::*;
 
-pub fn get_pool(pool_account: &str) -> Result<PoolInfo> {
+pub fn veriry_pool<'info>(
+    pool_account: &str, 
+    protocol_account: &str
+
+) -> ProgramResult {
+
     let pools = get_pools();
     let lps = pools
-        .iter()
-        .filter(|p| p.account.eq(pool_account))
-        .map(|p| p.clone())
+        .filter(|p| p.account == pool_account && p.protocol_account == protocol_account)
+        .map(|p| p)
         .collect::<Vec<PoolInfo>>();
 
-    
     if lps.len() == 0
     {
         return Err(ErrorCode::PoolNotFound.into());
     }
 
-    Ok(lps[0].clone())
+    Ok(())
 }
 
 pub fn get_transfer_context<'info>(
@@ -26,11 +29,11 @@ pub fn get_transfer_context<'info>(
 
 ) -> Result<CpiContext<'_, '_, '_, 'info, Transfer<'info>>> {
 
-    let cpi_program = swap_info.accounts.token_program_account;
+    let cpi_program = swap_info.accounts.token_program_account.to_account_info();
     let cpi_accounts = Transfer {
         from: swap_info.accounts.from_token_account.to_account_info(),
         to: swap_info.accounts.hla_ops_token_account.to_account_info(),
-        authority: swap_info.accounts.vault_account
+        authority: swap_info.accounts.vault_account.to_account_info()
     };
 
     Ok(CpiContext::new(

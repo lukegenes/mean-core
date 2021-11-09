@@ -35,6 +35,7 @@ fn get_swap_context<'info>(
 ) -> Result<CpiContext<'_, '_, '_, 'info, Swap<'info>>> {
 
     let acounts_iter = &mut swap_info.remaining_accounts.iter();
+    
     let _pool_account_info = next_account_info(acounts_iter)?;
     let cpi_program_info = next_account_info(acounts_iter)?;
     let swap_account_info = next_account_info(acounts_iter)?;
