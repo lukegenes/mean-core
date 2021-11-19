@@ -139,22 +139,20 @@ pub mod ddca {
         let interval = ctx.accounts.ddca_account.interval_in_seconds;
         let last_completed_ts = ctx.accounts.ddca_account.last_completed_swap_ts;
         let now_ts = Clock::get()?.unix_timestamp as u64;
-        let max_delta_in_secs = cmp::max(cmp::min(interval / 20, 9000), 60); // +/-5% min: 1 min, max: 2.5 hours (ok for min interval = 5 min)
+        let max_delta_in_secs = cmp::max(cmp::min(interval / 20, 7200), 300); // +/-5% min: 5 min, max: 2h
         let prev_checkpoint = (now_ts - start_ts) / interval;
         let prev_ts = start_ts + prev_checkpoint * interval;
         let next_checkpoint = prev_checkpoint + 1;
         let next_ts = start_ts + next_checkpoint * interval;
         let checkpoint_ts: u64;
-        msg!("DDCA schedule: {{ start_ts: {}, interval: {}, last_ts: {}, now_ts: {}, max_delta_in_secs: {}, low: {}, high: {}, low_ts: {}, high_ts: {} }}",
+        msg!("sts: {}, its: {}, lts: {}, nts: {}, mds: {}, lo: {}, hi: {}, lots: {}, hits: {} }}",
                                 start_ts, interval, last_completed_ts, now_ts, max_delta_in_secs, prev_checkpoint, next_checkpoint, prev_ts, next_ts);
 
         if now_ts >= (prev_ts - max_delta_in_secs) && now_ts <= (prev_ts + max_delta_in_secs) {
             checkpoint_ts = prev_ts;
-            // msg!("valid schedule");
         }
         else if now_ts >= (next_ts - max_delta_in_secs) && now_ts <= (next_ts + max_delta_in_secs) {
             checkpoint_ts = next_ts;
-            // msg!("valid schedule");
         }
         else {
             return Err(ErrorCode::InvalidSwapSchedule.into());
@@ -239,7 +237,7 @@ pub mod ddca {
             ctx.accounts.ddca_account.is_paused = true;
         } else {
             let lamports_per_signature = Fees::get()?.fee_calculator.lamports_per_signature;
-            msg!("transfering {} lamports ({} SOL) from ddca to wake account for next swap", lamports_per_signature, lamports_per_signature as f64 / LAMPORTS_PER_SOL as f64);
+            // msg!("transfering {} lamports ({} SOL) from ddca to wake account for next swap", lamports_per_signature, lamports_per_signature as f64 / LAMPORTS_PER_SOL as f64);
 
             **ctx.accounts.ddca_account.to_account_info().try_borrow_mut_lamports()? -= lamports_per_signature;
             **ctx.accounts.wake_account.to_account_info().try_borrow_mut_lamports()? += lamports_per_signature;
@@ -465,7 +463,7 @@ pub struct CreateInputAccounts<'info> {
         payer = owner_account, 
         space = 500, // 8 + DdcaAccount::LEN,
         constraint = amount_per_swap > 0,
-        constraint = interval_in_seconds >= 7 * 24 * 60 * 60, // minimum inverval: 1 week
+        constraint = interval_in_seconds >= 3600, // minimum inverval: 1 hour
     )]
     pub ddca_account: Account<'info, DdcaAccount>,
     pub from_mint:  Account<'info, Mint>, 
