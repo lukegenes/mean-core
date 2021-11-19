@@ -19,4 +19,4 @@ anchor-lang = "0.17.0"
 anchor-spl = "0.17.0"
 spl-token = { version = "3.1.1", features = ["no-entrypoint"] }
 solana-program = "=1.7.11"
-hla = { path = "../../../hybrid-liquidity-ag/programs/hla", features = ["cpi"], version = "0.1.0" }
+hla = { path = "../../../hybrid-liquidity-ag/programs/hla", features = ["cpi"], version = "0.2.2" }
