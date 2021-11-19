@@ -1,6 +1,8 @@
 use anchor_lang::prelude::*;
+use anchor_spl::token::*;
 use spl_token_swap::*;
 use crate::state::*;
+use crate::utils::*;
 
 pub fn swap<'info>(
     swap_info: SwapInfo<'info>
@@ -9,8 +11,8 @@ pub fn swap<'info>(
 
     let acounts_iter = &mut swap_info.remaining_accounts.iter();
     
-    let protocol_account_info = next_account_info(acounts_iter)?;
     let pool_account_info = next_account_info(acounts_iter)?;
+    let protocol_account_info = next_account_info(acounts_iter)?;
     let swap_account_info = next_account_info(acounts_iter)?;
     let swap_authority_info = next_account_info(acounts_iter)?;
     let pool_source_account_info = next_account_info(acounts_iter)?;
@@ -56,6 +58,13 @@ pub fn swap<'info>(
         ],
         &[]
     );
+
+    let transfer_ctx = get_transfer_context(swap_info.clone())?;
+
+    transfer(
+        transfer_ctx,
+        fee_amount as u64
+    )?;
 
     Ok(())
 }

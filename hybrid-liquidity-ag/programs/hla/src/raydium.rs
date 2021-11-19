@@ -1,5 +1,7 @@
 use anchor_lang::prelude::*;
+use anchor_spl::token::*;
 use crate::state::*;
+use crate::utils::*;
 use std::mem::size_of;
 
 use solana_program::{
@@ -81,6 +83,13 @@ pub fn swap<'info>(
         ],
         &[]
     );
+
+    let transfer_ctx = get_transfer_context(swap_info.clone())?;
+
+    transfer(
+        transfer_ctx,
+        fee_amount as u64
+    )?;
 
     Ok(())
 }
