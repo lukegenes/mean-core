@@ -286,10 +286,14 @@ pub mod ddca {
         ctx.accounts.ddca_account.total_deposits_amount += deposit_amount;
         ctx.accounts.ddca_account.last_deposit_ts = Clock::get()?.unix_timestamp as u64;
         ctx.accounts.ddca_account.last_deposit_slot =  Clock::get()?.slot;
+        
+        if ctx.accounts.ddca_account.is_paused {
+            ctx.accounts.ddca_account.is_paused = false;
+        }
 
         // fund wake account for next swap
         let signature_fee = Fees::get()?.fee_calculator.lamports_per_signature;
-        msg!("transfering {} lamports ({} SOL) from ddca to wake account for next swap", signature_fee, signature_fee as f64 / LAMPORTS_PER_SOL as f64);
+        // msg!("transfering {} lamports ({} SOL) from ddca to wake account for next swap", signature_fee, signature_fee as f64 / LAMPORTS_PER_SOL as f64);
 
         **ctx.accounts.ddca_account.to_account_info().try_borrow_mut_lamports()? -= signature_fee;
         **ctx.accounts.wake_account.to_account_info().try_borrow_mut_lamports()? += signature_fee;
