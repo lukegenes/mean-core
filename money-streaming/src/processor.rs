@@ -196,7 +196,28 @@ impl Processor {
                     treasury_block_height,
                     treasury_base_address
                 )
-            }    
+            },
+            
+            StreamInstruction::CreateTreasuryV2 { 
+                block_height,
+                base_address,
+                tag,
+                amount,
+                is_reserved
+
+            } => {
+                msg!("Instruction: CreateTreasury");
+
+                Self::process_create_treasury_v2(
+                    accounts, 
+                    program_id,
+                    block_height,
+                    base_address,
+                    tag,
+                    amount,
+                    is_reserved
+                )
+            }  
         }
     }
 
@@ -1733,6 +1754,20 @@ impl Processor {
             fees_lamports, 
             (*msp_ops_account_info.key).to_string()
         );
+        
+        Ok(())
+    }
+
+    fn process_create_treasury_v2(
+        accounts: &[AccountInfo], 
+        _program_id: &Pubkey,
+        block_height: u64,
+        base_address: Pubkey,
+        tag: String,
+        amount: f64,
+        is_reserved: bool
+
+    ) -> ProgramResult {
         
         Ok(())
     }
