@@ -1,5 +1,6 @@
 // Register modules
 pub mod error;
+pub mod utils;
 pub mod instruction;
 pub mod processor;
 pub mod state;
