@@ -14,9 +14,6 @@ pub mod ddca_operating_account {
 // pub mod hla_program {
 //     solana_program::declare_id!("B6gLd2uyVQLZMdC1s9C4WR7ZP9fMhJNh7WZYcsibuzN3");
 // }
-pub mod hla_ops_accounts {
-    solana_program::declare_id!("FZMd4pn9FsvMC55D4XQfaexJvKBtQpVuqMk5zuonLRDX");
-}
 
 pub const WITHDRAW_TOKEN_FEE_NUMERATOR: u64 = 50;
 pub const WITHDRAW_TOKEN_FEE_DENOMINATOR: u64 = 10000;
@@ -48,18 +45,8 @@ pub mod ddca {
             return Err(ErrorCode::InvalidSwapsCount.into());
         }
 
-        let mut start_ts = Clock::get()?.unix_timestamp as u64;
+        let start_ts = Clock::get()?.unix_timestamp as u64;
         let current_slot = Clock::get()?.slot;
-
-        if interval_in_seconds < 3600 { // less than 1 hour
-            if interval_in_seconds != 5 * 60 && interval_in_seconds != 10 * 60 && interval_in_seconds != 15 * 60 && interval_in_seconds != 20 * 60 && interval_in_seconds != 30 * 60 {
-                return Err(ErrorCode::InvalidInterval.into());
-            }
-            let seconds_past_hour = start_ts % 3600;
-            if seconds_past_hour % interval_in_seconds != 0 {
-                start_ts = (start_ts / 3600) * 3600 + ((seconds_past_hour / interval_in_seconds) + 1) * interval_in_seconds;
-            }
-        }
 
         ctx.accounts.ddca_account.owner_acc_addr = *ctx.accounts.owner_account.key;
         ctx.accounts.ddca_account.from_mint = *ctx.accounts.from_mint.as_ref().key; //ctx.accounts.from_token_account.mint;
@@ -165,9 +152,6 @@ pub mod ddca {
         // Token balances before the trade.
         let from_amount_before = token::accessor::amount(&ctx.accounts.from_token_account.to_account_info())?;
         let to_amount_before = token::accessor::amount(&ctx.accounts.to_token_account.to_account_info())?;
-        
-        // msg!("Executing scheduled swap at {}", checkpoint_ts);
-        solana_program::log::sol_log_compute_units();
 
         // call hla to execute the first swap
         let hla_cpi_program = ctx.accounts.hla_program.clone();
@@ -509,13 +493,15 @@ pub struct WakeAndSwapInputAccounts<'info> {
     // ddca
     #[account(
         mut,
+        constraint = ddca_account.from_tacc_addr == *from_token_account.to_account_info().key,
+        constraint = ddca_account.to_tacc_addr == *to_token_account.to_account_info().key,
     )]
     pub ddca_account: Account<'info, DdcaAccount>,
-    #[account(constraint = from_mint.key() == ddca_account.from_mint)]
+    // #[account(constraint = from_mint.key() == ddca_account.from_mint)]
     pub from_mint:  Account<'info, Mint>,
     #[account(mut)]
     pub from_token_account: Box<Account<'info, TokenAccount>>,
-    #[account(constraint = to_mint.key() == ddca_account.to_mint)]
+    // #[account(constraint = to_mint.key() == ddca_account.to_mint)]
     pub to_mint:  Account<'info, Mint>, 
     #[account(mut)]
     pub to_token_account: Box<Account<'info, TokenAccount>>,
@@ -523,7 +509,7 @@ pub struct WakeAndSwapInputAccounts<'info> {
     // #[account(address = hla_program::ID)]
     #[account(address = hla::ID)]
     pub hla_program: AccountInfo<'info>,
-    #[account(mut, address = hla_ops_accounts::ID)]
+    #[account(mut)]
     pub hla_operating_account: AccountInfo<'info>,
     #[account(mut)]
     pub hla_operating_from_token_account: Box<Account<'info, TokenAccount>>,
@@ -551,6 +537,7 @@ pub struct AddFundsInputAccounts<'info> {
     #[account(
         mut,
         constraint = ddca_account.owner_acc_addr == *owner_account.key,
+        constraint = ddca_account.from_tacc_addr == *from_token_account.to_account_info().key,
     )]
     pub ddca_account: Account<'info, DdcaAccount>,
     #[account(mut)]
@@ -582,7 +569,8 @@ pub struct WithdrawInputAccounts<'info> {
     #[account(
         mut,
         constraint = withdraw_amount > 0,
-        constraint = ddca_to_token_account.amount >= withdraw_amount
+        constraint = ddca_to_token_account.amount >= withdraw_amount,
+        constraint = ddca_account.to_tacc_addr == *ddca_to_token_account.to_account_info().key,
     )]
     pub ddca_to_token_account: Box<Account<'info, TokenAccount>>,
     #[account(address = ddca_operating_account::ID)]
@@ -610,18 +598,14 @@ pub struct CloseInputAccounts<'info> {
     #[account(
         mut,
         constraint = ddca_account.owner_acc_addr == *owner_account.key,
+        constraint = ddca_account.from_tacc_addr == *ddca_from_token_account.to_account_info().key,
+        constraint = ddca_account.to_tacc_addr == *ddca_to_token_account.to_account_info().key,
         close = owner_account,
     )]
     pub ddca_account: Account<'info, DdcaAccount>,
-    #[account(
-        mut,
-        // close = owner_account,
-    )]
+    #[account(mut)]
     pub ddca_from_token_account: Box<Account<'info, TokenAccount>>,
-    #[account(
-        mut,
-        // close = owner_account,
-    )]
+    #[account(mut)]
     pub ddca_to_token_account: Box<Account<'info, TokenAccount>>,
     #[account(address = ddca_operating_account::ID)]
     pub operating_account: AccountInfo<'info>,
