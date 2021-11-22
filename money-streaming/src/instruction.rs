@@ -165,7 +165,9 @@ pub enum StreamInstruction {
 
     /// 0. `[signer]` The treasurer account (the creator of the treasury)
     /// 1. `[writable]` The treasury account
-    /// 2. `[writable]` The treasury token account
+    /// 2. `[writable]` The treasury token account (The token account of the treasury which the funds are going to be payed for)
+    /// 3. `[writable]` The treasury token mint account (The mint account of the treasury token which the funds are going to be payed for).
+    /// 4. `[writable]` The treasury mint account (The mint account of the treasury pool token issued by the treasury).
     /// 5. `[writable]` The Money Streaming Program operating account (Fees account).
     /// 6. `[writable]` The Money Streaming Protocol operating token account.
     /// 7. `[]` The Associated Token Program account.
@@ -173,11 +175,33 @@ pub enum StreamInstruction {
     /// 9. `[]` System Program account.
     /// 10. `[]` SysvarRent account.
     CreateTreasuryV2 {
-        block_height: u64,
+        slot: u64,
         base_address: Pubkey,
         tag: String,
         amount: f64,
-        is_reserved: bool 
+        is_reserved: bool
+    },
+
+    /// Initialize a new stream contract
+    ///
+    /// 0. `[signer]` The treasurer account (The creator of the money stream).
+    /// 1. `[]` The treasury account (The stream contract treasury account).
+    /// 2. `[]` The beneficiary associated token mint account.
+    /// 3. `[writable]` The stream account (The stream contract account).
+    /// 4.  [writable] The Money Streaming Program operating account (Fees account).
+    /// 5.  [] The Money Streaming Program account.
+    /// 6. `[]` The System Program account.
+    /// 7. `[]` Rent sysvar account.
+    CreateStreamV2 {
+        beneficiary_address: Pubkey,
+        name: String,        
+        rate_amount: f64,
+        rate_interval_in_seconds: u64,
+        start_utc: u64,
+        rate_cliff_in_seconds: u64,
+        cliff_vest_amount: f64, // OPTIONAL
+        cliff_vest_percent: f64, // OPTIONAL
+        auto_pause_in_seconds: u64
     },
 }
 
@@ -201,6 +225,8 @@ impl StreamInstruction {
             7 => Self::unpack_answer_update(result)?,
             8 => Ok(Self::CloseStream)?,
             9 => Self::unpack_create_treasury(result)?,
+            10 => Self::unpack_create_treasury_v2(result)?,
+            11 => Self::unpack_create_stream_v2(result)?,
 
             _ => return Err(StreamError::InvalidStreamInstruction.into()),
         })
@@ -324,7 +350,7 @@ impl StreamInstruction {
             },
 
             Self::CreateTreasuryV2 {
-                block_height,
+                slot,
                 base_address,
                 tag,
                 amount,
@@ -333,7 +359,7 @@ impl StreamInstruction {
             } => {
                 buf.push(10);
 
-                buf.extend_from_slice(&block_height.to_le_bytes());
+                buf.extend_from_slice(&slot.to_le_bytes());
                 buf.extend_from_slice(base_address.as_ref());
                 buf.extend_from_slice(tag.as_ref());
                 buf.extend_from_slice(&amount.to_le_bytes());
@@ -344,6 +370,32 @@ impl StreamInstruction {
                 };
 
                 buf.push(is_reserved as u8);
+            },
+
+            Self::CreateStreamV2 {
+                beneficiary_address,
+                name,
+                rate_amount,
+                rate_interval_in_seconds,
+                start_utc,
+                rate_cliff_in_seconds,
+                cliff_vest_amount,
+                cliff_vest_percent,
+                auto_pause_in_seconds
+
+            } => {
+
+                buf.push(11);
+
+                buf.extend_from_slice(beneficiary_address.as_ref());
+                buf.extend_from_slice(name.as_ref());
+                buf.extend_from_slice(&rate_amount.to_le_bytes());
+                buf.extend_from_slice(&rate_interval_in_seconds.to_le_bytes());
+                buf.extend_from_slice(&start_utc.to_le_bytes());
+                buf.extend_from_slice(&rate_cliff_in_seconds.to_le_bytes());
+                buf.extend_from_slice(&cliff_vest_amount.to_le_bytes());
+                buf.extend_from_slice(&cliff_vest_percent.to_le_bytes());
+                buf.extend_from_slice(&auto_pause_in_seconds.to_le_bytes());               
             },
         };
 
@@ -489,8 +541,8 @@ impl StreamInstruction {
 
     fn unpack_create_treasury_v2(input: &[u8]) -> Result<Self, StreamError> {
 
-        let (block_height, result) = input.split_at(8);
-        let block_height = unpack_u64(block_height)?;
+        let (slot, result) = input.split_at(8);
+        let slot = unpack_u64(slot)?;
 
         let (base_address, result) = unpack_pubkey(result)?;
         let (tag, result) = unpack_string(result)?;
@@ -506,11 +558,50 @@ impl StreamInstruction {
         };
 
         Ok(Self::CreateTreasuryV2 { 
-            block_height,
+            slot,
             base_address,
             tag,
             amount,
             is_reserved
+        })
+    }
+
+    fn unpack_create_stream_v2(input: &[u8]) -> Result<Self, StreamError> {
+
+        let (beneficiary_address, result) = unpack_pubkey(input)?;
+        let (name, result) = unpack_string(result)?;
+
+        let (rate_amount, result) = result.split_at(8);
+        let rate_amount = unpack_f64(rate_amount)?;
+
+        let (rate_interval_in_seconds, result) = result.split_at(8);
+        let rate_interval_in_seconds = unpack_u64(rate_interval_in_seconds)?;
+
+        let (start_utc, result) = result.split_at(8);
+        let start_utc = unpack_u64(start_utc)?;
+
+        let (rate_cliff_in_seconds, result) = result.split_at(8);
+        let rate_cliff_in_seconds = unpack_u64(rate_cliff_in_seconds)?;
+
+        let (cliff_vest_amount, result) = result.split_at(8);
+        let cliff_vest_amount = unpack_f64(cliff_vest_amount)?;
+
+        let (cliff_vest_percent, result) = result.split_at(8);
+        let cliff_vest_percent = unpack_f64(cliff_vest_percent)?;
+
+        let (auto_pause_in_seconds, _result) = result.split_at(8);
+        let auto_pause_in_seconds = unpack_u64(auto_pause_in_seconds)?;
+
+        Ok(Self::CreateStreamV2 {
+            beneficiary_address,
+            name,
+            rate_amount,
+            rate_interval_in_seconds,
+            start_utc,
+            rate_cliff_in_seconds,
+            cliff_vest_amount,
+            cliff_vest_percent,
+            auto_pause_in_seconds
         })
     }
  }

@@ -633,7 +633,7 @@ impl Pack for Treasury {
 #[derive(Clone, Debug)]
 pub struct TreasuryV2 {
     pub initialized: bool,
-    pub block_height: u64,
+    pub slot: u64,
     pub mint_address: Pubkey,
     pub base_address: Pubkey,
     pub tag: String,
@@ -655,7 +655,7 @@ impl Default for TreasuryV2 {
     fn default() -> Self {
         Self {
             initialized: false,
-            block_height: 0,
+            slot: 0,
             mint_address: Pubkey::default(),
             base_address: Pubkey::default(),
             tag: String::default(),
@@ -675,7 +675,7 @@ impl Pack for TreasuryV2 {
         let output = array_mut_ref![output, 0, TreasuryV2::LEN];
         let TreasuryV2 {
             initialized,
-            block_height,
+            slot,
             mint_address,
             base_address,
             tag,
@@ -687,7 +687,7 @@ impl Pack for TreasuryV2 {
         } = self;
 
         output[0] = *initialized as u8;
-        output.copy_from_slice(block_height.to_le_bytes().as_ref());
+        output.copy_from_slice(slot.to_le_bytes().as_ref());
         output.copy_from_slice(mint_address.as_ref());
         output.copy_from_slice(base_address.as_ref());
         output.copy_from_slice(tag.as_ref());
@@ -713,7 +713,7 @@ impl Pack for TreasuryV2 {
         };
 
         let (_, result) = input.split_at(1);
-        let (block_height, result) = result.split_at(8);
+        let (slot, result) = result.split_at(8);
         let (mint_address, result) = unpack_pubkey(result)?;
         let (base_address, result) = unpack_pubkey(result)?;
         let (tag, result) = unpack_string(result)?;
@@ -723,7 +723,7 @@ impl Pack for TreasuryV2 {
 
         Ok(TreasuryV2 {
             initialized,             
-            block_height: unpack_u64(block_height)?,
+            slot: unpack_u64(slot)?,
             mint_address,
             base_address,
             tag,
