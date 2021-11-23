@@ -132,8 +132,10 @@ pub mod ddca {
         let next_checkpoint = prev_checkpoint + 1;
         let next_ts = start_ts + next_checkpoint * interval;
         let checkpoint_ts: u64;
-        msg!("sts: {}, its: {}, lts: {}, nts: {}, mds: {}, lo: {}, hi: {}, lots: {}, hits: {} }}",
-                                start_ts, interval, last_completed_ts, now_ts, max_delta_in_secs, prev_checkpoint, next_checkpoint, prev_ts, next_ts);
+
+        #[cfg(feature = "devnet")]
+        msg!("sts: {}, its: {}, lts: {}, nts: {}, mds: {}, lo: {}, hi: {}, lots: {}, hits: {} }}", 
+        start_ts, interval, last_completed_ts, now_ts, max_delta_in_secs, prev_checkpoint, next_checkpoint, prev_ts, next_ts);
 
         if now_ts >= (prev_ts - max_delta_in_secs) && now_ts <= (prev_ts + max_delta_in_secs) {
             checkpoint_ts = prev_ts;
