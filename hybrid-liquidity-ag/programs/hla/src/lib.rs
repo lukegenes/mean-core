@@ -3,9 +3,10 @@ use anchor_lang::prelude::*;
 pub mod errors;
 pub mod utils;
 pub mod state;
-pub mod data;
 pub mod saber;
 pub mod orca;
+pub mod raydium;
+pub mod serum;
 
 use crate::state::*;
 
@@ -24,28 +25,10 @@ pub mod hla {
     ) -> ProgramResult {
 
         let rem_accs_iter = &mut ctx.remaining_accounts.iter();
-        let pool_account = next_account_info(rem_accs_iter)?;
-        let pool_account_address = &pool_account.key.to_string();
-        let pool_info = utils::get_pool(pool_account_address.as_str())?;
 
-        if pool_info.account.ne(pool_account.key.to_string().as_str())
-        {
-            return Err(errors::ErrorCode::InvalidPool.into());
-        }
-
-        let protocol_account = next_account_info(rem_accs_iter)?;        
-
-        if pool_info.protocol_account.ne(protocol_account.key.to_string().as_str())
-        {
-            return Err(errors::ErrorCode::InvalidProtocol.into());
-        }
-
-        let amm_account = next_account_info(rem_accs_iter)?;   
-
-        if pool_info.amm_account.ne(amm_account.key.to_string().as_str())
-        {
-            return Err(errors::ErrorCode::InvalidAmm.into());
-        }
+        let _pool_account_info = next_account_info(rem_accs_iter)?;
+        let protocol_account_info = next_account_info(rem_accs_iter)?;
+        let protocol_account_address = &protocol_account_info.key.to_string();
 
         let swap_info = SwapInfo {
             accounts: ctx.accounts.clone(),
@@ -54,12 +37,14 @@ pub mod hla {
             min_out_amount
         };
 
-        match protocol_account.key.to_string().as_str() {
+        match protocol_account_address.as_str() {
 
-            SABER => saber::swap(swap_info),
             ORCA => orca::swap(swap_info),
+            SABER => saber::swap(swap_info),
+            RAYDIUM => raydium::swap(swap_info),
+            SERUM => serum::swap(swap_info),
     
-            _ => return Err(errors::ErrorCode::PoolNotFound.into()),
+            _ => return Err(errors::ErrorCode::PoolNotFound.into())
         }
     }
 }

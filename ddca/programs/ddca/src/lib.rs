@@ -14,9 +14,6 @@ pub mod ddca_operating_account {
 // pub mod hla_program {
 //     solana_program::declare_id!("B6gLd2uyVQLZMdC1s9C4WR7ZP9fMhJNh7WZYcsibuzN3");
 // }
-pub mod hla_ops_accounts {
-    solana_program::declare_id!("FZMd4pn9FsvMC55D4XQfaexJvKBtQpVuqMk5zuonLRDX");
-}
 
 pub const WITHDRAW_TOKEN_FEE_NUMERATOR: u64 = 50;
 pub const WITHDRAW_TOKEN_FEE_DENOMINATOR: u64 = 10000;
@@ -48,18 +45,8 @@ pub mod ddca {
             return Err(ErrorCode::InvalidSwapsCount.into());
         }
 
-        let mut start_ts = Clock::get()?.unix_timestamp as u64;
+        let start_ts = Clock::get()?.unix_timestamp as u64;
         let current_slot = Clock::get()?.slot;
-
-        if interval_in_seconds < 3600 { // less than 1 hour
-            if interval_in_seconds != 5 * 60 && interval_in_seconds != 10 * 60 && interval_in_seconds != 15 * 60 && interval_in_seconds != 20 * 60 && interval_in_seconds != 30 * 60 {
-                return Err(ErrorCode::InvalidInterval.into());
-            }
-            let seconds_past_hour = start_ts % 3600;
-            if seconds_past_hour % interval_in_seconds != 0 {
-                start_ts = (start_ts / 3600) * 3600 + ((seconds_past_hour / interval_in_seconds) + 1) * interval_in_seconds;
-            }
-        }
 
         ctx.accounts.ddca_account.owner_acc_addr = *ctx.accounts.owner_account.key;
         ctx.accounts.ddca_account.from_mint = *ctx.accounts.from_mint.as_ref().key; //ctx.accounts.from_token_account.mint;
@@ -139,22 +126,22 @@ pub mod ddca {
         let interval = ctx.accounts.ddca_account.interval_in_seconds;
         let last_completed_ts = ctx.accounts.ddca_account.last_completed_swap_ts;
         let now_ts = Clock::get()?.unix_timestamp as u64;
-        let max_delta_in_secs = cmp::max(cmp::min(interval / 20, 9000), 60); // +/-5% min: 1 min, max: 2.5 hours (ok for min interval = 5 min)
+        let max_delta_in_secs = cmp::max(cmp::min(interval / 20, 7200), 300); // +/-5% min: 5 min, max: 2h
         let prev_checkpoint = (now_ts - start_ts) / interval;
         let prev_ts = start_ts + prev_checkpoint * interval;
         let next_checkpoint = prev_checkpoint + 1;
         let next_ts = start_ts + next_checkpoint * interval;
         let checkpoint_ts: u64;
-        msg!("DDCA schedule: {{ start_ts: {}, interval: {}, last_ts: {}, now_ts: {}, max_delta_in_secs: {}, low: {}, high: {}, low_ts: {}, high_ts: {} }}",
-                                start_ts, interval, last_completed_ts, now_ts, max_delta_in_secs, prev_checkpoint, next_checkpoint, prev_ts, next_ts);
+
+        #[cfg(feature = "devnet")]
+        msg!("sts: {}, its: {}, lts: {}, nts: {}, mds: {}, lo: {}, hi: {}, lots: {}, hits: {} }}", 
+        start_ts, interval, last_completed_ts, now_ts, max_delta_in_secs, prev_checkpoint, next_checkpoint, prev_ts, next_ts);
 
         if now_ts >= (prev_ts - max_delta_in_secs) && now_ts <= (prev_ts + max_delta_in_secs) {
             checkpoint_ts = prev_ts;
-            // msg!("valid schedule");
         }
         else if now_ts >= (next_ts - max_delta_in_secs) && now_ts <= (next_ts + max_delta_in_secs) {
             checkpoint_ts = next_ts;
-            // msg!("valid schedule");
         }
         else {
             return Err(ErrorCode::InvalidSwapSchedule.into());
@@ -167,9 +154,6 @@ pub mod ddca {
         // Token balances before the trade.
         let from_amount_before = token::accessor::amount(&ctx.accounts.from_token_account.to_account_info())?;
         let to_amount_before = token::accessor::amount(&ctx.accounts.to_token_account.to_account_info())?;
-        
-        // msg!("Executing scheduled swap at {}", checkpoint_ts);
-        solana_program::log::sol_log_compute_units();
 
         // call hla to execute the first swap
         let hla_cpi_program = ctx.accounts.hla_program.clone();
@@ -239,7 +223,7 @@ pub mod ddca {
             ctx.accounts.ddca_account.is_paused = true;
         } else {
             let lamports_per_signature = Fees::get()?.fee_calculator.lamports_per_signature;
-            msg!("transfering {} lamports ({} SOL) from ddca to wake account for next swap", lamports_per_signature, lamports_per_signature as f64 / LAMPORTS_PER_SOL as f64);
+            // msg!("transfering {} lamports ({} SOL) from ddca to wake account for next swap", lamports_per_signature, lamports_per_signature as f64 / LAMPORTS_PER_SOL as f64);
 
             **ctx.accounts.ddca_account.to_account_info().try_borrow_mut_lamports()? -= lamports_per_signature;
             **ctx.accounts.wake_account.to_account_info().try_borrow_mut_lamports()? += lamports_per_signature;
@@ -288,10 +272,14 @@ pub mod ddca {
         ctx.accounts.ddca_account.total_deposits_amount += deposit_amount;
         ctx.accounts.ddca_account.last_deposit_ts = Clock::get()?.unix_timestamp as u64;
         ctx.accounts.ddca_account.last_deposit_slot =  Clock::get()?.slot;
+        
+        if ctx.accounts.ddca_account.is_paused {
+            ctx.accounts.ddca_account.is_paused = false;
+        }
 
         // fund wake account for next swap
         let signature_fee = Fees::get()?.fee_calculator.lamports_per_signature;
-        msg!("transfering {} lamports ({} SOL) from ddca to wake account for next swap", signature_fee, signature_fee as f64 / LAMPORTS_PER_SOL as f64);
+        // msg!("transfering {} lamports ({} SOL) from ddca to wake account for next swap", signature_fee, signature_fee as f64 / LAMPORTS_PER_SOL as f64);
 
         **ctx.accounts.ddca_account.to_account_info().try_borrow_mut_lamports()? -= signature_fee;
         **ctx.accounts.wake_account.to_account_info().try_borrow_mut_lamports()? += signature_fee;
@@ -430,6 +418,26 @@ pub mod ddca {
                 .with_signer(&[&seeds[..]]),
         )?;
 
+        // defund wake account
+        let lamports_to_return = ctx.accounts.wake_account.to_account_info().lamports();
+        if lamports_to_return > 0 {
+
+            msg!("returning {} lamports ({} SOL) from wake account to ddca account", lamports_to_return, lamports_to_return as f64 / LAMPORTS_PER_SOL as f64);
+            let ix = anchor_lang::solana_program::system_instruction::transfer(
+                ctx.accounts.wake_account.key,
+                ctx.accounts.ddca_account.as_ref().key,
+                lamports_to_return,
+            );
+
+            anchor_lang::solana_program::program::invoke(
+                &ix,
+                &[
+                    ctx.accounts.wake_account.to_account_info(),
+                    ctx.accounts.ddca_account.to_account_info(),
+                ],
+            )?;
+        }
+
         Ok(())
     }
 }
@@ -465,7 +473,7 @@ pub struct CreateInputAccounts<'info> {
         payer = owner_account, 
         space = 500, // 8 + DdcaAccount::LEN,
         constraint = amount_per_swap > 0,
-        constraint = interval_in_seconds >= 7 * 24 * 60 * 60, // minimum inverval: 1 week
+        constraint = interval_in_seconds >= 3600, // minimum inverval: 1 hour
     )]
     pub ddca_account: Account<'info, DdcaAccount>,
     pub from_mint:  Account<'info, Mint>, 
@@ -507,13 +515,15 @@ pub struct WakeAndSwapInputAccounts<'info> {
     // ddca
     #[account(
         mut,
+        constraint = ddca_account.from_tacc_addr == *from_token_account.to_account_info().key,
+        constraint = ddca_account.to_tacc_addr == *to_token_account.to_account_info().key,
     )]
     pub ddca_account: Account<'info, DdcaAccount>,
-    #[account(constraint = from_mint.key() == ddca_account.from_mint)]
+    // #[account(constraint = from_mint.key() == ddca_account.from_mint)]
     pub from_mint:  Account<'info, Mint>,
     #[account(mut)]
     pub from_token_account: Box<Account<'info, TokenAccount>>,
-    #[account(constraint = to_mint.key() == ddca_account.to_mint)]
+    // #[account(constraint = to_mint.key() == ddca_account.to_mint)]
     pub to_mint:  Account<'info, Mint>, 
     #[account(mut)]
     pub to_token_account: Box<Account<'info, TokenAccount>>,
@@ -521,7 +531,7 @@ pub struct WakeAndSwapInputAccounts<'info> {
     // #[account(address = hla_program::ID)]
     #[account(address = hla::ID)]
     pub hla_program: AccountInfo<'info>,
-    #[account(mut, address = hla_ops_accounts::ID)]
+    #[account(mut)]
     pub hla_operating_account: AccountInfo<'info>,
     #[account(mut)]
     pub hla_operating_from_token_account: Box<Account<'info, TokenAccount>>,
@@ -549,6 +559,7 @@ pub struct AddFundsInputAccounts<'info> {
     #[account(
         mut,
         constraint = ddca_account.owner_acc_addr == *owner_account.key,
+        constraint = ddca_account.from_tacc_addr == *from_token_account.to_account_info().key,
     )]
     pub ddca_account: Account<'info, DdcaAccount>,
     #[account(mut)]
@@ -580,7 +591,8 @@ pub struct WithdrawInputAccounts<'info> {
     #[account(
         mut,
         constraint = withdraw_amount > 0,
-        constraint = ddca_to_token_account.amount >= withdraw_amount
+        constraint = ddca_to_token_account.amount >= withdraw_amount,
+        constraint = ddca_account.to_tacc_addr == *ddca_to_token_account.to_account_info().key,
     )]
     pub ddca_to_token_account: Box<Account<'info, TokenAccount>>,
     #[account(address = ddca_operating_account::ID)]
@@ -602,24 +614,23 @@ pub struct WithdrawInputAccounts<'info> {
 pub struct CloseInputAccounts<'info> {
     pub owner_account: Signer<'info>,
     #[account(mut)]
+    pub wake_account: Signer<'info>,
+    #[account(mut)]
     pub owner_from_token_account: Box<Account<'info, TokenAccount>>,
     #[account(mut)]
     pub owner_to_token_account: Box<Account<'info, TokenAccount>>,
     #[account(
         mut,
         constraint = ddca_account.owner_acc_addr == *owner_account.key,
+        constraint = ddca_account.wake_acc_addr == *wake_account.key,
+        constraint = ddca_account.from_tacc_addr == *ddca_from_token_account.to_account_info().key,
+        constraint = ddca_account.to_tacc_addr == *ddca_to_token_account.to_account_info().key,
         close = owner_account,
     )]
     pub ddca_account: Account<'info, DdcaAccount>,
-    #[account(
-        mut,
-        // close = owner_account,
-    )]
+    #[account(mut)]
     pub ddca_from_token_account: Box<Account<'info, TokenAccount>>,
-    #[account(
-        mut,
-        // close = owner_account,
-    )]
+    #[account(mut)]
     pub ddca_to_token_account: Box<Account<'info, TokenAccount>>,
     #[account(address = ddca_operating_account::ID)]
     pub operating_account: AccountInfo<'info>,
@@ -638,6 +649,7 @@ pub struct CloseInputAccounts<'info> {
     )]
     pub operating_to_token_account: Box<Account<'info, TokenAccount>>,
     pub token_program: Program<'info, Token>,
+    pub system_program: Program<'info, System>,
 }
 
 // ACCOUNT STRUCTS

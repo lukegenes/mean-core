@@ -9,6 +9,7 @@ use solana_program::{
 
 use crate::{
     check_program_account,
+    utils::*,
     error::StreamError
 };
 
@@ -47,12 +48,11 @@ pub enum StreamInstruction {
     /// 6. `[]` The treasury mint account (the mint of the treasury pool token)
     /// 7. `[writable]` The stream account (The stream contract account).
     /// 8.  [writable] The Money Streaming Program operating account (Fees account).
-    /// 9.  [writable] The Money Streaming Program operating token account.
-    /// 10.  [] The Money Streaming Program account.
-    /// 11. `[]` The Associated Token Program account.
-    /// 12. `[]` The Token Program account.
-    /// 13. `[]` The System Program account.
-    /// 14. `[]` Rent sysvar account.
+    /// 9.  [] The Money Streaming Program account.
+    /// 10. `[]` The Associated Token Program account.
+    /// 11. `[]` The Token Program account.
+    /// 12. `[]` The System Program account.
+    /// 13. `[]` Rent sysvar account.
     AddFunds {
         contribution_amount: f64,
         funded_on_utc: u64,
@@ -152,7 +152,7 @@ pub enum StreamInstruction {
     /// 2. `[writable]` The treasury token account (The token account of the treasury which the funds are going to be payed for)
     /// 3. `[writable]` The treasury token mint account (The mint account of the treasury token which the funds are going to be payed for).
     /// 4. `[writable]` The treasury mint account (The mint account of the treasury pool token issued by the treasury).
-    /// 5. `[writable]` The Money Streaming Program operating ccount (Fees account).
+    /// 5. `[writable]` The Money Streaming Program operating account (Fees account).
     /// 6. `[writable]` The Money Streaming Protocol operating token account.
     /// 7. `[]` The Associated Token Program account.
     /// 8. `[]` The Token Program account.    
@@ -163,17 +163,45 @@ pub enum StreamInstruction {
         treasury_base_address: Pubkey
     },
 
-    /// Transfers a specific amount of tokens between 2 accounts
+    /// 0. `[signer]` The treasurer account (the creator of the treasury)
+    /// 1. `[writable]` The treasury account
+    /// 2. `[writable]` The treasury token account (The token account of the treasury which the funds are going to be payed for)
+    /// 3. `[writable]` The treasury token mint account (The mint account of the treasury token which the funds are going to be payed for).
+    /// 4. `[writable]` The treasury mint account (The mint account of the treasury pool token issued by the treasury).
+    /// 5. `[writable]` The Money Streaming Program operating account (Fees account).
+    /// 6. `[writable]` The Money Streaming Protocol operating token account.
+    /// 7. `[]` The Associated Token Program account.
+    /// 8. `[]` The Token Program account.    
+    /// 9. `[]` System Program account.
+    /// 10. `[]` SysvarRent account.
+    CreateTreasuryV2 {
+        slot: u64,
+        base_address: Pubkey,
+        tag: String,
+        amount: f64,
+        is_reserved: bool
+    },
+
+    /// Initialize a new stream contract
     ///
-    /// 0. `[signer]` The source account
-    /// 1. `[writable]` The source token account
-    /// 2. `[writable]` The destination token account.
-    /// 3. `[writable]` The associated token mint account
-    /// 4. `[writable]` The Money Streaming Program operating account (Fees account).
-    /// 5. `[writable]` The Money Streaming Protocol operating token account.
-    /// 6. `[]` The Token Program account.
-    Transfer {
-        amount: f64
+    /// 0. `[signer]` The treasurer account (The creator of the money stream).
+    /// 1. `[]` The treasury account (The stream contract treasury account).
+    /// 2. `[]` The beneficiary associated token mint account.
+    /// 3. `[writable]` The stream account (The stream contract account).
+    /// 4.  [writable] The Money Streaming Program operating account (Fees account).
+    /// 5.  [] The Money Streaming Program account.
+    /// 6. `[]` The System Program account.
+    /// 7. `[]` Rent sysvar account.
+    CreateStreamV2 {
+        beneficiary_address: Pubkey,
+        name: String,        
+        rate_amount: f64,
+        rate_interval_in_seconds: u64,
+        start_utc: u64,
+        rate_cliff_in_seconds: u64,
+        cliff_vest_amount: f64, // OPTIONAL
+        cliff_vest_percent: f64, // OPTIONAL
+        auto_pause_in_seconds: u64
     },
 }
 
@@ -197,7 +225,8 @@ impl StreamInstruction {
             7 => Self::unpack_answer_update(result)?,
             8 => Ok(Self::CloseStream)?,
             9 => Self::unpack_create_treasury(result)?,
-            10 => Self::unpack_transfer(result)?,
+            10 => Self::unpack_create_treasury_v2(result)?,
+            11 => Self::unpack_create_stream_v2(result)?,
 
             _ => return Err(StreamError::InvalidStreamInstruction.into()),
         })
@@ -320,9 +349,53 @@ impl StreamInstruction {
                 buf.extend_from_slice(treasury_base_address.as_ref());
             },
 
-            &Self::Transfer { amount } => {
+            Self::CreateTreasuryV2 {
+                slot,
+                base_address,
+                tag,
+                amount,
+                is_reserved 
+
+            } => {
                 buf.push(10);
+
+                buf.extend_from_slice(&slot.to_le_bytes());
+                buf.extend_from_slice(base_address.as_ref());
+                buf.extend_from_slice(tag.as_ref());
                 buf.extend_from_slice(&amount.to_le_bytes());
+
+                let is_reserved = match is_reserved {
+                    false => 0,
+                    true => 1
+                };
+
+                buf.push(is_reserved as u8);
+            },
+
+            Self::CreateStreamV2 {
+                beneficiary_address,
+                name,
+                rate_amount,
+                rate_interval_in_seconds,
+                start_utc,
+                rate_cliff_in_seconds,
+                cliff_vest_amount,
+                cliff_vest_percent,
+                auto_pause_in_seconds
+
+            } => {
+
+                buf.push(11);
+
+                buf.extend_from_slice(beneficiary_address.as_ref());
+                buf.extend_from_slice(name.as_ref());
+                buf.extend_from_slice(&rate_amount.to_le_bytes());
+                buf.extend_from_slice(&rate_interval_in_seconds.to_le_bytes());
+                buf.extend_from_slice(&start_utc.to_le_bytes());
+                buf.extend_from_slice(&rate_cliff_in_seconds.to_le_bytes());
+                buf.extend_from_slice(&cliff_vest_amount.to_le_bytes());
+                buf.extend_from_slice(&cliff_vest_percent.to_le_bytes());
+                buf.extend_from_slice(&auto_pause_in_seconds.to_le_bytes());               
             },
         };
 
@@ -331,29 +404,29 @@ impl StreamInstruction {
 
     fn unpack_create_stream(input: &[u8]) -> Result<Self, StreamError> {
 
-        let (beneficiary_address, result) = Self::unpack_pubkey(input)?;
-        let (stream_name, result) = Self::unpack_string(result)?;
+        let (beneficiary_address, result) = unpack_pubkey(input)?;
+        let (stream_name, result) = unpack_string(result)?;
 
         let (rate_amount, result) = result.split_at(8);
-        let rate_amount = Self::unpack_f64(rate_amount)?;
+        let rate_amount = unpack_f64(rate_amount)?;
 
         let (rate_interval_in_seconds, result) = result.split_at(8);
-        let rate_interval_in_seconds = Self::unpack_u64(rate_interval_in_seconds)?;
+        let rate_interval_in_seconds = unpack_u64(rate_interval_in_seconds)?;
 
         let (start_utc, result) = result.split_at(8);
-        let start_utc = Self::unpack_u64(start_utc)?;
+        let start_utc = unpack_u64(start_utc)?;
 
         let (rate_cliff_in_seconds, result) = result.split_at(8);
-        let rate_cliff_in_seconds = Self::unpack_u64(rate_cliff_in_seconds)?;
+        let rate_cliff_in_seconds = unpack_u64(rate_cliff_in_seconds)?;
 
         let (cliff_vest_amount, result) = result.split_at(8);
-        let cliff_vest_amount = Self::unpack_f64(cliff_vest_amount)?;
+        let cliff_vest_amount = unpack_f64(cliff_vest_amount)?;
 
         let (cliff_vest_percent, result) = result.split_at(8);
-        let cliff_vest_percent = Self::unpack_f64(cliff_vest_percent)?;
+        let cliff_vest_percent = unpack_f64(cliff_vest_percent)?;
 
         let (auto_pause_in_seconds, _result) = result.split_at(8);
-        let auto_pause_in_seconds = Self::unpack_u64(auto_pause_in_seconds)?;
+        let auto_pause_in_seconds = unpack_u64(auto_pause_in_seconds)?;
 
         Ok(Self::CreateStream {
             beneficiary_address,
@@ -370,9 +443,9 @@ impl StreamInstruction {
 
     fn unpack_add_funds(input: &[u8]) -> Result<Self, StreamError> {
         let (contribution_amount, result) = input.split_at(8);
-        let contribution_amount = Self::unpack_f64(contribution_amount)?;
+        let contribution_amount = unpack_f64(contribution_amount)?;
         let (funded_on_utc, result) = result.split_at(8);
-        let funded_on_utc = Self::unpack_u64(funded_on_utc)?;
+        let funded_on_utc = unpack_u64(funded_on_utc)?;
 
         let (resume, _result) = result.split_at(1);
         let resume = match resume {
@@ -390,42 +463,42 @@ impl StreamInstruction {
 
     fn unpack_recover_funds(input: &[u8]) -> Result<Self, StreamError> {
         let (recover_amount, _result) = input.split_at(8);
-        let recover_amount = Self::unpack_f64(recover_amount)?;
+        let recover_amount = unpack_f64(recover_amount)?;
 
         Ok(Self::RecoverFunds { recover_amount })
     }
 
     fn unpack_withdraw(input: &[u8]) -> Result<Self, StreamError> {
         let (withdrawal_amount, _result) = input.split_at(8);
-        let withdrawal_amount = Self::unpack_f64(withdrawal_amount)?;
+        let withdrawal_amount = unpack_f64(withdrawal_amount)?;
 
         Ok(Self::Withdraw { withdrawal_amount })
     }
 
     fn unpack_propose_update(input: &[u8]) -> Result<Self, StreamError> {
-        let (proposed_by, result) = Self::unpack_pubkey(input)?;
-        let (stream_name, result) = Self::unpack_string(result)?;
-        let (treasurer_address, result) = Self::unpack_pubkey(result)?;
-        let (beneficiary_address, result) = Self::unpack_pubkey(result)?;
-        let (associated_token_address, result) = Self::unpack_pubkey(result)?;
+        let (proposed_by, result) = unpack_pubkey(input)?;
+        let (stream_name, result) = unpack_string(result)?;
+        let (treasurer_address, result) = unpack_pubkey(result)?;
+        let (beneficiary_address, result) = unpack_pubkey(result)?;
+        let (associated_token_address, result) = unpack_pubkey(result)?;
 
         let (rate_amount, result) = result.split_at(8);
-        let rate_amount = Self::unpack_f64(rate_amount)?;
+        let rate_amount = unpack_f64(rate_amount)?;
 
         let (rate_interval_in_seconds, result) = result.split_at(8);
-        let rate_interval_in_seconds = Self::unpack_u64(rate_interval_in_seconds)?;
+        let rate_interval_in_seconds = unpack_u64(rate_interval_in_seconds)?;
 
         let (rate_cliff_in_seconds, result) = result.split_at(8);
-        let rate_cliff_in_seconds = Self::unpack_u64(rate_cliff_in_seconds)?;
+        let rate_cliff_in_seconds = unpack_u64(rate_cliff_in_seconds)?;
 
         let (cliff_vest_amount, result) = result.split_at(8);
-        let cliff_vest_amount = Self::unpack_f64(cliff_vest_amount)?;
+        let cliff_vest_amount = unpack_f64(cliff_vest_amount)?;
 
         let (cliff_vest_percent, result) = result.split_at(8);
-        let cliff_vest_percent = Self::unpack_f64(cliff_vest_percent)?;
+        let cliff_vest_percent = unpack_f64(cliff_vest_percent)?;
 
         let (auto_pause_in_seconds, _result) = result.split_at(8);
-        let auto_pause_in_seconds = Self::unpack_u64(auto_pause_in_seconds)?;        
+        let auto_pause_in_seconds = unpack_u64(auto_pause_in_seconds)?;        
 
         Ok(Self::ProposeUpdate {
             proposed_by,
@@ -456,9 +529,9 @@ impl StreamInstruction {
     fn unpack_create_treasury(input: &[u8]) -> Result<Self, StreamError> {
 
         let (treasury_block_height, result) = input.split_at(8);
-        let treasury_block_height = Self::unpack_u64(treasury_block_height)?;
+        let treasury_block_height = unpack_u64(treasury_block_height)?;
 
-        let (treasury_base_address, _result) = Self::unpack_pubkey(result)?;
+        let (treasury_base_address, _result) = unpack_pubkey(result)?;
 
         Ok(Self::CreateTreasury { 
             treasury_block_height,
@@ -466,52 +539,70 @@ impl StreamInstruction {
         })
     }
 
-    fn unpack_transfer(input: &[u8]) -> Result<Self, StreamError> {
+    fn unpack_create_treasury_v2(input: &[u8]) -> Result<Self, StreamError> {
 
-        let (amount, _result) = input.split_at(8);
-        let amount = Self::unpack_f64(amount)?;
+        let (slot, result) = input.split_at(8);
+        let slot = unpack_u64(slot)?;
 
-        Ok(Self::Transfer { amount })
+        let (base_address, result) = unpack_pubkey(result)?;
+        let (tag, result) = unpack_string(result)?;
+
+        let (amount, result) = input.split_at(8);
+        let amount = unpack_f64(amount)?;
+
+        let (is_reserved, _result) = result.split_at(1);
+        let is_reserved = match is_reserved {
+            [0] => false,
+            [1] => true,
+            _ => false
+        };
+
+        Ok(Self::CreateTreasuryV2 { 
+            slot,
+            base_address,
+            tag,
+            amount,
+            is_reserved
+        })
     }
 
-    fn unpack_pubkey(input: &[u8]) -> Result<(Pubkey, &[u8]), StreamError> {
-        if input.len() >= 32 {
-            let (key, rest) = input.split_at(32);
-            let pk = Pubkey::new(key);
+    fn unpack_create_stream_v2(input: &[u8]) -> Result<Self, StreamError> {
 
-            Ok((pk, rest))
-        } else {
-            Err(StreamError::InvalidArgument.into())
-        }
-    }
+        let (beneficiary_address, result) = unpack_pubkey(input)?;
+        let (name, result) = unpack_string(result)?;
 
-    fn unpack_string(input: &[u8]) -> Result<(String, &[u8]), StreamError> {
-        if input.len() >= 32 {
-            let (bytes, rest) = input.split_at(32);
-            Ok((String::from_utf8_lossy(bytes).to_string(), rest))
-        } else {
-            Err(StreamError::InvalidArgument.into())
-        }
-    }
+        let (rate_amount, result) = result.split_at(8);
+        let rate_amount = unpack_f64(rate_amount)?;
 
-    fn unpack_u64(input: &[u8]) -> Result<u64, StreamError> {
-        let amount = input
-            .get(..8)
-            .and_then(|slice| slice.try_into().ok())
-            .map(u64::from_le_bytes)
-            .ok_or(StreamError::InvalidStreamInstruction)?;
+        let (rate_interval_in_seconds, result) = result.split_at(8);
+        let rate_interval_in_seconds = unpack_u64(rate_interval_in_seconds)?;
 
-        Ok(amount)
-    }
+        let (start_utc, result) = result.split_at(8);
+        let start_utc = unpack_u64(start_utc)?;
 
-    fn unpack_f64(input: &[u8]) -> Result<f64, StreamError> {
-        let amount = input
-            .get(..8)
-            .and_then(|slice| slice.try_into().ok())
-            .map(f64::from_le_bytes)
-            .ok_or(StreamError::InvalidStreamInstruction)?;
+        let (rate_cliff_in_seconds, result) = result.split_at(8);
+        let rate_cliff_in_seconds = unpack_u64(rate_cliff_in_seconds)?;
 
-        Ok(amount)
+        let (cliff_vest_amount, result) = result.split_at(8);
+        let cliff_vest_amount = unpack_f64(cliff_vest_amount)?;
+
+        let (cliff_vest_percent, result) = result.split_at(8);
+        let cliff_vest_percent = unpack_f64(cliff_vest_percent)?;
+
+        let (auto_pause_in_seconds, _result) = result.split_at(8);
+        let auto_pause_in_seconds = unpack_u64(auto_pause_in_seconds)?;
+
+        Ok(Self::CreateStreamV2 {
+            beneficiary_address,
+            name,
+            rate_amount,
+            rate_interval_in_seconds,
+            start_utc,
+            rate_cliff_in_seconds,
+            cliff_vest_amount,
+            cliff_vest_percent,
+            auto_pause_in_seconds
+        })
     }
  }
 
@@ -651,38 +742,4 @@ impl StreamInstruction {
     ];
 
     Ok(Instruction { program_id: *program_id, accounts, data })
- }
-
- pub fn transfer(
-     source_address: Pubkey,
-     source_token_address: Pubkey,
-     destination_token_address: Pubkey,
-     mint_address: Pubkey,
-    //  msp_ops_address: Pubkey,
-     program_id: &Pubkey,
-     amount: f64
-
- ) -> Result<Instruction, StreamError> {
-
-    if let Err(_error) = check_program_account(program_id) {
-        return Err(StreamError::IncorrectProgramId.into());
-    }
-
-    let data = StreamInstruction::Transfer { amount }.pack();
-    let accounts = vec![
-        AccountMeta::new_readonly(source_address, true),
-        AccountMeta::new(source_token_address, false),
-        AccountMeta::new(destination_token_address, false),
-        AccountMeta::new(mint_address, false),
-        // AccountMeta::new(msp_ops_address, false),
-        // AccountMeta::new_readonly(*program_id, false),
-        AccountMeta::new_readonly(spl_token::id(), false),
-        // AccountMeta::new_readonly(solana_program::system_program::id(), false)
-    ];
-
-    Ok(Instruction { 
-        program_id: *program_id, 
-        accounts, 
-        data 
-    })
  }

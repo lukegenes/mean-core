@@ -18,5 +18,8 @@ pub enum ErrorCode {
     InvalidProtocol,
 
     #[msg("Amm is not valid")]
-    InvalidAmm,    
+    InvalidAmm,
+
+    #[msg("Slippage exceeded")]
+    SlippageExceeded,  
 }
