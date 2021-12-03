@@ -32,7 +32,7 @@ pub enum StreamError {
     InvalidTreasuryAccount,
 
     #[error("Invalid treasury mint")]
-    InvalidTreasuryMint,
+    InvalidTreasuryPoolMint,
 
     #[error("Invalid treasury token")]
     InvalidTreasuryToken,    
@@ -43,8 +43,8 @@ pub enum StreamError {
     #[error("Invalid treasury pool")]
     InvalidTreasuryPool,    
 
-    #[error("Invalid contributor treasury associated token")]
-    InvalidContributorTreasuryToken,
+    #[error("Invalid treasury pool ATA")]
+    InvalidTreasuryPoolAddress,
 
     #[error("Invalid MSP Operations token")]
     InvalidMspOpsToken,   
@@ -80,7 +80,19 @@ pub enum StreamError {
     InvalidSignerAuthority,
 
     #[error("Overflow")]
-    Overflow
+    Overflow,
+    //
+    #[error("InvalidPdaAccount")]
+    InvalidPdaAccount,
+    
+    #[error("AvailableTreasuryReserveExceeded")]
+    AvailableTreasuryReserveExceeded,
+
+    #[error("InvalidTreasuryAssociatedToken")]
+    InvalidTreasuryAssociatedToken,
+
+    #[error("CloseTreasuryWithStreams")]
+    CloseTreasuryWithStreams,
 }
 
 impl From<StreamError> for ProgramError {
@@ -104,12 +116,12 @@ impl PrintProgramError for StreamError {
             Self::StreamTermsAlreadyInitialized => msg!("Error: StreamTermsAlreadyInitialized"),
             Self::InvalidStreamData => msg!("Error: InvalidStreamData"),
             Self::InvalidTreasuryAccount => msg!("Error: Treasury associated token address does not match seed derivation"),
-            Self::InvalidTreasuryMint => msg!("Error: Treasury mint address does not match seed derivation"),
+            Self::InvalidTreasuryPoolMint => msg!("Error: Treasury pool mint address does not match seed derivation"),
             Self::InvalidTreasuryToken => msg!("Error: Treasury associated token address does not match seed derivation"),
             Self::InvalidTreasuryData => msg!("Error: Treasury data in not valid"),
             Self::InvalidMspOpsToken => msg!("Error: MSP Operations associated token address does not match seed derivation"),
             Self::InvalidTreasuryPool => msg!("Error: Treasury pool address does not match seed derivation"),
-            Self::InvalidContributorTreasuryToken => msg!("Error: Contributor treasury associated token address does not match seed derivation"),
+            Self::InvalidTreasuryPoolAddress => msg!("Error: Treasury ATA does not match seed derivation"),
             Self::MissingInstructionSignature => msg!("Error: MissingInstructionSignature"),
             Self::InvalidRentException => msg!("Error: Account balance below rent-exempt threshold"),
             Self::InsufficientFunds => msg!("Error: InsufficientFunds"),
@@ -120,7 +132,11 @@ impl PrintProgramError for StreamError {
             Self::NotAuthorizedToWithdraw => msg!("Error: Not authorized to withdraw from the stream"),
             Self::InvalidWithdrawalDate => msg!("Error: The date to withdraw your money has not been reached yet"),
             Self::InvalidSignerAuthority => msg!("Error: InvalidSignerAuthority"),
-            Self::Overflow => msg!("Error: Overflow")
+            Self::Overflow => msg!("Error: Overflow"),
+            Self::InvalidPdaAccount => msg!("Error: PDA account doesn't match the seed derivation"),
+            Self::AvailableTreasuryReserveExceeded => msg!("Error: The amount to reserve in not available"),
+            Self::InvalidTreasuryAssociatedToken => msg!("Error: The associated token is not valid for the treasury"),
+            Self::CloseTreasuryWithStreams => msg!("Error: Treasuries with active streams can not be closed"),
         }
     }
 }
