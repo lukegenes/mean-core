@@ -132,8 +132,10 @@ pub mod ddca {
         let next_checkpoint = prev_checkpoint + 1;
         let next_ts = start_ts + next_checkpoint * interval;
         let checkpoint_ts: u64;
-        msg!("sts: {}, its: {}, lts: {}, nts: {}, mds: {}, lo: {}, hi: {}, lots: {}, hits: {} }}",
-                                start_ts, interval, last_completed_ts, now_ts, max_delta_in_secs, prev_checkpoint, next_checkpoint, prev_ts, next_ts);
+
+        #[cfg(feature = "devnet")]
+        msg!("sts: {}, its: {}, lts: {}, nts: {}, mds: {}, lo: {}, hi: {}, lots: {}, hits: {} }}", 
+        start_ts, interval, last_completed_ts, now_ts, max_delta_in_secs, prev_checkpoint, next_checkpoint, prev_ts, next_ts);
 
         if now_ts >= (prev_ts - max_delta_in_secs) && now_ts <= (prev_ts + max_delta_in_secs) {
             checkpoint_ts = prev_ts;
@@ -416,6 +418,26 @@ pub mod ddca {
                 .with_signer(&[&seeds[..]]),
         )?;
 
+        // defund wake account
+        let lamports_to_return = ctx.accounts.wake_account.to_account_info().lamports();
+        if lamports_to_return > 0 {
+
+            msg!("returning {} lamports ({} SOL) from wake account to ddca account", lamports_to_return, lamports_to_return as f64 / LAMPORTS_PER_SOL as f64);
+            let ix = anchor_lang::solana_program::system_instruction::transfer(
+                ctx.accounts.wake_account.key,
+                ctx.accounts.ddca_account.as_ref().key,
+                lamports_to_return,
+            );
+
+            anchor_lang::solana_program::program::invoke(
+                &ix,
+                &[
+                    ctx.accounts.wake_account.to_account_info(),
+                    ctx.accounts.ddca_account.to_account_info(),
+                ],
+            )?;
+        }
+
         Ok(())
     }
 }
@@ -592,12 +614,15 @@ pub struct WithdrawInputAccounts<'info> {
 pub struct CloseInputAccounts<'info> {
     pub owner_account: Signer<'info>,
     #[account(mut)]
+    pub wake_account: Signer<'info>,
+    #[account(mut)]
     pub owner_from_token_account: Box<Account<'info, TokenAccount>>,
     #[account(mut)]
     pub owner_to_token_account: Box<Account<'info, TokenAccount>>,
     #[account(
         mut,
         constraint = ddca_account.owner_acc_addr == *owner_account.key,
+        constraint = ddca_account.wake_acc_addr == *wake_account.key,
         constraint = ddca_account.from_tacc_addr == *ddca_from_token_account.to_account_info().key,
         constraint = ddca_account.to_tacc_addr == *ddca_to_token_account.to_account_info().key,
         close = owner_account,
@@ -624,6 +649,7 @@ pub struct CloseInputAccounts<'info> {
     )]
     pub operating_to_token_account: Box<Account<'info, TokenAccount>>,
     pub token_program: Program<'info, Token>,
+    pub system_program: Program<'info, System>,
 }
 
 // ACCOUNT STRUCTS
