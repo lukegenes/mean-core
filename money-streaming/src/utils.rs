@@ -401,7 +401,11 @@ pub fn add_funds_v0<'info>(
 
 pub fn withdraw_v0<'info>(
     msp_account_info: &AccountInfo<'info>,
+    rent_account_info: &AccountInfo<'info>,
+    system_account_info: &AccountInfo<'info>,
     token_program_account_info: &AccountInfo<'info>,
+    associated_token_program_account_info: &AccountInfo<'info>,
+    msp_ops_account_info: &AccountInfo<'info>,
     msp_ops_token_account_info: &AccountInfo<'info>,
     beneficiary_account_info: &AccountInfo<'info>,
     beneficiary_token_account_info: &AccountInfo<'info>,
@@ -413,8 +417,16 @@ pub fn withdraw_v0<'info>(
 
 ) -> ProgramResult {
 
-    let clock = Clock::get()?;
     let mut stream = Stream::unpack_from_slice(&stream_account_info.data.borrow())?;
+
+    if beneficiary_token_account_info.owner != beneficiary_account_info.key ||
+       treasury_token_account_info.owner != treasury_account_info.key ||
+       stream.treasury_address.ne(treasury_account_info.key)
+    {
+        return Err(StreamError::InstructionNotAuthorized.into());
+    }
+
+    let clock = Clock::get()?;
     let current_block_time = clock.unix_timestamp as u64;
     let is_running = (stream.stream_resumed_block_time >= stream.escrow_vested_amount_snap_block_time) as u64;    
     let mut rate = 0.0;
@@ -514,6 +526,30 @@ pub fn withdraw_v0<'info>(
         Stream::pack_into_slice(&stream, &mut stream_account_info.data.borrow_mut());
 
         let fee = WITHDRAW_PERCENT_FEE * transfer_amount as f64 / associated_token_mint_pow / 100f64;
+        let msp_ops_token_address = spl_associated_token_account::get_associated_token_address(
+            msp_ops_account_info.key,
+            associated_token_mint_info.key
+        );
+    
+        if msp_ops_token_address != *msp_ops_token_account_info.key 
+        {
+            return Err(StreamError::InvalidMspOpsToken.into());
+        }
+    
+        if (*msp_ops_token_account_info.owner).ne(msp_ops_account_info.key)
+        {
+            // Create treasury associated token account if doesn't exist
+            let _ = create_ata_account(
+                &system_account_info,
+                &rent_account_info,
+                &associated_token_program_account_info,
+                &token_program_account_info,
+                &beneficiary_account_info,
+                &msp_ops_account_info,
+                &msp_ops_token_account_info,
+                &associated_token_mint_info
+            )?;
+        }
         // Pay fees
         let _ = transfer_token_fee(
             token_program_account_info,
