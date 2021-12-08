@@ -599,9 +599,8 @@ pub struct WithdrawInputAccounts<'info> {
     pub operating_account: AccountInfo<'info>,
     #[account(
         mut,
-        //TODO: uncomment when https://github.com/project-serum/anchor/pull/843 is released
-        // associated_token::mint = from_mint, 
-        // associated_token::authority = ddca_operating_account,
+        constraint = operating_to_token_account.owner == operating_account.key(), // TODO: convert to ATA constraints
+        constraint = operating_to_token_account.mint == ddca_to_token_account.mint,
     )]
     pub operating_to_token_account: Box<Account<'info, TokenAccount>>,
     pub rent: Sysvar<'info, Rent>,
@@ -636,16 +635,14 @@ pub struct CloseInputAccounts<'info> {
     pub operating_account: AccountInfo<'info>,
     #[account(
         mut,
-        //TODO: uncomment when https://github.com/project-serum/anchor/pull/843 is released
-        // associated_token::mint = from_mint, 
-        // associated_token::authority = ddca_operating_account,
+        constraint = operating_from_token_account.owner == operating_account.key(), // TODO: convert to ATA constraints
+        constraint = operating_from_token_account.mint == ddca_from_token_account.mint,
     )]
     pub operating_from_token_account: Box<Account<'info, TokenAccount>>,
     #[account(
         mut,
-        //TODO: uncomment when https://github.com/project-serum/anchor/pull/843 is released
-        // associated_token::mint = from_mint, 
-        // associated_token::authority = ddca_operating_account,
+        constraint = operating_to_token_account.owner == operating_account.key(), // TODO: convert to ATA constraints
+        constraint = operating_to_token_account.mint == ddca_to_token_account.mint,
     )]
     pub operating_to_token_account: Box<Account<'info, TokenAccount>>,
     pub token_program: Program<'info, Token>,
