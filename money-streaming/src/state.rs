@@ -385,7 +385,7 @@ pub struct StreamV1 {
     pub treasury_address: Pubkey,
     pub treasury_estimated_depletion_utc: u64,
     pub allocation_reserved: f64,
-    pub allocation_committed: f64,
+    pub allocation: f64,
     pub escrow_vested_amount_snap: f64,
     pub escrow_vested_amount_snap_slot: u64,
     pub escrow_vested_amount_snap_block_time: u64,
@@ -420,7 +420,7 @@ impl Default for StreamV1 {
             treasury_address: Pubkey::default(), 
             treasury_estimated_depletion_utc: 0,
             allocation_reserved: 0.0,
-            allocation_committed: 0.0,
+            allocation: 0.0,
             escrow_vested_amount_snap: 0.0,
             escrow_vested_amount_snap_slot: 0,
             escrow_vested_amount_snap_block_time: 0,
@@ -453,14 +453,14 @@ impl Pack for StreamV1 {
             treasury_address_output,
             treasury_estimated_depletion_utc_output,
             allocation_reserved_output,
-            allocation_committed_output,
+            allocation_output,
             escrow_vested_amount_snap_output,
             escrow_vested_amount_snap_slot_output,
             escrow_vested_amount_snap_block_time_output,
             stream_resumed_slot_output,
             stream_resumed_block_time_output,
             auto_pause_in_seconds_output,
-            additional_data
+            _additional_data
             
         ) = mut_array_refs![output, 1, 32, 32, 8, 8, 8, 8, 8, 8, 8, 32, 32, 32, 8, 8, 8, 8, 8, 8, 8, 8, 8, 211];
 
@@ -480,7 +480,7 @@ impl Pack for StreamV1 {
             treasury_address,
             treasury_estimated_depletion_utc,
             allocation_reserved,
-            allocation_committed,
+            allocation,
             escrow_vested_amount_snap,
             escrow_vested_amount_snap_slot,
             escrow_vested_amount_snap_block_time,
@@ -505,7 +505,7 @@ impl Pack for StreamV1 {
         treasury_address_output.copy_from_slice(treasury_address.as_ref());
         *treasury_estimated_depletion_utc_output = treasury_estimated_depletion_utc.to_le_bytes();
         *allocation_reserved_output = allocation_reserved.to_le_bytes();
-        *allocation_committed_output = allocation_committed.to_le_bytes();
+        *allocation_output = allocation.to_le_bytes();
         *escrow_vested_amount_snap_output = escrow_vested_amount_snap.to_le_bytes();
         *escrow_vested_amount_snap_slot_output = escrow_vested_amount_snap_slot.to_le_bytes();
         *escrow_vested_amount_snap_block_time_output = escrow_vested_amount_snap_block_time.to_le_bytes();
@@ -534,14 +534,14 @@ impl Pack for StreamV1 {
             treasury_address,
             treasury_estimated_depletion_utc,
             allocation_reserved,
-            allocation_committed,
+            allocation,
             escrow_vested_amount_snap,
             escrow_vested_amount_snap_slot,
             escrow_vested_amount_snap_block_time,
             stream_resumed_slot,
             stream_resumed_block_time,
             auto_pause_in_seconds,
-            additional_data
+            _additional_data
             
         ) = array_refs![input, 1, 32, 32, 8, 8, 8, 8, 8, 8, 8, 32, 32, 32, 8, 8, 8, 8, 8, 8, 8, 8, 8, 211];
 
@@ -567,7 +567,7 @@ impl Pack for StreamV1 {
             treasury_address: Pubkey::new_from_array(*treasury_address), 
             treasury_estimated_depletion_utc: u64::from_le_bytes(*treasury_estimated_depletion_utc),
             allocation_reserved: f64::from_le_bytes(*allocation_reserved),
-            allocation_committed: f64::from_le_bytes(*allocation_committed),
+            allocation: f64::from_le_bytes(*allocation),
             escrow_vested_amount_snap: f64::from_le_bytes(*escrow_vested_amount_snap),
             escrow_vested_amount_snap_slot: u64::from_le_bytes(*escrow_vested_amount_snap_slot),
             escrow_vested_amount_snap_block_time: u64::from_le_bytes(*escrow_vested_amount_snap_block_time),
@@ -671,9 +671,11 @@ pub struct TreasuryV1 {
     pub label: String,
     pub balance: f64,
     pub allocation_reserved: f64,
-    pub allocation_committed: f64,
+    pub allocation: f64,
     pub streams_amount: u64,
-    pub created_on_utc: u64
+    pub created_on_utc: u64,
+    pub depletion_rate: f64,
+    pub treasury_type: u8
 }
 
 impl Sealed for TreasuryV1 {}
@@ -695,9 +697,11 @@ impl Default for TreasuryV1 {
             label: String::default(),
             balance: 0.0,
             allocation_reserved: 0.0,
-            allocation_committed: 0.0,
-            streams_amount: 0,
-            created_on_utc: 0
+            allocation: 0.0,
+            created_on_utc: 0,
+            streams_amount: 0,    
+            depletion_rate: 0.0,
+            treasury_type: 0
         }
     }
 }
@@ -717,12 +721,14 @@ impl Pack for TreasuryV1 {
             label_output,
             balance_output,
             allocation_reserved_output,
-            allocation_committed_output,
+            allocation_output,
             streams_amount_output,
             created_on_utc_output,
-            additional_data
+            depletion_rate_output,
+            treasury_type_output,
+            _additional_data
             
-        ) = mut_array_refs![output, 1, 8, 32, 32, 32, 32, 8, 8, 8, 8, 8, 123];
+        ) = mut_array_refs![output, 1, 8, 32, 32, 32, 32, 8, 8, 8, 8, 8, 8, 1, 114];
 
         let TreasuryV1 {
             initialized,
@@ -733,9 +739,11 @@ impl Pack for TreasuryV1 {
             label,
             balance,
             allocation_reserved,
-            allocation_committed,
+            allocation,
+            streams_amount,
             created_on_utc,
-            streams_amount
+            depletion_rate,
+            treasury_type
 
         } = self;
 
@@ -747,9 +755,11 @@ impl Pack for TreasuryV1 {
         label_output.copy_from_slice(label.as_ref());
         *balance_output = balance.to_le_bytes();
         *allocation_reserved_output = allocation_reserved.to_le_bytes();
-        *allocation_committed_output = allocation_committed.to_le_bytes();
+        *allocation_output = allocation.to_le_bytes();
         *streams_amount_output = streams_amount.to_le_bytes();
         *created_on_utc_output = created_on_utc.to_le_bytes();
+        *depletion_rate_output = depletion_rate.to_le_bytes();
+        *treasury_type_output = treasury_type.to_le_bytes();
     }
     
     fn unpack_from_slice(input: &[u8]) -> Result<Self, ProgramError> {
@@ -764,12 +774,14 @@ impl Pack for TreasuryV1 {
             label,
             balance,
             allocation_reserved,
-            allocation_committed,
+            allocation,
             streams_amount,
             created_on_utc,
-            additional_data
+            depletion_rate,
+            treasury_type,
+            _additional_data
 
-        ) = array_refs![input, 1, 8, 32, 32, 32, 32, 8, 8, 8, 8, 8, 123];
+        ) = array_refs![input, 1, 8, 32, 32, 32, 32, 8, 8, 8, 8, 8, 8, 1, 114];
 
         let initialized = match initialized {
             [0] => false,
@@ -786,9 +798,11 @@ impl Pack for TreasuryV1 {
             label: String::from_utf8_lossy(label).to_string(),
             balance: f64::from_le_bytes(*balance),
             allocation_reserved: f64::from_le_bytes(*allocation_reserved),
-            allocation_committed: f64::from_le_bytes(*allocation_committed),
+            allocation: f64::from_le_bytes(*allocation),
             streams_amount: u64::from_le_bytes(*streams_amount),
-            created_on_utc: u64::from_le_bytes(*created_on_utc)
+            created_on_utc: u64::from_le_bytes(*created_on_utc),
+            depletion_rate: f64::from_le_bytes(*depletion_rate),
+            treasury_type: u8::from_le_bytes(*treasury_type),
         })
     }
 }

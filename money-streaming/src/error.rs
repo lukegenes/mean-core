@@ -13,7 +13,7 @@ use thiserror::Error;
 #[derive(Clone, Debug, Eq, Error, FromPrimitive, PartialEq)]
 pub enum StreamError {
 
-    #[error("Invalid streaming program id")]
+    #[error("Invalid money streaming program")]
     IncorrectProgramId,
 
     #[error("Invalid instruction for the streaming program")]
@@ -85,14 +85,21 @@ pub enum StreamError {
     #[error("InvalidPdaAccount")]
     InvalidPdaAccount,
     
-    #[error("AvailableTreasuryReserveExceeded")]
-    AvailableTreasuryReserveExceeded,
+    #[error("AvailableTreasuryAmountExceeded")]
+    AvailableTreasuryAmountExceeded,
 
     #[error("InvalidTreasuryAssociatedToken")]
     InvalidTreasuryAssociatedToken,
 
     #[error("CloseTreasuryWithStreams")]
     CloseTreasuryWithStreams,
+
+    #[error("StreamAllocationExceeded")]
+    StreamAllocationExceeded,
+
+    #[error("InvalidBeneficiaryToken")]
+    InvalidBeneficiaryToken,
+
 }
 
 impl From<StreamError> for ProgramError {
@@ -134,9 +141,11 @@ impl PrintProgramError for StreamError {
             Self::InvalidSignerAuthority => msg!("Error: InvalidSignerAuthority"),
             Self::Overflow => msg!("Error: Overflow"),
             Self::InvalidPdaAccount => msg!("Error: PDA account doesn't match the seed derivation"),
-            Self::AvailableTreasuryReserveExceeded => msg!("Error: The amount to reserve in not available"),
+            Self::AvailableTreasuryAmountExceeded => msg!("Error: Treasury available funds excedeed"),
             Self::InvalidTreasuryAssociatedToken => msg!("Error: The associated token is not valid for the treasury"),
             Self::CloseTreasuryWithStreams => msg!("Error: Treasuries with active streams can not be closed"),
+            Self::StreamAllocationExceeded => msg!("Error: Stream reserved allocation can not exceed the allocation amount"),
+            Self::InvalidBeneficiaryToken => msg!("Error: Beneficiary associated token address does not match seed derivation"),
         }
     }
 }
