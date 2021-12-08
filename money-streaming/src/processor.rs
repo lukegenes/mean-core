@@ -875,6 +875,8 @@ impl Processor {
             return Err(StreamError::MissingInstructionSignature.into());
         }
 
+        let mut stream = StreamV1::unpack_from_slice(&stream_account_info.data.borrow())?;
+
         if msp_ops_account_info.key.ne(&MSP_OPS_ACCOUNT_ADDRESS.parse().unwrap()) ||
            treasury_account_info.owner != program_id ||
            stream_account_info.owner != program_id
@@ -884,7 +886,8 @@ impl Processor {
 
         if beneficiary_token_account_info.owner != beneficiary_account_info.key ||
            treasury_token_account_info.owner != treasury_account_info.key ||
-           msp_ops_account_info.owner != msp_ops_account_info.key
+           msp_ops_account_info.owner != msp_account_info.key ||
+           stream.treasury_address.ne(treasury_account_info.key)
         {
             return Err(StreamError::InstructionNotAuthorized.into());
         }
@@ -913,7 +916,6 @@ impl Processor {
             return Err(StreamError::InvalidTreasuryAssociatedToken.into());
         }
 
-        let mut stream = StreamV1::unpack_from_slice(&stream_account_info.data.borrow())?;
         let mut rate = 0.0;
         let is_running = (stream.stream_resumed_block_time >= stream.escrow_vested_amount_snap_block_time) as u64;    
         
@@ -1446,6 +1448,23 @@ impl Processor {
             return Err(StreamError::InstructionNotAuthorized.into());
         }
 
+        let mut stream = StreamV1::unpack_from_slice(&stream_account_info.data.borrow())?;
+
+        if stream.treasurer_address.ne(initializer_account_info.key) &&
+            stream.beneficiary_address.ne(initializer_account_info.key) 
+        {
+            return Err(StreamError::InstructionNotAuthorized.into()); // Just the treasurer or the beneficiary can close a stream
+        }
+
+        if treasurer_token_account_info.owner != treasurer_account_info.key ||
+           beneficiary_token_account_info.owner != beneficiary_account_info.key ||
+           treasury_token_account_info.owner != treasury_account_info.key ||
+           msp_ops_account_info.owner != msp_account_info.key ||
+           stream.treasury_address.ne(treasury_account_info.key)
+        {
+            return Err(StreamError::InstructionNotAuthorized.into());
+        }
+
         if beneficiary_token_account_info.owner != beneficiary_account_info.key ||
            treasury_token_account_info.owner != treasury_account_info.key ||
            msp_ops_account_info.owner != msp_ops_account_info.key
@@ -1459,14 +1478,6 @@ impl Processor {
         if treasury.associated_token_address.ne(associated_token_mint_info.key)
         {
             return Err(StreamError::InvalidTreasuryAssociatedToken.into());
-        }
-
-        let mut stream = StreamV1::unpack_from_slice(&stream_account_info.data.borrow())?;
-
-        if stream.treasurer_address.ne(initializer_account_info.key) &&
-            stream.beneficiary_address.ne(initializer_account_info.key) 
-        {
-            return Err(StreamError::InstructionNotAuthorized.into()); // Just the treasurer or the beneficiary can close a stream
         }
 
         if stream_account_info.data_len() == Stream::LEN 
