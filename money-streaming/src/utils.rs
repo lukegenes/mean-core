@@ -474,11 +474,11 @@ pub fn withdraw_v0<'info>(
         escrow_vested_amount = max_vested_amount;
     }
 
-    let mut transfer_amount = (amount * associated_token_mint_pow) as u64;
+    let transfer_amount = (amount * associated_token_mint_pow) as u64;
 
     if transfer_amount > escrow_vested_amount
     {
-        transfer_amount = escrow_vested_amount;
+        return Err(StreamError::NotAllowedWithdrawalAmount.into());
     }
 
     if transfer_amount > 0
@@ -524,11 +524,11 @@ pub fn withdraw_v0<'info>(
         );
 
         // Update stream account data
-        let stream_total_wwithdrawals = ((stream.total_withdrawals * associated_token_mint_pow) as u64)
-            .checked_add((amount * associated_token_mint_pow) as u64)
+        let stream_total_withdrawals = ((stream.total_withdrawals * associated_token_mint_pow) as u64)
+            .checked_add(transfer_amount)
             .ok_or(StreamError::Overflow)? as f64 / associated_token_mint_pow;
 
-        stream.total_withdrawals = stream_total_wwithdrawals;
+        stream.total_withdrawals = stream_total_withdrawals;
 
         let stream_escrow_vested_amount_snap = escrow_vested_amount
             .checked_sub(transfer_amount)
@@ -793,7 +793,11 @@ pub fn close_stream_v0<'info>(
         .checked_sub((stream.total_withdrawals * associated_token_mint_pow) as u64)
         .ok_or(StreamError::Overflow)? as f64 / associated_token_mint_pow;
 
-    if escrow_vested_amount > vested_amount
+    if escrow_vested_amount < 0.0
+    {
+        escrow_vested_amount = 0.0;
+    } 
+    else if escrow_vested_amount > vested_amount
     {
         escrow_vested_amount = vested_amount;
     }    
@@ -882,7 +886,7 @@ pub fn close_stream_v0<'info>(
         );
 
         token_amount = ((token_amount * associated_token_mint_pow) as u64)
-            .checked_sub((escrow_vested_amount * associated_token_mint_pow) as u64)
+            .checked_sub(transfer_amount)
             .ok_or(StreamError::Overflow)? as f64 / associated_token_mint_pow;
     }
 
@@ -892,13 +896,18 @@ pub fn close_stream_v0<'info>(
         .checked_sub((escrow_vested_amount * associated_token_mint_pow) as u64)
         .ok_or(StreamError::Overflow)? as f64 / associated_token_mint_pow;
 
+
+    if escrow_unvested_amount < 0.0
+    {
+        escrow_unvested_amount = 0.0;
+    }
+    else if escrow_unvested_amount > token_amount
+    {
+        escrow_unvested_amount = token_amount;
+    }
+
     if escrow_unvested_amount > 0.0
     {
-        if escrow_unvested_amount > token_amount
-        {
-            escrow_unvested_amount = token_amount;
-        }
-
         let transfer_unvested_amount = (escrow_unvested_amount as f64 * associated_token_mint_pow) as u64;
 
         // Crediting escrow unvested amount to the treasurer

@@ -951,16 +951,9 @@ impl Processor {
             .checked_add((rate_time * associated_token_mint_pow) as u64)
             .ok_or(StreamError::Overflow)? as f64 / associated_token_mint_pow;
 
-        let mut allocation_amount = stream.allocation;
-
-        if stream.allocation_reserved > 0.0
+        if escrow_vested_amount > stream.allocation
         {
-            allocation_amount = stream.allocation_reserved;
-        }
-        
-        if escrow_vested_amount > allocation_amount
-        {
-            escrow_vested_amount = allocation_amount;
+            escrow_vested_amount = stream.allocation;
         }
         
         if amount > escrow_vested_amount || amount > treasury.balance
@@ -968,7 +961,7 @@ impl Processor {
             return Err(StreamError::NotAllowedWithdrawalAmount.into());
         }
 
-        let transfer_amount = amount * associated_token_mint_pow;
+        let transfer_amount = (amount * associated_token_mint_pow) as u64;
 
         // Withdraw
         let _ = claim_treasury_funds(
@@ -977,15 +970,15 @@ impl Processor {
             &treasury_account_info,
             &treasury_token_account_info,
             &beneficiary_token_account_info,
-            transfer_amount as u64
+            transfer_amount
         );
 
         // Update stream account data
         let escrow_vested_amount_snap = ((escrow_vested_amount * associated_token_mint_pow) as u64)
             .checked_sub((amount * associated_token_mint_pow) as u64)
-            .ok_or(StreamError::Overflow)?;
+            .ok_or(StreamError::Overflow)? as f64 / associated_token_mint_pow;
 
-        stream.escrow_vested_amount_snap = escrow_vested_amount_snap as f64 / associated_token_mint_pow;
+        stream.escrow_vested_amount_snap = escrow_vested_amount_snap;
         stream.escrow_vested_amount_snap_slot = clock.slot as u64;
         stream.escrow_vested_amount_snap_block_time = clock.unix_timestamp as u64;
         stream.stream_resumed_slot = clock.slot as u64;
@@ -994,7 +987,7 @@ impl Processor {
         stream.allocation = ((stream.allocation * associated_token_mint_pow) as u64)
             .checked_sub((amount * associated_token_mint_pow) as u64)
             .ok_or(StreamError::Overflow)? as f64 / associated_token_mint_pow;
-        
+
         if stream.allocation_reserved >= amount
         {
             stream.allocation_reserved = ((stream.allocation_reserved * associated_token_mint_pow) as u64)
@@ -1006,9 +999,12 @@ impl Processor {
         StreamV1::pack_into_slice(&stream, &mut stream_account_info.data.borrow_mut());
 
         // Update treasury account data
-        treasury.allocation = ((treasury.allocation * associated_token_mint_pow) as u64)
-            .checked_sub((amount * associated_token_mint_pow) as u64)
-            .ok_or(StreamError::Overflow)? as f64 / associated_token_mint_pow;
+        if stream.allocation >= amount
+        {
+            treasury.allocation = ((treasury.allocation * associated_token_mint_pow) as u64)
+                .checked_sub((amount * associated_token_mint_pow) as u64)
+                .ok_or(StreamError::Overflow)? as f64 / associated_token_mint_pow;
+        }
 
         if stream.allocation_reserved >= amount
         {
@@ -1017,9 +1013,12 @@ impl Processor {
                 .ok_or(StreamError::Overflow)? as f64 / associated_token_mint_pow;
         }
 
-        treasury.balance = ((treasury.balance * associated_token_mint_pow) as u64)
-            .checked_sub((amount * associated_token_mint_pow) as u64)
-            .ok_or(StreamError::Overflow)? as f64 / associated_token_mint_pow;
+        if treasury.balance >= amount
+        {
+            treasury.balance = ((treasury.balance * associated_token_mint_pow) as u64)
+                .checked_sub((amount * associated_token_mint_pow) as u64)
+                .ok_or(StreamError::Overflow)? as f64 / associated_token_mint_pow;
+        }
 
         // Save
         TreasuryV1::pack_into_slice(&treasury, &mut treasury_account_info.data.borrow_mut());
@@ -1616,13 +1615,13 @@ impl Processor {
                 
             // Update treasury data
             let treasury_balance = ((treasury.balance * associated_token_mint_pow) as u64)
-                .checked_sub((escrow_vested_amount * associated_token_mint_pow) as u64)
+                .checked_sub(vested_transfer_amount)
                 .ok_or(StreamError::Overflow)? as f64 / associated_token_mint_pow;
 
             treasury.balance = treasury_balance;
 
             let treasury_allocation = ((treasury.allocation * associated_token_mint_pow) as u64)
-                .checked_sub((escrow_vested_amount * associated_token_mint_pow) as u64)
+                .checked_sub(vested_transfer_amount)
                 .ok_or(StreamError::Overflow)? as f64 / associated_token_mint_pow;
 
             treasury.allocation = treasury_allocation;
@@ -1630,7 +1629,7 @@ impl Processor {
             if treasury.allocation_reserved >= escrow_vested_amount
             {
                 let treasury_allocation_reserved = ((treasury.allocation_reserved * associated_token_mint_pow) as u64)
-                    .checked_sub((escrow_vested_amount * associated_token_mint_pow) as u64)
+                    .checked_sub(vested_transfer_amount)
                     .ok_or(StreamError::Overflow)? as f64 / associated_token_mint_pow;
 
                 treasury.allocation_reserved = treasury_allocation_reserved;
