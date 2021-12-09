@@ -885,31 +885,6 @@ impl Processor {
             return Err(StreamError::InstructionNotAuthorized.into());
         }
 
-        let mut stream = StreamV1::unpack_from_slice(&stream_account_info.data.borrow())?;
-        let beneficiary_token_address = spl_associated_token_account::get_associated_token_address(
-            &stream.beneficiary_address,
-            associated_token_mint_info.key
-        );
-
-        let mut treasury = TreasuryV1::unpack_from_slice(&treasury_account_info.data.borrow())?;
-        let treasury_token_address = spl_associated_token_account::get_associated_token_address(
-            &stream.treasury_address,
-            associated_token_mint_info.key
-        );
-
-        let msp_ops_token_address = spl_associated_token_account::get_associated_token_address(
-            &MSP_OPS_ACCOUNT_ADDRESS.parse().unwrap(),
-            associated_token_mint_info.key
-        );
-    
-        if beneficiary_token_address.ne(beneficiary_token_account_info.key) ||
-           treasury_token_address.ne(treasury_token_account_info.key) ||
-           treasury.associated_token_address.ne(associated_token_mint_info.key) ||
-           msp_ops_token_address.ne(msp_ops_token_account_info.key)
-        {
-            return Err(StreamError::InstructionNotAuthorized.into());
-        }
-
         if treasury_account_info.data_len() == Treasury::LEN &&
            stream_account_info.data_len() == Stream::LEN
         {
@@ -929,6 +904,30 @@ impl Processor {
                 stream_account_info,
                 amount
             );
+        }
+
+        let mut stream = StreamV1::unpack_from_slice(&stream_account_info.data.borrow())?;
+        let beneficiary_token_address = spl_associated_token_account::get_associated_token_address(
+            &stream.beneficiary_address,
+            associated_token_mint_info.key
+        );
+
+        let mut treasury = TreasuryV1::unpack_from_slice(&treasury_account_info.data.borrow())?;
+        let treasury_token_address = spl_associated_token_account::get_associated_token_address(
+            &stream.treasury_address,
+            associated_token_mint_info.key
+        );
+
+        let msp_ops_token_address = spl_associated_token_account::get_associated_token_address(
+            &MSP_OPS_ACCOUNT_ADDRESS.parse().unwrap(),
+            associated_token_mint_info.key
+        );
+    
+        if beneficiary_token_address.ne(beneficiary_token_account_info.key) ||
+           treasury_token_address.ne(treasury_token_account_info.key) ||
+           msp_ops_token_address.ne(msp_ops_token_account_info.key)
+        {
+            return Err(StreamError::InstructionNotAuthorized.into());
         }
 
         let mut rate = 0.0;
@@ -1465,10 +1464,32 @@ impl Processor {
             return Err(StreamError::InstructionNotAuthorized.into());
         }
 
+        if stream_account_info.data_len() == Stream::LEN 
+        {
+            return close_stream_v0(
+                &msp_account_info,
+                &msp_ops_account_info,
+                &msp_ops_token_account_info,
+                &token_program_account_info,
+                &system_account_info,
+                &initializer_account_info,
+                &treasurer_account_info,
+                &treasurer_token_account_info,
+                &treasurer_treasury_pool_token_account_info,
+                &beneficiary_token_account_info,
+                &associated_token_mint_info,
+                &treasury_account_info,
+                &treasury_token_account_info,
+                &treasury_pool_mint_info,
+                &stream_account_info,
+                auto_close_treasury,
+            );
+        }
+
         let mut stream = StreamV1::unpack_from_slice(&stream_account_info.data.borrow())?;
 
         if stream.treasurer_address.ne(initializer_account_info.key) &&
-            stream.beneficiary_address.ne(initializer_account_info.key) 
+           stream.beneficiary_address.ne(initializer_account_info.key) 
         {
             return Err(StreamError::InstructionNotAuthorized.into()); // Just the treasurer or the beneficiary can close a stream
         }
@@ -1491,7 +1512,6 @@ impl Processor {
     
         if beneficiary_token_address.ne(beneficiary_token_account_info.key) ||
            treasury_token_address.ne(treasury_token_account_info.key) ||
-           treasury.associated_token_address.ne(associated_token_mint_info.key) ||
            msp_ops_token_address.ne(msp_ops_token_account_info.key)
         {
             return Err(StreamError::InstructionNotAuthorized.into());
@@ -1502,29 +1522,6 @@ impl Processor {
         if treasury.associated_token_address.ne(associated_token_mint_info.key)
         {
             return Err(StreamError::InvalidTreasuryAssociatedToken.into());
-        }
-
-        if stream_account_info.data_len() == Stream::LEN 
-        {
-            return close_stream_v0(
-                &msp_account_info,
-                &msp_ops_account_info,
-                &msp_ops_token_account_info,
-                &token_program_account_info,
-                &system_account_info,
-                &initializer_account_info,
-                &treasurer_account_info,
-                &treasurer_token_account_info,
-                &treasurer_treasury_pool_token_account_info,
-                &beneficiary_account_info,
-                &beneficiary_token_account_info,
-                &associated_token_mint_info,
-                &treasury_account_info,
-                &treasury_token_account_info,
-                &treasury_pool_mint_info,
-                &stream_account_info,
-                auto_close_treasury,
-            );
         }
         
         let associated_token_mint = spl_token::state::Mint::unpack_from_slice(&associated_token_mint_info.data.borrow())?;
@@ -1567,7 +1564,7 @@ impl Processor {
 
         if escrow_vested_amount > 0.0
         {
-            if (*beneficiary_token_account_info.owner).ne(token_program_account_info.key)
+            if beneficiary_token_account_info.data_len() != spl_token::state::Account::LEN
             {
                 // Create contributor treasury associated token account
                 let beneficiary_token_address = spl_associated_token_account::get_associated_token_address(
@@ -1606,31 +1603,6 @@ impl Processor {
                 &beneficiary_token_account_info,
                 vested_transfer_amount
             );
-
-            if (*msp_ops_token_account_info.owner).ne(token_program_account_info.key)
-            {
-                // Create contributor treasury associated token account
-                let msp_ops_token_address = spl_associated_token_account::get_associated_token_address(
-                    msp_ops_account_info.key,
-                    associated_token_mint_info.key
-                );
-
-                if msp_ops_token_address.ne(msp_ops_token_account_info.key)
-                {
-                    return Err(StreamError::InvalidMspOpsToken.into());
-                }
-
-                let _ = create_ata_account(
-                    &system_account_info,
-                    &rent_account_info,
-                    &associated_token_program_account_info,
-                    &token_program_account_info,
-                    &initializer_account_info,
-                    &msp_ops_account_info,
-                    &msp_ops_token_account_info,
-                    &associated_token_mint_info
-                );
-            }
 
             // Pay fee by the beneficiary from the vested amount
             let _ = claim_treasury_funds(
@@ -1936,7 +1908,7 @@ impl Processor {
         let treasury_token_account_info = next_account_info(account_info_iter)?;
         let treasury_pool_mint_info = next_account_info(account_info_iter)?;
         let msp_ops_account_info = next_account_info(account_info_iter)?;
-        let msp_ops_token_account_info = next_account_info(account_info_iter)?;
+        let _msp_ops_token_account_info = next_account_info(account_info_iter)?;
         let msp_account_info = next_account_info(account_info_iter)?;
         let token_program_account_info = next_account_info(account_info_iter)?;
         // let system_account_info = next_account_info(account_info_iter)?;
@@ -1962,14 +1934,12 @@ impl Processor {
             // close treasury
             return close_treasury_v0(
                 msp_account_info,
-                msp_ops_token_account_info,
                 token_program_account_info,
                 treasurer_account_info,
                 treasurer_token_account_info,
                 treasurer_treasury_pool_token_account_info,
                 treasury_account_info,
                 treasury_token_account_info,
-                associated_token_mint_info,
                 treasury_pool_mint_info
             );
         }
