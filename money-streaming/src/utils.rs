@@ -947,11 +947,11 @@ pub fn close_stream_v0<'info>(
     }
 
     // Close stream account
-    let initializer_lamports = initializer_account_info.lamports();
+    let treasurer_lamports = treasurer_account_info.lamports();
     let stream_lamports = stream_account_info.lamports();
 
     **stream_account_info.lamports.borrow_mut() = 0;
-    **initializer_account_info.lamports.borrow_mut() = initializer_lamports
+    **treasurer_account_info.lamports.borrow_mut() = treasurer_lamports
         .checked_add(stream_lamports)
         .ok_or(StreamError::Overflow)?;
 

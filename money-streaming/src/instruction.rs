@@ -680,7 +680,7 @@ impl StreamInstruction {
         AccountMeta::new(treasury_account_address, false),
         AccountMeta::new(treasury_token_account_address, false),
         AccountMeta::new(treasury_pool_mint_address, false),
-        AccountMeta::new_readonly(msp_ops_account_address, false),
+        AccountMeta::new(msp_ops_account_address, false),
         AccountMeta::new(msp_ops_token_account_address, false),
         AccountMeta::new_readonly(*program_id, false),
         AccountMeta::new_readonly(token_program_account_address, false)
