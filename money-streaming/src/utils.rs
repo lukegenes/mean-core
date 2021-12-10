@@ -778,6 +778,12 @@ pub fn close_stream_v0<'info>(
     {
         rate = stream.rate_amount / (stream.rate_interval_in_seconds as f64) * (is_running as f64);
     }
+    else if stream.total_deposits > stream.total_withdrawals
+    {
+        rate = ((stream.total_deposits * associated_token_mint_pow) as u64)
+            .checked_sub((stream.total_withdrawals * associated_token_mint_pow) as u64)
+            .ok_or(StreamError::Overflow)? as f64 / associated_token_mint_pow;
+    }
 
     let marker_block_time = cmp::max(stream.stream_resumed_block_time, stream.escrow_vested_amount_snap_block_time);
     let elapsed_time = (clock.unix_timestamp as u64)
@@ -789,14 +795,17 @@ pub fn close_stream_v0<'info>(
         .checked_add((rate_time * associated_token_mint_pow) as u64)
         .ok_or(StreamError::Overflow)? as f64 / associated_token_mint_pow;
 
-    let vested_amount = ((stream.total_deposits * associated_token_mint_pow) as u64)
-        .checked_sub((stream.total_withdrawals * associated_token_mint_pow) as u64)
-        .ok_or(StreamError::Overflow)? as f64 / associated_token_mint_pow;
-
-    if escrow_vested_amount > vested_amount
+    if stream.total_deposits > stream.total_withdrawals
     {
-        escrow_vested_amount = vested_amount;
-    }    
+        let vested_amount = ((stream.total_deposits * associated_token_mint_pow) as u64)
+            .checked_sub((stream.total_withdrawals * associated_token_mint_pow) as u64)
+            .ok_or(StreamError::Overflow)? as f64 / associated_token_mint_pow;
+
+        if escrow_vested_amount > vested_amount
+        {
+            escrow_vested_amount = vested_amount;
+        }
+    }   
 
     let treasury_token = spl_token::state::Account::unpack_from_slice(&treasury_token_account_info.data.borrow())?;
     let mut token_amount = treasury_token.amount as f64 / associated_token_mint_pow;    
@@ -886,19 +895,25 @@ pub fn close_stream_v0<'info>(
             .ok_or(StreamError::Overflow)? as f64 / associated_token_mint_pow;
     }
 
-    let mut escrow_unvested_amount = ((stream.total_deposits * associated_token_mint_pow) as u64)
-        .checked_sub((stream.total_withdrawals * associated_token_mint_pow) as u64)
-        .unwrap()
-        .checked_sub((escrow_vested_amount * associated_token_mint_pow) as u64)
-        .ok_or(StreamError::Overflow)? as f64 / associated_token_mint_pow;
+    let escrow_unvested_amount;
+
+    if stream.total_deposits > stream.total_withdrawals
+    {
+        escrow_unvested_amount = ((stream.total_deposits * associated_token_mint_pow) as u64)
+            .checked_sub((stream.total_withdrawals * associated_token_mint_pow) as u64)
+            .unwrap()
+            .checked_sub((escrow_vested_amount * associated_token_mint_pow) as u64)
+            .ok_or(StreamError::Overflow)? as f64 / associated_token_mint_pow;
+    }
+    else
+    {
+        escrow_unvested_amount = ((token_amount * associated_token_mint_pow) as u64)
+            .checked_sub((escrow_vested_amount * associated_token_mint_pow) as u64)
+            .ok_or(StreamError::Overflow)? as f64 / associated_token_mint_pow;
+    }
 
     if escrow_unvested_amount > 0.0
     {
-        if escrow_unvested_amount > token_amount
-        {
-            escrow_unvested_amount = token_amount;
-        }
-
         let transfer_unvested_amount = (escrow_unvested_amount as f64 * associated_token_mint_pow) as u64;
 
         // Crediting escrow unvested amount to the treasurer
