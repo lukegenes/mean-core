@@ -912,31 +912,38 @@ impl Processor {
             associated_token_mint_info.key
         );
 
+        if beneficiary_token_address.ne(beneficiary_token_account_info.key)
+        {
+            return Err(StreamError::InstructionNotAuthorized.into());
+        }
+
         let mut treasury = TreasuryV1::unpack_from_slice(&treasury_account_info.data.borrow())?;
         let treasury_token_address = spl_associated_token_account::get_associated_token_address(
             &stream.treasury_address,
             associated_token_mint_info.key
         );
 
+        if treasury_token_address.ne(treasury_token_account_info.key)
+        {
+            return Err(StreamError::InstructionNotAuthorized.into());
+        }
+
         let msp_ops_token_address = spl_associated_token_account::get_associated_token_address(
             &MSP_OPS_ACCOUNT_ADDRESS.parse().unwrap(),
             associated_token_mint_info.key
         );
     
-        if beneficiary_token_address.ne(beneficiary_token_account_info.key) ||
-           treasury_token_address.ne(treasury_token_account_info.key) ||
-           msp_ops_token_address.ne(msp_ops_token_account_info.key)
+        if msp_ops_token_address.ne(msp_ops_token_account_info.key)
         {
             return Err(StreamError::InstructionNotAuthorized.into());
         }
 
-        let mut rate = 0.0;
-        let is_running = (stream.stream_resumed_block_time >= stream.escrow_vested_amount_snap_block_time) as u64;    
-        
-        if stream.rate_interval_in_seconds > 0
+        let is_running = (stream.stream_resumed_block_time >= stream.escrow_vested_amount_snap_block_time) as u64;
+        let rate = match stream.rate_interval_in_seconds
         {
-            rate = stream.rate_amount / (stream.rate_interval_in_seconds as f64) * (is_running as f64);
-        }
+            k if k > 0 => stream.rate_amount / (stream.rate_interval_in_seconds as f64) * (is_running as f64),
+            _ => stream.allocation
+        };
 
         let marker_block_time = cmp::max(stream.stream_resumed_block_time, stream.escrow_vested_amount_snap_block_time);
         let elapsed_time = (clock.unix_timestamp as u64)
@@ -951,9 +958,13 @@ impl Processor {
             .checked_add((rate_time * associated_token_mint_pow) as u64)
             .ok_or(StreamError::Overflow)? as f64 / associated_token_mint_pow;
 
+<<<<<<< Updated upstream
         let mut allocation_amount = stream.allocation;
 
         if stream.allocation_reserved > 0.0
+=======
+        if escrow_vested_amount < 0.0 || escrow_vested_amount > stream.allocation
+>>>>>>> Stashed changes
         {
             allocation_amount = stream.allocation_reserved;
         }
@@ -963,12 +974,17 @@ impl Processor {
             escrow_vested_amount = allocation_amount;
         }
         
-        if amount > escrow_vested_amount || amount > treasury.balance
+        if amount > escrow_vested_amount
         {
             return Err(StreamError::NotAllowedWithdrawalAmount.into());
         }
+<<<<<<< Updated upstream
 
         let transfer_amount = amount * associated_token_mint_pow;
+=======
+ 
+        let transfer_amount = (amount * associated_token_mint_pow) as u64;
+>>>>>>> Stashed changes
 
         // Withdraw
         let _ = claim_treasury_funds(
@@ -1554,7 +1570,7 @@ impl Processor {
         
         if escrow_vested_amount > treasury.balance
         {
-            return Err(StreamError::NotAllowedWithdrawalAmount.into());
+            escrow_vested_amount = treasury.balance;
         }
 
         // Pausing the stream
