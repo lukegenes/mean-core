@@ -17,6 +17,14 @@ use arrayref::{
 
 use crate::error::{ StreamError, TreasuryError };
 
+#[derive(PartialEq)]
+pub enum StreamStatus 
+{
+    Scheduled = 0,
+    Running = 1,
+    Paused = 2
+}
+
 #[derive(Clone, Debug)]
 pub struct StreamTerms {
     pub initialized: bool,

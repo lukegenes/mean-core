@@ -3,7 +3,7 @@ use std::cmp;
 use num_traits;
 use std::{ string::String, convert::TryInto };
 use crate::error::StreamError;
-use crate::state::{ Treasury, TreasuryV1, Stream };
+use crate::state::{ Treasury, TreasuryV1, Stream, StreamV1, StreamStatus };
 use crate::constants::{
     ADD_FUNDS_FLAT_FEE,
     CLOSE_STREAM_FLAT_FEE,
@@ -1021,4 +1021,159 @@ pub fn transfer_token_fee<'info>(
     ])
 }
 
+pub fn get_stream_status_v0<'info>(
+    stream: &Stream,
+    clock: &Clock
 
+) -> Result<StreamStatus, StreamError> {
+
+    let now = clock.unix_timestamp as u64 * 1000u64;
+
+    if stream.start_utc > now
+    {
+        return Ok(StreamStatus::Scheduled);
+    }
+
+    if stream.stream_resumed_block_time >= stream.escrow_vested_amount_snap_block_time
+    {
+        return Ok(StreamStatus::Running);
+    }
+
+    return Ok(StreamStatus::Paused);
+}
+
+pub fn get_stream_status<'info>(
+    stream: &StreamV1,
+    clock: &Clock
+
+) -> Result<StreamStatus, StreamError> {
+
+    let now = clock.unix_timestamp as u64 * 1000u64;
+
+    if stream.start_utc > now
+    {
+        return Ok(StreamStatus::Scheduled);
+    }
+
+    if stream.stream_resumed_block_time >= stream.escrow_vested_amount_snap_block_time
+    {
+        return Ok(StreamStatus::Running);
+    }
+
+    return Ok(StreamStatus::Paused);
+}
+
+pub fn get_stream_vested_amount_v0<'info>(
+    stream: &Stream,
+    clock: &Clock,
+    decimals: u64
+
+) -> Result<u64, StreamError> {
+
+    let status = get_stream_status_v0(stream, clock)?;
+
+    if status == StreamStatus::Scheduled
+    {
+        return Ok(0);
+    }
+
+    let is_running = match status
+    {
+        k if k == StreamStatus::Running => 1,
+        _ => 0
+    };
+
+    let rate = match stream.rate_interval_in_seconds
+    {
+        k if k > 0 => stream.rate_amount / (stream.rate_interval_in_seconds as f64) * (is_running as f64),
+        _ => stream.total_deposits - stream.total_withdrawals
+    };
+
+    let marker_block_time = cmp::max(stream.stream_resumed_block_time, stream.escrow_vested_amount_snap_block_time);
+    let elapsed_time = (clock.unix_timestamp as u64)
+        .checked_sub(marker_block_time)
+        .ok_or(StreamError::Overflow)?;
+
+    let rate_time = rate * elapsed_time as f64;    
+    let pow = num_traits::pow(10u64, decimals.try_into().unwrap());
+    let total_deposits = stream.total_deposits as u64 * pow;
+    let total_withdrawals = stream.total_withdrawals as u64 * pow;
+    let max_vested_amount = total_deposits
+        .checked_sub(total_withdrawals)
+        .ok_or(StreamError::Overflow)?;
+
+    let mut cliff_vest_amount = stream.cliff_vest_amount as u64 * pow;
+
+    if stream.cliff_vest_percent > 0.0
+    {
+        cliff_vest_amount = stream.cliff_vest_percent as u64 * max_vested_amount / 100u64;
+    }
+
+    let mut escrow_vested_amount = (stream.escrow_vested_amount_snap as u64 * pow)
+        .checked_add(cliff_vest_amount)
+        .unwrap()
+        .checked_add(rate_time as u64 * pow)
+        .ok_or(StreamError::Overflow)?;
+
+    if escrow_vested_amount > max_vested_amount
+    {
+        escrow_vested_amount = max_vested_amount;
+    }
+
+    return Ok(escrow_vested_amount);
+}
+
+pub fn get_stream_vested_amount<'info>(
+    stream: &StreamV1,
+    clock: &Clock,
+    decimals: u64
+
+) -> Result<u64, StreamError> {
+
+    let status = get_stream_status(stream, clock)?;
+
+    if status == StreamStatus::Scheduled
+    {
+        return Ok(0);
+    }
+
+    let is_running = match status
+    {
+        k if k == StreamStatus::Running => 1,
+        _ => 0
+    };
+
+    let rate = match stream.rate_interval_in_seconds
+    {
+        k if k > 0 => stream.rate_amount / (stream.rate_interval_in_seconds as f64) * (is_running as f64),
+        _ => stream.allocation
+    };
+
+    let marker_block_time = cmp::max(stream.stream_resumed_block_time, stream.escrow_vested_amount_snap_block_time);
+    let elapsed_time = (clock.unix_timestamp as u64)
+        .checked_sub(marker_block_time)
+        .ok_or(StreamError::Overflow)?;
+
+    let rate_time = rate * elapsed_time as f64;    
+    let pow = num_traits::pow(10u64, decimals.try_into().unwrap());
+    let stream_allocation = stream.allocation as u64 * pow;
+    let mut cliff_vest_amount = stream.cliff_vest_amount as u64 * pow;
+
+    if stream.cliff_vest_percent > 0.0
+    {
+        cliff_vest_amount = stream.cliff_vest_percent as u64 * stream_allocation / 100u64;
+    }
+
+    let mut escrow_vested_amount = (stream.escrow_vested_amount_snap as u64 * pow)
+        .checked_add(cliff_vest_amount)
+        .unwrap()
+        .checked_add(rate_time as u64 * pow)
+        .ok_or(StreamError::Overflow)?;
+
+    if escrow_vested_amount > stream_allocation
+    {
+        escrow_vested_amount = stream_allocation;
+    }
+
+    return Ok(escrow_vested_amount);
+}

@@ -25,10 +25,12 @@ use crate::{
         create_ata_account, 
         claim_treasury_funds,
         transfer_sol_fee,
-        transfer_token_fee
+        transfer_token_fee,
+        get_stream_status,
+        // get_stream_vested_amount
     },
     instruction::{ StreamInstruction, close_treasury },
-    state::{ Stream, StreamV1, StreamTerms, Treasury, TreasuryV1 },
+    state::{ Stream, StreamV1, StreamTerms, Treasury, TreasuryV1, StreamStatus },
     constants::{
         MSP_OPS_ACCOUNT_ADDRESS,
         CREATE_TREASURY_FLAT_FEE,
@@ -360,6 +362,13 @@ impl Processor {
         stream.escrow_vested_amount_snap_block_time = clock.unix_timestamp as u64;
         stream.stream_resumed_slot = clock.slot;
         stream.stream_resumed_block_time = clock.unix_timestamp as u64;
+
+        let status = get_stream_status(&stream, &clock)?;
+
+        if status == StreamStatus::Scheduled
+        {
+            stream.stream_resumed_block_time = start_utc / 1000u64;
+        }
 
         if auto_pause_in_seconds != 0 
         {
@@ -944,28 +953,18 @@ impl Processor {
         let treasury_token = spl_token::state::Account::unpack_from_slice(&treasury_token_account_info.data.borrow())?;
         let token_amount = treasury_token.amount as f64 / associated_token_mint_pow;
         let is_running = (stream.stream_resumed_block_time >= stream.escrow_vested_amount_snap_block_time) as u64;
-        let rate;
-
-        if stream.rate_interval_in_seconds > 0
+        let rate = match stream.rate_interval_in_seconds
         {
-            rate = stream.rate_amount / (stream.rate_interval_in_seconds as f64) * (is_running as f64);
-        }
-        else if stream.allocation > 0.0
-        {
-            rate = stream.allocation;
-        }
-        else
-        {
-            rate = token_amount;
-        }
+            k if k > 0 => stream.rate_amount / (stream.rate_interval_in_seconds as f64) * (is_running as f64),
+            _ => stream.allocation
+        };
 
         let marker_block_time = cmp::max(stream.stream_resumed_block_time, stream.escrow_vested_amount_snap_block_time);
         let elapsed_time = (clock.unix_timestamp as u64)
             .checked_sub(marker_block_time)
             .ok_or(StreamError::Overflow)?;
 
-        let rate_time = rate * elapsed_time as f64;
-    
+        let rate_time = rate * elapsed_time as f64;    
         let mut escrow_vested_amount = ((stream.escrow_vested_amount_snap * associated_token_mint_pow) as u64)
             .checked_add((rate_time * associated_token_mint_pow) as u64)
             .ok_or(StreamError::Overflow)? as f64 / associated_token_mint_pow;
