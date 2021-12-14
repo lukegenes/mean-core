@@ -1177,3 +1177,415 @@ pub fn get_stream_vested_amount<'info>(
 
     return Ok(escrow_vested_amount);
 }
+
+pub fn check_can_create_stream<'info>(
+    program_id: &Pubkey,
+    msp_account_info: &AccountInfo<'info>,
+    treasurer_account_info: &AccountInfo<'info>,
+    treasury_account_info: &AccountInfo<'info>,
+    stream_account_info: &AccountInfo<'info>,
+    associated_token_mint_info: &AccountInfo<'info>,
+    allocation: f64
+
+) -> ProgramResult {
+
+    let stream = StreamV1::unpack_from_slice(&stream_account_info.data.borrow())?;
+
+    if stream.initialized == true
+    {
+        return Err(StreamError::StreamAlreadyInitialized.into());
+    }
+
+    if msp_account_info.key.ne(program_id)
+    {
+        return Err(StreamError::IncorrectProgramId.into());
+    }
+
+    if !treasurer_account_info.is_signer
+    {
+        return Err(StreamError::MissingInstructionSignature.into());
+    }
+
+    if treasury_account_info.owner != program_id
+    {
+        return Err(StreamError::InstructionNotAuthorized.into());
+    }
+
+    let treasury = TreasuryV1::unpack_from_slice(&treasury_account_info.data.borrow())?;
+
+    if treasury.associated_token_address.ne(associated_token_mint_info.key)
+    {
+        return Err(StreamError::InvalidTreasuryAssociatedToken.into());
+    }
+
+    let associated_token_mint = spl_token::state::Mint::unpack_from_slice(&associated_token_mint_info.data.borrow())?;
+    let pow = num_traits::pow(10f64, associated_token_mint.decimals.into());
+    
+    if allocation > treasury.balance
+    {
+        return Err(StreamError::AvailableTreasuryAmountExceeded.into());
+    }
+    else if treasury.streams_amount > 0 && treasury.allocation <= treasury.balance
+    {
+        let available_balance = ((treasury.balance * pow) as u64)
+            .checked_sub((treasury.allocation * pow) as u64) 
+            .ok_or(StreamError::Overflow)? as f64 / pow;
+
+        if allocation > available_balance
+        {
+            return Err(StreamError::AvailableTreasuryAmountExceeded.into());
+        }
+    }
+
+    Ok(())
+}
+
+pub fn create_stream_account<'info>(
+    treasurer_account_info: &AccountInfo<'info>,
+    stream_account_info: &AccountInfo<'info>,
+    msp_account_info: &AccountInfo<'info>,
+    rent_account_info: &AccountInfo<'info>,
+    system_account_info: &AccountInfo<'info>
+
+) -> ProgramResult {
+
+    let rent = &Rent::from_account_info(rent_account_info)?;
+    // Create stream account
+    let stream_balance = rent.minimum_balance(StreamV1::LEN);
+    let create_stream_ix = system_instruction::create_account(
+        treasurer_account_info.key,
+        stream_account_info.key,
+        stream_balance,
+        u64::from_le_bytes(StreamV1::LEN.to_le_bytes()),
+        msp_account_info.key
+    );
+
+    invoke(&create_stream_ix, &[
+        treasurer_account_info.clone(),
+        stream_account_info.clone(),
+        msp_account_info.clone(),
+        system_account_info.clone()
+    ])
+} 
+
+pub fn create_stream_update_treasury(
+    treasury: &mut TreasuryV1,
+    stream: &StreamV1,
+    decimals: usize
+
+) -> ProgramResult {
+
+    let pow = num_traits::pow(10f64, decimals.into());
+    let rate = stream.rate_amount / stream.rate_interval_in_seconds as f64;
+    let depletion_rate = ((treasury.depletion_rate * pow) as u64)
+        .checked_add((rate * pow) as u64)
+        .ok_or(StreamError::Overflow)? as f64 / pow;
+
+    treasury.depletion_rate = depletion_rate;        
+    treasury.streams_amount = treasury.streams_amount
+        .checked_add(1)
+        .ok_or(StreamError::Overflow)?;
+
+    if stream.allocation > 0.0
+    {
+        let treasury_allocation = ((treasury.allocation * pow) as u64)
+            .checked_add((stream.allocation * pow) as u64)
+            .ok_or(StreamError::Overflow)?;
+
+        treasury.allocation = treasury_allocation as f64 / pow;
+    }
+
+    if stream.allocation_reserved > 0.0
+    {
+        let treasury_allocation = ((treasury.allocation * pow) as u64)
+            .checked_add((stream.allocation_reserved * pow) as u64)
+            .ok_or(StreamError::Overflow)?;
+
+        treasury.allocation = treasury_allocation as f64 / pow;
+    }
+
+    Ok(())
+}
+
+pub fn check_can_add_funds<'info>(
+    program_id: &Pubkey,
+    msp_account_info: &AccountInfo<'info>,
+    contributor_account_info: &AccountInfo<'info>,
+    contributor_treasury_pool_token_account_info: &AccountInfo<'info>,
+    associated_token_mint_info: &AccountInfo<'info>,
+    treasury_account_info: &AccountInfo<'info>,
+    treasury_token_account_info: &AccountInfo<'info>,
+    treasury_pool_mint_info: &AccountInfo<'info>,
+    associated_token_program_account_info: &AccountInfo<'info>,
+    token_program_account_info: &AccountInfo<'info>,
+    rent_account_info: &AccountInfo<'info>,
+    system_account_info: &AccountInfo<'info>
+
+) -> ProgramResult {
+
+    if msp_account_info.key.ne(program_id)
+    {
+        return Err(StreamError::IncorrectProgramId.into());
+    }
+
+    if !contributor_account_info.is_signer 
+    {
+        return Err(StreamError::MissingInstructionSignature.into());
+    }
+
+    if treasury_account_info.owner != program_id
+    {
+        return Err(StreamError::InstructionNotAuthorized.into());
+    }
+
+    let treasury_token_address = spl_associated_token_account::get_associated_token_address(
+        treasury_account_info.key,
+        associated_token_mint_info.key
+    );
+
+    if treasury_token_address != *treasury_token_account_info.key 
+    {
+        return Err(StreamError::InvalidTreasuryAccount.into());
+    }
+
+    if treasury_token_account_info.data_len() == 0
+    {
+        // Create treasury associated token account if doesn't exist
+        let _ = create_ata_account(
+            &system_account_info,
+            &rent_account_info,
+            &associated_token_program_account_info,
+            &token_program_account_info,
+            &contributor_account_info,
+            &treasury_account_info,
+            &treasury_token_account_info,
+            &associated_token_mint_info
+        )?;
+    }
+
+    let treasury = TreasuryV1::unpack_from_slice(&treasury_account_info.data.borrow())?;
+    let (treasury_pool_address, _) = Pubkey::find_program_address(
+        &[
+            treasury.treasurer_address.as_ref(),
+            &treasury.slot.to_le_bytes()
+        ], 
+        msp_account_info.key
+    );
+
+    if treasury_pool_address != *treasury_account_info.key 
+    {
+        return Err(StreamError::InvalidTreasuryPool.into());
+    }
+
+    if contributor_treasury_pool_token_account_info.data_len() == 0
+    {
+        // Create contributor treasury associated token account
+        let contributor_treasury_pool_token_address = spl_associated_token_account::get_associated_token_address(
+            contributor_account_info.key,
+            treasury_pool_mint_info.key
+        );
+
+        if contributor_treasury_pool_token_address.ne(contributor_treasury_pool_token_account_info.key)
+        {
+            return Err(StreamError::InvalidTreasuryPoolAddress.into());
+        }
+
+        // Create the contributor treasury token account if there is a treasury pool and the account does not exists
+        let _ = create_ata_account(
+            &system_account_info,
+            &rent_account_info,
+            &associated_token_program_account_info,
+            &token_program_account_info,
+            &contributor_account_info,
+            &contributor_account_info,
+            &contributor_treasury_pool_token_account_info,
+            &treasury_pool_mint_info
+        );
+    }
+
+    Ok(())
+}
+
+pub fn mint_treasury_pool_tokens<'info>(
+    treasury_account_info: &AccountInfo<'info>,
+    treasury_pool_mint_info: &AccountInfo<'info>,
+    dest_pool_token_account_info: &AccountInfo<'info>,
+    msp_account_info: &AccountInfo<'info>,
+    token_program_account_info: &AccountInfo<'info>,
+    amount: f64
+
+) -> ProgramResult {
+
+    let treasury = TreasuryV1::unpack_from_slice(&treasury_account_info.data.borrow())?;
+    let (_, treasury_pool_bump_seed) = Pubkey::find_program_address(
+        &[
+            treasury.treasurer_address.as_ref(),
+            &treasury.slot.to_le_bytes()
+        ], 
+        msp_account_info.key
+    );
+    
+    // Mint just if there is a treasury pool
+    let treasury_pool_mint = spl_token::state::Mint::unpack_from_slice(&treasury_pool_mint_info.data.borrow())?;
+    let treasury_pool_mint_signer_seed: &[&[_]] = &[
+        treasury.treasurer_address.as_ref(),
+        &treasury.slot.to_le_bytes(),
+        &[treasury_pool_bump_seed]
+    ];
+
+    let pow = num_traits::pow(10f64, treasury_pool_mint.decimals.into());
+    let mint_amount = (amount * pow) as u64;
+
+    let mint_to_ix = spl_token::instruction::mint_to(
+        token_program_account_info.key,
+        treasury_pool_mint_info.key,
+        dest_pool_token_account_info.key,
+        treasury_account_info.key,
+        &[],
+        mint_amount
+    )?;
+
+    invoke_signed(&mint_to_ix,
+        &[
+            token_program_account_info.clone(),
+            treasury_pool_mint_info.clone(),
+            dest_pool_token_account_info.clone(),
+            treasury_account_info.clone()
+        ],
+        &[treasury_pool_mint_signer_seed]
+    )
+}
+
+pub fn add_funds_update_treasury<'info>(
+    treasury: &mut TreasuryV1,
+    associated_token_mint_info: &AccountInfo<'info>,
+    allocation_type: u8,
+    amount: f64
+
+) -> ProgramResult {
+
+    let associated_token_mint = spl_token::state::Mint::unpack_from_slice(&associated_token_mint_info.data.borrow())?;
+    let pow = num_traits::pow(10f64, associated_token_mint.decimals.into());
+
+    let balance = ((treasury.balance * pow) as u64)
+        .checked_add((amount * pow) as u64)
+        .ok_or(StreamError::Overflow)?;
+
+    treasury.balance = balance as f64 / pow;
+
+    if allocation_type == 0
+    {
+        let treasury_allocation = ((treasury.allocation * pow) as u64)
+            .checked_add((amount * pow) as u64)
+            .ok_or(StreamError::Overflow)?;
+
+        treasury.allocation = treasury_allocation as f64 / pow;
+
+    } 
+    else if allocation_type == 1
+    {
+        let treasury_allocation = ((treasury.allocation * pow) as u64)
+            .checked_add((amount * pow) as u64)
+            .ok_or(StreamError::Overflow)?;
+
+        treasury.allocation = treasury_allocation as f64 / pow;
+        
+        let treasury_allocation_reserved = ((treasury.allocation_reserved * pow) as u64)
+            .checked_add((amount * pow) as u64)
+            .ok_or(StreamError::Overflow)?;
+
+        treasury.allocation_reserved = treasury_allocation_reserved as f64 / pow;
+    }
+
+    treasury.associated_token_address = *associated_token_mint_info.key;
+
+    Ok(())
+}
+
+pub fn add_funds_update_stream<'info>(
+    stream_account_info: &AccountInfo<'info>,
+    associated_token_mint_info: &AccountInfo<'info>,
+    clock: &Clock,
+    allocation_stream_address: &Pubkey,
+    allocation_type: u8,
+    amount: f64
+
+) -> ProgramResult {
+
+    let current_slot = clock.slot as u64;
+    let current_block_time = clock.unix_timestamp as u64;
+    let mut stream = StreamV1::unpack_from_slice(&stream_account_info.data.borrow())?;
+    let associated_token_mint = spl_token::state::Mint::unpack_from_slice(&associated_token_mint_info.data.borrow())?;
+
+    let escrow_vested_amount = get_stream_vested_amount(
+        &stream, 
+        &clock, 
+        associated_token_mint.decimals.try_into().unwrap()
+    )?;
+
+    let pow = num_traits::pow(10f64, associated_token_mint.decimals.into());
+    let allocation = (stream.allocation * pow) as u64;
+
+    // Pause because the allocation amount was reached
+    if escrow_vested_amount > allocation
+    {
+        stream.escrow_vested_amount_snap = escrow_vested_amount as f64 / pow;
+        stream.escrow_vested_amount_snap_slot = current_slot;
+        stream.escrow_vested_amount_snap_block_time = current_block_time;
+    }
+
+    if allocation_type == 1 &&
+       allocation_stream_address.ne(&Pubkey::default()) && 
+       stream_account_info.key.eq(&allocation_stream_address)
+    {
+        stream.allocation = allocation
+            .checked_add((amount * pow) as u64)
+            .ok_or(StreamError::Overflow)? as f64 / pow;
+
+        stream.allocation_reserved = ((stream.allocation_reserved * pow) as u64)
+            .checked_add((amount * pow) as u64)
+            .ok_or(StreamError::Overflow)? as f64 / pow;
+    }
+
+    // if it was paused before because of lack of money then resume it again 
+    if escrow_vested_amount > allocation
+    {
+        stream.stream_resumed_slot = clock.slot as u64;
+        stream.stream_resumed_block_time = clock.unix_timestamp as u64;
+    }
+
+    StreamV1::pack_into_slice(&stream, &mut stream_account_info.data.borrow_mut());
+
+    Ok(())
+}
+
+pub fn transfer_tokens<'info>(
+    source_owner_account_info: &AccountInfo<'info>,
+    source_token_account_info: &AccountInfo<'info>,
+    dest_token_account_info: &AccountInfo<'info>,
+    associated_token_mint_info: &AccountInfo<'info>,
+    token_program_account_info: &AccountInfo<'info>,
+    amount: f64
+
+) -> ProgramResult {
+
+    let associated_token_mint = spl_token::state::Mint::unpack_from_slice(&associated_token_mint_info.data.borrow())?;
+    let pow = num_traits::pow(10f64, associated_token_mint.decimals.into());
+    let transfer_amount = (amount * pow) as u64;
+
+    let transfer_ix = spl_token::instruction::transfer(
+        token_program_account_info.key,
+        source_token_account_info.key,
+        dest_token_account_info.key,
+        source_owner_account_info.key,
+        &[],
+        transfer_amount
+    )?;
+
+    invoke(&transfer_ix, &[
+        source_owner_account_info.clone(),
+        dest_token_account_info.clone(),
+        source_token_account_info.clone(),
+        token_program_account_info.clone()
+    ])
+}
