@@ -395,6 +395,7 @@ impl Processor {
             &treasury_account_info,
             &treasury_token_account_info,
             &treasury_pool_mint_info,
+            &stream_account_info,
             &associated_token_program_account_info,
             &token_program_account_info,
             &rent_account_info,

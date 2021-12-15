@@ -1317,6 +1317,7 @@ pub fn check_can_add_funds<'info>(
     treasury_account_info: &AccountInfo<'info>,
     treasury_token_account_info: &AccountInfo<'info>,
     treasury_pool_mint_info: &AccountInfo<'info>,
+    stream_account_info: &AccountInfo<'info>,
     associated_token_program_account_info: &AccountInfo<'info>,
     token_program_account_info: &AccountInfo<'info>,
     rent_account_info: &AccountInfo<'info>,
@@ -1403,6 +1404,16 @@ pub fn check_can_add_funds<'info>(
             &treasury_pool_mint_info
         );
     }
+
+    if stream_account_info.data_len() == StreamV1::LEN
+    {
+        let stream = StreamV1::unpack_from_slice(&stream_account_info.data.borrow())?;
+
+        if stream.treasury_address.ne(treasury_account_info.key)
+        {
+            return Err(StreamError::InvalidTreasuryAccount.into());
+        }
+    } 
 
     Ok(())
 }
