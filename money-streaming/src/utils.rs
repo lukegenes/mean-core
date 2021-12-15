@@ -1589,3 +1589,214 @@ pub fn transfer_tokens<'info>(
         token_program_account_info.clone()
     ])
 }
+
+pub fn check_can_withdraw_funds<'info>(
+    program_id: &Pubkey,
+    treasury_account_info: &AccountInfo<'info>,
+    treasury_token_account_info: &AccountInfo<'info>,
+    beneficiary_account_info: &AccountInfo<'info>,
+    beneficiary_token_account_info: &AccountInfo<'info>,
+    associated_token_mint_info: &AccountInfo<'info>,
+    stream_account_info: &AccountInfo<'info>,
+    msp_ops_token_account_info: &AccountInfo<'info>,
+    msp_account_info: &AccountInfo<'info>
+
+) -> ProgramResult {
+
+    if msp_account_info.key.ne(program_id)
+    {
+        return Err(StreamError::IncorrectProgramId.into());
+    }
+
+    if !beneficiary_account_info.is_signer
+    {
+        return Err(StreamError::MissingInstructionSignature.into());
+    }
+
+    if treasury_account_info.owner != program_id ||
+       stream_account_info.owner != program_id
+    {
+        return Err(StreamError::InstructionNotAuthorized.into());
+    }
+
+    let stream = StreamV1::unpack_from_slice(&stream_account_info.data.borrow())?;
+    let beneficiary_token_address = spl_associated_token_account::get_associated_token_address(
+        &stream.beneficiary_address,
+        associated_token_mint_info.key
+    );
+
+    if beneficiary_token_address.ne(beneficiary_token_account_info.key)
+    {
+        return Err(StreamError::InstructionNotAuthorized.into());
+    }
+
+    let treasury_token_address = spl_associated_token_account::get_associated_token_address(
+        &stream.treasury_address,
+        associated_token_mint_info.key
+    );
+
+    if treasury_token_address.ne(treasury_token_account_info.key)
+    {
+        return Err(StreamError::InstructionNotAuthorized.into());
+    }
+
+    let msp_ops_token_address = spl_associated_token_account::get_associated_token_address(
+        &MSP_OPS_ACCOUNT_ADDRESS.parse().unwrap(),
+        associated_token_mint_info.key
+    );
+
+    if msp_ops_token_address.ne(msp_ops_token_account_info.key)
+    {
+        return Err(StreamError::InstructionNotAuthorized.into());
+    }
+
+    Ok(())
+}
+
+pub fn withdraw_funds_update_stream<'info>(
+    stream: &mut StreamV1,
+    associated_token_mint_info: &AccountInfo<'info>,
+    clock: &Clock,
+    vested_amount: u64,
+    transfer_amount: u64
+
+) -> ProgramResult {
+
+    let associated_token_mint = spl_token::state::Mint::unpack_from_slice(&associated_token_mint_info.data.borrow())?;
+    let pow = num_traits::pow(10f64, associated_token_mint.decimals.into());
+
+    // Update stream account data
+    let escrow_vested_amount_snap = vested_amount
+        .checked_sub(transfer_amount)
+        .ok_or(StreamError::Overflow)?;
+
+    stream.escrow_vested_amount_snap = escrow_vested_amount_snap as f64 / pow;
+    stream.escrow_vested_amount_snap_slot = clock.slot as u64;
+    stream.escrow_vested_amount_snap_block_time = clock.unix_timestamp as u64;
+
+    let stream_allocation = (stream.allocation * pow) as u64;
+
+    if escrow_vested_amount_snap < stream_allocation
+    {
+        stream.stream_resumed_slot = clock.slot as u64;
+        stream.stream_resumed_block_time = clock.unix_timestamp as u64;
+    }
+
+    stream.allocation = stream_allocation
+        .checked_sub(transfer_amount)
+        .ok_or(StreamError::Overflow)? as f64 / pow;
+
+    let stream_allocation_reserved = (stream.allocation_reserved * pow) as u64;
+
+    if stream_allocation_reserved >= transfer_amount
+    {
+        stream.allocation_reserved = stream_allocation_reserved
+            .checked_sub(transfer_amount)
+            .ok_or(StreamError::Overflow)? as f64 / pow;
+    }
+
+    Ok(())
+}
+
+pub fn withdraw_funds_update_treasury<'info>(
+    treasury: &mut TreasuryV1,
+    associated_token_mint_info: &AccountInfo<'info>,
+    transfer_amount: u64
+
+) -> ProgramResult {
+
+    let associated_token_mint = spl_token::state::Mint::unpack_from_slice(&associated_token_mint_info.data.borrow())?;
+    let pow = num_traits::pow(10f64, associated_token_mint.decimals.into());
+    let treasury_allocation = (treasury.allocation * pow) as u64;
+
+    if treasury_allocation >= transfer_amount
+    {
+        treasury.allocation = treasury_allocation
+            .checked_sub(transfer_amount)
+            .ok_or(StreamError::Overflow)? as f64 / pow;
+    }
+
+    let treasury_allocation_reserved = (treasury.allocation_reserved * pow) as u64;
+
+    if treasury_allocation_reserved >= transfer_amount
+    {
+        treasury.allocation_reserved = treasury_allocation_reserved
+            .checked_sub(transfer_amount)
+            .ok_or(StreamError::Overflow)? as f64 / pow;
+    }
+
+    let treasury_balance = (treasury.balance * pow) as u64;
+
+    if treasury_balance >= transfer_amount
+    {
+        treasury.balance = treasury_balance
+            .checked_sub(transfer_amount)
+            .ok_or(StreamError::Overflow)? as f64 / pow;
+    }
+
+    Ok(())
+}
+
+pub fn check_can_pause_stream<'info>(
+    program_id: &Pubkey,
+    initializer_account_info: &AccountInfo<'info>,
+    stream_account_info: &AccountInfo<'info>,
+    msp_account_info: &AccountInfo<'info>
+
+) -> ProgramResult {
+
+    if msp_account_info.key.ne(program_id)
+    {
+        return Err(StreamError::IncorrectProgramId.into());
+    }
+
+    if !initializer_account_info.is_signer 
+    {
+        return Err(StreamError::MissingInstructionSignature.into());
+    }
+
+    let stream = StreamV1::unpack_from_slice(&stream_account_info.data.borrow())?;
+
+    if stream_account_info.owner != program_id ||
+    (
+        stream.treasurer_address.ne(initializer_account_info.key) && 
+        stream.beneficiary_address.ne(initializer_account_info.key)
+    )
+    {
+        return Err(StreamError::InstructionNotAuthorized.into());
+    }
+
+    Ok(())
+}
+
+pub fn check_can_resume_stream<'info>(
+    program_id: &Pubkey,
+    initializer_account_info: &AccountInfo<'info>,
+    stream_account_info: &AccountInfo<'info>,
+    msp_account_info: &AccountInfo<'info>
+
+) -> ProgramResult {
+
+    if msp_account_info.key.ne(program_id)
+    {
+        return Err(StreamError::IncorrectProgramId.into());
+    }
+
+    if !initializer_account_info.is_signer 
+    {
+        return Err(StreamError::MissingInstructionSignature.into());
+    }
+
+    let stream = StreamV1::unpack_from_slice(&stream_account_info.data.borrow())?;
+
+    if stream_account_info.owner != program_id ||
+    (
+        stream.treasurer_address.ne(initializer_account_info.key) && 
+        stream.beneficiary_address.ne(initializer_account_info.key)
+    )
+    {
+        return Err(StreamError::InstructionNotAuthorized.into());
+    }
+
+    Ok(())
+}
