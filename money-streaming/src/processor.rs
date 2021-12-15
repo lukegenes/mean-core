@@ -241,13 +241,13 @@ impl Processor {
         let associated_token_mint_info = next_account_info(account_info_iter)?;
         let beneficiary_account_info = next_account_info(account_info_iter)?;
         let stream_account_info = next_account_info(account_info_iter)?;
-        let msp_ops_account_info = next_account_info(account_info_iter)?;
+        let fee_treasury_account_info = next_account_info(account_info_iter)?;
         let msp_account_info = next_account_info(account_info_iter)?;
         let system_account_info = next_account_info(account_info_iter)?;
         let rent_account_info = next_account_info(account_info_iter)?;
 
         // Verify the correct MSP Operations Account 
-        if msp_ops_account_info.key.ne(&MSP_OPS_ACCOUNT_ADDRESS.parse().unwrap())
+        if fee_treasury_account_info.key.ne(&FEE_TREASURY_ACCOUNT_ADDRESS.parse().unwrap())
         {
             return Err(StreamError::InstructionNotAuthorized.into());
         }
@@ -328,7 +328,7 @@ impl Processor {
         transfer_sol_fee(
             &system_account_info,
             &treasurer_account_info,
-            &msp_ops_account_info, 
+            &fee_treasury_account_info, 
             CREATE_STREAM_FLAT_FEE
         )
     }
@@ -351,7 +351,7 @@ impl Processor {
         let associated_token_mint_info = next_account_info(account_info_iter)?;    
         let treasury_pool_mint_info = next_account_info(account_info_iter)?;
         let stream_account_info = next_account_info(account_info_iter)?;
-        let msp_ops_account_info = next_account_info(account_info_iter)?;
+        let fee_treasury_account_info = next_account_info(account_info_iter)?;
         let msp_account_info = next_account_info(account_info_iter)?;
         let associated_token_program_account_info = next_account_info(account_info_iter)?;
         let token_program_account_info = next_account_info(account_info_iter)?;
@@ -359,7 +359,7 @@ impl Processor {
         let rent_account_info = next_account_info(account_info_iter)?;
 
         // Verify the correct MSP Operations Account 
-        if msp_ops_account_info.key.ne(&MSP_OPS_ACCOUNT_ADDRESS.parse().unwrap())
+        if fee_treasury_account_info.key.ne(&FEE_TREASURY_ACCOUNT_ADDRESS.parse().unwrap())
         {
             return Err(StreamError::InstructionNotAuthorized.into());
         }
@@ -368,7 +368,7 @@ impl Processor {
         {
             return add_funds_v0(
                 msp_account_info,
-                msp_ops_account_info,
+                fee_treasury_account_info,
                 associated_token_program_account_info,
                 token_program_account_info,
                 system_account_info,
@@ -402,7 +402,7 @@ impl Processor {
         )?;
 
         // Mint treasury pool tokens
-        let _ = mint_treasury_pool_tokens(
+        let _ = create_deposit_receipt(
             &treasury_account_info,
             &treasury_pool_mint_info,
             &contributor_treasury_pool_token_account_info,
@@ -451,7 +451,7 @@ impl Processor {
         transfer_sol_fee(
             &system_account_info,
             &contributor_account_info,
-            &msp_ops_account_info, 
+            &fee_treasury_account_info, 
             ADD_FUNDS_FLAT_FEE
         )
     }
@@ -471,8 +471,8 @@ impl Processor {
         let treasury_account_info = next_account_info(account_info_iter)?;
         let treasury_token_account_info = next_account_info(account_info_iter)?;
         let treasury_pool_mint_info = next_account_info(account_info_iter)?;
-        let msp_ops_account_info = next_account_info(account_info_iter)?;
-        let msp_ops_token_account_info = next_account_info(account_info_iter)?;
+        let fee_treasury_account_info = next_account_info(account_info_iter)?;
+        let fee_treasury_token_account_info = next_account_info(account_info_iter)?;
         let msp_account_info = next_account_info(account_info_iter)?;
         let token_program_account_info = next_account_info(account_info_iter)?;
 
@@ -486,7 +486,7 @@ impl Processor {
             return Err(StreamError::MissingInstructionSignature.into());
         }
         
-        if msp_ops_account_info.key.ne(&MSP_OPS_ACCOUNT_ADDRESS.parse().unwrap()) ||
+        if fee_treasury_account_info.key.ne(&FEE_TREASURY_ACCOUNT_ADDRESS.parse().unwrap()) ||
            treasury_account_info.owner != program_id
         {
             return Err(StreamError::InstructionNotAuthorized.into());
@@ -602,7 +602,7 @@ impl Processor {
         transfer_token_fee(
             &token_program_account_info,
             &contributor_token_account_info,
-            &msp_ops_token_account_info,
+            &fee_treasury_token_account_info,
             &contributor_account_info,
             fee
         )
@@ -622,8 +622,8 @@ impl Processor {
         let treasury_account_info = next_account_info(account_info_iter)?;
         let treasury_token_account_info = next_account_info(account_info_iter)?;
         let stream_account_info = next_account_info(account_info_iter)?;
-        let msp_ops_account_info = next_account_info(account_info_iter)?;
-        let msp_ops_token_account_info = next_account_info(account_info_iter)?;
+        let fee_treasury_account_info = next_account_info(account_info_iter)?;
+        let fee_treasury_token_account_info = next_account_info(account_info_iter)?;
         let msp_account_info = next_account_info(account_info_iter)?;
         let associated_token_program_account_info = next_account_info(account_info_iter)?;
         let token_program_account_info = next_account_info(account_info_iter)?;
@@ -631,7 +631,7 @@ impl Processor {
         let system_account_info = next_account_info(account_info_iter)?;
         let clock = Clock::get()?;
 
-        if msp_ops_account_info.key.ne(&MSP_OPS_ACCOUNT_ADDRESS.parse().unwrap())
+        if fee_treasury_account_info.key.ne(&FEE_TREASURY_ACCOUNT_ADDRESS.parse().unwrap())
         {
             return Err(StreamError::InstructionNotAuthorized.into());
         }
@@ -645,8 +645,8 @@ impl Processor {
                 system_account_info,
                 token_program_account_info,
                 associated_token_program_account_info,
-                msp_ops_account_info,
-                msp_ops_token_account_info,
+                fee_treasury_account_info,
+                fee_treasury_token_account_info,
                 beneficiary_account_info,
                 beneficiary_token_account_info,
                 associated_token_mint_info,
@@ -665,7 +665,7 @@ impl Processor {
             &beneficiary_token_account_info,
             &associated_token_mint_info,
             &stream_account_info,
-            &msp_ops_token_account_info,
+            &fee_treasury_token_account_info,
             &msp_account_info
         )?;
 
@@ -745,7 +745,7 @@ impl Processor {
         // Save
         TreasuryV1::pack_into_slice(&treasury, &mut treasury_account_info.data.borrow_mut());
 
-        if msp_ops_token_account_info.data_len() == 0
+        if fee_treasury_token_account_info.data_len() == 0
         {
             // Create treasury associated token account if doesn't exist
             let _ = create_ata_account(
@@ -754,8 +754,8 @@ impl Processor {
                 &associated_token_program_account_info,
                 &token_program_account_info,
                 &beneficiary_account_info,
-                &msp_ops_account_info,
-                &msp_ops_token_account_info,
+                &fee_treasury_account_info,
+                &fee_treasury_token_account_info,
                 &associated_token_mint_info
             )?;
         }
@@ -765,7 +765,7 @@ impl Processor {
         transfer_token_fee(
             &token_program_account_info,
             &beneficiary_token_account_info,
-            &msp_ops_token_account_info,
+            &fee_treasury_token_account_info,
             &beneficiary_account_info,
             fee as u64
         )
@@ -782,11 +782,11 @@ impl Processor {
         let treasury_account_info = next_account_info(account_info_iter)?;
         let associated_token_mint_info = next_account_info(account_info_iter)?;
         let stream_account_info = next_account_info(account_info_iter)?;
-        let msp_ops_account_info = next_account_info(account_info_iter)?;
+        let fee_treasury_account_info = next_account_info(account_info_iter)?;
         let msp_account_info = next_account_info(account_info_iter)?;
         let clock = Clock::get()?;
 
-        if msp_ops_account_info.key.ne(&MSP_OPS_ACCOUNT_ADDRESS.parse().unwrap())
+        if fee_treasury_account_info.key.ne(&FEE_TREASURY_ACCOUNT_ADDRESS.parse().unwrap())
         {
             return Err(StreamError::InstructionNotAuthorized.into());
         }
@@ -850,11 +850,11 @@ impl Processor {
         let treasury_account_info = next_account_info(account_info_iter)?;
         let associated_token_mint_info = next_account_info(account_info_iter)?;
         let stream_account_info = next_account_info(account_info_iter)?;
-        let msp_ops_account_info = next_account_info(account_info_iter)?;
+        let fee_treasury_account_info = next_account_info(account_info_iter)?;
         let msp_account_info = next_account_info(account_info_iter)?;
         let clock = Clock::get()?;
 
-        if msp_ops_account_info.key.ne(&MSP_OPS_ACCOUNT_ADDRESS.parse().unwrap())
+        if fee_treasury_account_info.key.ne(&FEE_TREASURY_ACCOUNT_ADDRESS.parse().unwrap())
         {
             return Err(StreamError::InstructionNotAuthorized.into());
         }
@@ -916,7 +916,7 @@ impl Processor {
         let stream_terms_account_info = next_account_info(account_info_iter)?;
         let _counterparty_account_info = next_account_info(account_info_iter)?;
         let stream_account_info = next_account_info(account_info_iter)?;
-        let msp_ops_account_info = next_account_info(account_info_iter)?;
+        let fee_treasury_account_info = next_account_info(account_info_iter)?;
         let system_account_info = next_account_info(account_info_iter)?;
 
         if !initializer_account_info.is_signer 
@@ -981,7 +981,7 @@ impl Processor {
         transfer_sol_fee(
             &system_account_info,
             &initializer_account_info,
-            &msp_ops_account_info,
+            &fee_treasury_account_info,
             PROPOSE_UPDATE_FLAT_FEE
         )
     }
@@ -999,7 +999,7 @@ impl Processor {
         let stream_terms_account_info = next_account_info(account_info_iter)?;
         let counterparty_account_info = next_account_info(account_info_iter)?;
         let stream_account_info = next_account_info(account_info_iter)?;
-        let msp_ops_account_info = next_account_info(account_info_iter)?;
+        let fee_treasury_account_info = next_account_info(account_info_iter)?;
         let system_account_info = next_account_info(account_info_iter)?;
 
         if !initializer_account_info.is_signer 
@@ -1122,7 +1122,7 @@ impl Processor {
         transfer_sol_fee(
             &system_account_info,
             &initializer_account_info,
-            &msp_ops_account_info,
+            &fee_treasury_account_info,
             PROPOSE_UPDATE_FLAT_FEE
         )
     }
@@ -1146,15 +1146,15 @@ impl Processor {
         let treasury_token_account_info = next_account_info(account_info_iter)?;
         let treasury_pool_mint_info = next_account_info(account_info_iter)?;
         let stream_account_info = next_account_info(account_info_iter)?;
-        let msp_ops_account_info = next_account_info(account_info_iter)?;
-        let msp_ops_token_account_info = next_account_info(account_info_iter)?;
+        let fee_treasury_account_info = next_account_info(account_info_iter)?;
+        let fee_treasury_token_account_info = next_account_info(account_info_iter)?;
         let msp_account_info = next_account_info(account_info_iter)?;
         let associated_token_program_account_info = next_account_info(account_info_iter)?;
         let token_program_account_info = next_account_info(account_info_iter)?;
         let rent_account_info = next_account_info(account_info_iter)?;
         let system_account_info = next_account_info(account_info_iter)?;
 
-        if msp_ops_account_info.key.ne(&MSP_OPS_ACCOUNT_ADDRESS.parse().unwrap())
+        if fee_treasury_account_info.key.ne(&FEE_TREASURY_ACCOUNT_ADDRESS.parse().unwrap())
         {
             return Err(StreamError::InstructionNotAuthorized.into());
         }
@@ -1163,8 +1163,8 @@ impl Processor {
         {
             return close_stream_v0(
                 &msp_account_info,
-                &msp_ops_account_info,
-                &msp_ops_token_account_info,
+                &fee_treasury_account_info,
+                &fee_treasury_token_account_info,
                 &token_program_account_info,
                 &system_account_info,
                 &initializer_account_info,
@@ -1189,7 +1189,7 @@ impl Processor {
             &beneficiary_token_account_info,
             &associated_token_mint_info,
             &stream_account_info,
-            &msp_ops_token_account_info,
+            &fee_treasury_token_account_info,
             &msp_account_info
         )?;
 
@@ -1239,8 +1239,8 @@ impl Processor {
                 &beneficiary_account_info,
                 &beneficiary_token_account_info,
                 &associated_token_mint_info,
-                &msp_ops_account_info,
-                &msp_ops_token_account_info,
+                &fee_treasury_account_info,
+                &fee_treasury_token_account_info,
                 &msp_account_info,
                 &associated_token_program_account_info,
                 &token_program_account_info,
@@ -1276,8 +1276,8 @@ impl Processor {
                 &treasury_account_info,
                 &treasury_token_account_info,
                 &treasury_pool_mint_info,
-                &msp_ops_account_info,
-                &msp_ops_token_account_info,
+                &fee_treasury_account_info,
+                &fee_treasury_token_account_info,
                 &msp_account_info,
                 &token_program_account_info
             )?;
@@ -1287,7 +1287,7 @@ impl Processor {
         let _ = transfer_sol_fee(
             &system_account_info,
             &initializer_account_info,
-            &msp_ops_account_info,
+            &fee_treasury_account_info,
             CLOSE_STREAM_FLAT_FEE
         );
 
@@ -1316,7 +1316,7 @@ impl Processor {
         let treasurer_account_info = next_account_info(account_info_iter)?;
         let treasury_account_info = next_account_info(account_info_iter)?;
         let treasury_pool_token_mint_info = next_account_info(account_info_iter)?;
-        let msp_ops_account_info = next_account_info(account_info_iter)?;
+        let fee_treasury_account_info = next_account_info(account_info_iter)?;
         let msp_account_info = next_account_info(account_info_iter)?;
         let token_program_account_info = next_account_info(account_info_iter)?;
         let system_account_info = next_account_info(account_info_iter)?;
@@ -1433,7 +1433,7 @@ impl Processor {
         transfer_sol_fee(
             &system_account_info,
             &treasurer_account_info,
-            &msp_ops_account_info,
+            &fee_treasury_account_info,
             CREATE_TREASURY_FLAT_FEE
         )
     }
@@ -1452,12 +1452,12 @@ impl Processor {
         let treasury_account_info = next_account_info(account_info_iter)?;  
         let treasury_token_account_info = next_account_info(account_info_iter)?;
         let treasury_pool_mint_info = next_account_info(account_info_iter)?;
-        let msp_ops_account_info = next_account_info(account_info_iter)?;
-        let _msp_ops_token_account_info = next_account_info(account_info_iter)?;
+        let fee_treasury_account_info = next_account_info(account_info_iter)?;
+        let _fee_treasury_token_account_info = next_account_info(account_info_iter)?;
         let msp_account_info = next_account_info(account_info_iter)?;
         let token_program_account_info = next_account_info(account_info_iter)?;
 
-        if msp_ops_account_info.key.ne(&MSP_OPS_ACCOUNT_ADDRESS.parse().unwrap())
+        if fee_treasury_account_info.key.ne(&FEE_TREASURY_ACCOUNT_ADDRESS.parse().unwrap())
         {
             return Err(StreamError::InstructionNotAuthorized.into());
         }
@@ -1532,7 +1532,7 @@ impl Processor {
         let treasury_account_info = next_account_info(account_info_iter)?;
         let treasury_token_account_info = next_account_info(account_info_iter)?;
         let associated_token_mint_info = next_account_info(account_info_iter)?;
-        let msp_ops_account_info = next_account_info(account_info_iter)?;
+        let fee_treasury_account_info = next_account_info(account_info_iter)?;
         let rent_account_info = next_account_info(account_info_iter)?;
         let rent = &Rent::from_account_info(rent_account_info)?;
         // let clock = Clock::get()?;
@@ -1542,7 +1542,7 @@ impl Processor {
             return Err(StreamError::MissingInstructionSignature.into());
         }
 
-        if msp_ops_account_info.key.ne(&MSP_OPS_ACCOUNT_ADDRESS.parse().unwrap())
+        if fee_treasury_account_info.key.ne(&FEE_TREASURY_ACCOUNT_ADDRESS.parse().unwrap())
         {
             return Err(StreamError::InstructionNotAuthorized.into());
         }

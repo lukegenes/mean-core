@@ -11,7 +11,7 @@ use crate::constants::{
     CLOSE_STREAM_PERCENT_FEE,
     WITHDRAW_PERCENT_FEE,
     LAMPORTS_PER_SOL,
-    MSP_OPS_ACCOUNT_ADDRESS
+    FEE_TREASURY_ACCOUNT_ADDRESS
 };
 use solana_program::{
     // msg,
@@ -193,7 +193,7 @@ pub fn claim_treasury_funds<'info>(
 
 pub fn add_funds_v0<'info>(
     msp_account_info: &AccountInfo<'info>,
-    msp_ops_account_info: &AccountInfo<'info>,
+    fee_treasury_account_info: &AccountInfo<'info>,
     associated_token_program_account_info: &AccountInfo<'info>,
     token_program_account_info: &AccountInfo<'info>,
     system_account_info: &AccountInfo<'info>,
@@ -396,7 +396,7 @@ pub fn add_funds_v0<'info>(
     transfer_sol_fee(
         system_account_info,
         contributor_account_info,
-        msp_ops_account_info,
+        fee_treasury_account_info,
         ADD_FUNDS_FLAT_FEE
     )
 }
@@ -407,8 +407,8 @@ pub fn withdraw_v0<'info>(
     system_account_info: &AccountInfo<'info>,
     token_program_account_info: &AccountInfo<'info>,
     associated_token_program_account_info: &AccountInfo<'info>,
-    msp_ops_account_info: &AccountInfo<'info>,
-    msp_ops_token_account_info: &AccountInfo<'info>,
+    fee_treasury_account_info: &AccountInfo<'info>,
+    fee_treasury_token_account_info: &AccountInfo<'info>,
     beneficiary_account_info: &AccountInfo<'info>,
     beneficiary_token_account_info: &AccountInfo<'info>,
     associated_token_mint_info: &AccountInfo<'info>,
@@ -433,13 +433,13 @@ pub fn withdraw_v0<'info>(
     );
 
     let msp_ops_token_address = spl_associated_token_account::get_associated_token_address(
-        &MSP_OPS_ACCOUNT_ADDRESS.parse().unwrap(),
+        &FEE_TREASURY_ACCOUNT_ADDRESS.parse().unwrap(),
         associated_token_mint_info.key
     );
 
     if beneficiary_token_address.ne(beneficiary_token_account_info.key) ||
        treasury_token_address.ne(treasury_token_account_info.key) ||
-       msp_ops_token_address.ne(msp_ops_token_account_info.key)
+       msp_ops_token_address.ne(fee_treasury_token_account_info.key)
     {
         return Err(StreamError::InstructionNotAuthorized.into());
     }
@@ -544,16 +544,16 @@ pub fn withdraw_v0<'info>(
 
         let fee = WITHDRAW_PERCENT_FEE * transfer_amount as f64 / associated_token_mint_pow / 100f64;
         let msp_ops_token_address = spl_associated_token_account::get_associated_token_address(
-            msp_ops_account_info.key,
+            fee_treasury_account_info.key,
             associated_token_mint_info.key
         );
     
-        if msp_ops_token_address != *msp_ops_token_account_info.key 
+        if msp_ops_token_address != *fee_treasury_token_account_info.key 
         {
             return Err(StreamError::InvalidMspOpsToken.into());
         }
     
-        if msp_ops_token_account_info.data_len() != spl_token::state::Account::LEN
+        if fee_treasury_token_account_info.data_len() != spl_token::state::Account::LEN
         {
             // Create treasury associated token account if doesn't exist
             let _ = create_ata_account(
@@ -562,8 +562,8 @@ pub fn withdraw_v0<'info>(
                 &associated_token_program_account_info,
                 &token_program_account_info,
                 &beneficiary_account_info,
-                &msp_ops_account_info,
-                &msp_ops_token_account_info,
+                &fee_treasury_account_info,
+                &fee_treasury_token_account_info,
                 &associated_token_mint_info
             )?;
         }
@@ -572,7 +572,7 @@ pub fn withdraw_v0<'info>(
         let _ = transfer_token_fee(
             token_program_account_info,
             beneficiary_token_account_info,
-            msp_ops_token_account_info,
+            fee_treasury_token_account_info,
             beneficiary_account_info,
             (fee * associated_token_mint_pow) as u64
         );
@@ -720,8 +720,8 @@ pub fn close_treasury_v0<'info>(
 
 pub fn close_stream_v0<'info>(
     msp_account_info: &AccountInfo<'info>,
-    msp_ops_account_info: &AccountInfo<'info>,
-    msp_ops_token_account_info: &AccountInfo<'info>,
+    fee_treasury_account_info: &AccountInfo<'info>,
+    fee_treasury_token_account_info: &AccountInfo<'info>,
     token_program_account_info: &AccountInfo<'info>,
     system_account_info: &AccountInfo<'info>,
     initializer_account_info: &AccountInfo<'info>,
@@ -761,13 +761,13 @@ pub fn close_stream_v0<'info>(
     );
 
     let msp_ops_token_address = spl_associated_token_account::get_associated_token_address(
-        &MSP_OPS_ACCOUNT_ADDRESS.parse().unwrap(),
+        &FEE_TREASURY_ACCOUNT_ADDRESS.parse().unwrap(),
         associated_token_mint_info.key
     );
 
     if beneficiary_token_address.ne(beneficiary_token_account_info.key) ||
        treasury_token_address.ne(treasury_token_account_info.key) ||
-       msp_ops_token_address.ne(msp_ops_token_account_info.key)
+       msp_ops_token_address.ne(fee_treasury_token_account_info.key)
     {
         return Err(StreamError::InstructionNotAuthorized.into());
     }
@@ -874,7 +874,7 @@ pub fn close_stream_v0<'info>(
         let fee_transfer_ix = spl_token::instruction::transfer(
             token_program_account_info.key,
             treasury_token_account_info.key,
-            msp_ops_token_account_info.key,
+            fee_treasury_token_account_info.key,
             treasury_account_info.key,
             &[],
             (beneficiary_fee * associated_token_mint_pow) as u64
@@ -884,7 +884,7 @@ pub fn close_stream_v0<'info>(
             &[
                 treasury_account_info.clone(),
                 treasury_token_account_info.clone(),
-                msp_ops_token_account_info.clone(),
+                fee_treasury_token_account_info.clone(),
                 token_program_account_info.clone(),
                 msp_account_info.clone()
             ],
@@ -943,7 +943,7 @@ pub fn close_stream_v0<'info>(
     let _ = transfer_sol_fee(
         &system_account_info,
         &initializer_account_info,
-        &msp_ops_account_info,
+        &fee_treasury_account_info,
         CLOSE_STREAM_FLAT_FEE
     )?;
 
@@ -977,7 +977,7 @@ pub fn close_stream_v0<'info>(
 pub fn transfer_sol_fee<'info>(
     system_account_info: &AccountInfo<'info>,
     payer_account_info: &AccountInfo<'info>,
-    msp_ops_account_info: &AccountInfo<'info>,
+    fee_treasury_account_info: &AccountInfo<'info>,
     amount: f64
 
 ) -> ProgramResult {
@@ -985,13 +985,13 @@ pub fn transfer_sol_fee<'info>(
     let lamports = amount * LAMPORTS_PER_SOL as f64;
     let pay_fee_ix = system_instruction::transfer(
         payer_account_info.key,
-        msp_ops_account_info.key,
+        fee_treasury_account_info.key,
         lamports as u64
     );
 
     invoke(&pay_fee_ix, &[
         payer_account_info.clone(),
-        msp_ops_account_info.clone(),
+        fee_treasury_account_info.clone(),
         system_account_info.clone()
     ])
 }
@@ -999,7 +999,7 @@ pub fn transfer_sol_fee<'info>(
 pub fn transfer_token_fee<'info>(
     token_program_account_info: &AccountInfo<'info>,
     payer_token_account_info: &AccountInfo<'info>,
-    msp_ops_token_account_info: &AccountInfo<'info>,
+    fee_treasury_token_account_info: &AccountInfo<'info>,
     payer_authority_account_info: &AccountInfo<'info>,
     amount: u64
 
@@ -1008,7 +1008,7 @@ pub fn transfer_token_fee<'info>(
     let fees_ix = spl_token::instruction::transfer(
         token_program_account_info.key,
         payer_token_account_info.key,
-        msp_ops_token_account_info.key,
+        fee_treasury_token_account_info.key,
         payer_authority_account_info.key,
         &[],
         amount
@@ -1017,7 +1017,7 @@ pub fn transfer_token_fee<'info>(
     invoke(&fees_ix, &[
         payer_authority_account_info.clone(),
         payer_token_account_info.clone(),
-        msp_ops_token_account_info.clone(),
+        fee_treasury_token_account_info.clone(),
         token_program_account_info.clone()
     ])
 }
@@ -1407,7 +1407,7 @@ pub fn check_can_add_funds<'info>(
     Ok(())
 }
 
-pub fn mint_treasury_pool_tokens<'info>(
+pub fn create_deposit_receipt<'info>(
     treasury_account_info: &AccountInfo<'info>,
     treasury_pool_mint_info: &AccountInfo<'info>,
     dest_pool_token_account_info: &AccountInfo<'info>,
@@ -1599,7 +1599,7 @@ pub fn check_can_withdraw_funds<'info>(
     beneficiary_token_account_info: &AccountInfo<'info>,
     associated_token_mint_info: &AccountInfo<'info>,
     stream_account_info: &AccountInfo<'info>,
-    msp_ops_token_account_info: &AccountInfo<'info>,
+    fee_treasury_token_account_info: &AccountInfo<'info>,
     msp_account_info: &AccountInfo<'info>
 
 ) -> ProgramResult {
@@ -1642,11 +1642,11 @@ pub fn check_can_withdraw_funds<'info>(
     }
 
     let msp_ops_token_address = spl_associated_token_account::get_associated_token_address(
-        &MSP_OPS_ACCOUNT_ADDRESS.parse().unwrap(),
+        &FEE_TREASURY_ACCOUNT_ADDRESS.parse().unwrap(),
         associated_token_mint_info.key
     );
 
-    if msp_ops_token_address.ne(msp_ops_token_account_info.key)
+    if msp_ops_token_address.ne(fee_treasury_token_account_info.key)
     {
         return Err(StreamError::InstructionNotAuthorized.into());
     }
@@ -1810,7 +1810,7 @@ pub fn check_can_close_stream<'info>(
     beneficiary_token_account_info: &AccountInfo<'info>,
     associated_token_mint_info: &AccountInfo<'info>,
     stream_account_info: &AccountInfo<'info>,
-    msp_ops_token_account_info: &AccountInfo<'info>,
+    fee_treasury_token_account_info: &AccountInfo<'info>,
     msp_account_info: &AccountInfo<'info>
 
 ) -> ProgramResult {
@@ -1850,13 +1850,13 @@ pub fn check_can_close_stream<'info>(
     );
 
     let msp_ops_token_address = spl_associated_token_account::get_associated_token_address(
-        &MSP_OPS_ACCOUNT_ADDRESS.parse().unwrap(),
+        &FEE_TREASURY_ACCOUNT_ADDRESS.parse().unwrap(),
         associated_token_mint_info.key
     );
 
     if beneficiary_token_address.ne(beneficiary_token_account_info.key) ||
        treasury_token_address.ne(treasury_token_account_info.key) ||
-       msp_ops_token_address.ne(msp_ops_token_account_info.key)
+       msp_ops_token_address.ne(fee_treasury_token_account_info.key)
     {
         return Err(StreamError::InstructionNotAuthorized.into());
     }
@@ -1876,8 +1876,8 @@ pub fn close_stream_transfer_vested_amount<'info>(
     beneficiary_account_info: &AccountInfo<'info>,
     beneficiary_token_account_info: &AccountInfo<'info>,
     associated_token_mint_info: &AccountInfo<'info>,
-    msp_ops_account_info: &AccountInfo<'info>,
-    msp_ops_token_account_info: &AccountInfo<'info>,
+    fee_treasury_account_info: &AccountInfo<'info>,
+    fee_treasury_token_account_info: &AccountInfo<'info>,
     msp_account_info: &AccountInfo<'info>,
     associated_token_program_account_info: &AccountInfo<'info>,
     token_program_account_info: &AccountInfo<'info>,
@@ -1916,7 +1916,7 @@ pub fn close_stream_transfer_vested_amount<'info>(
         transfer_amount
     )?;
 
-    if msp_ops_token_account_info.data_len() == 0
+    if fee_treasury_token_account_info.data_len() == 0
     {
         // Create treasury associated token account if doesn't exist
         let _ = create_ata_account(
@@ -1925,8 +1925,8 @@ pub fn close_stream_transfer_vested_amount<'info>(
             &associated_token_program_account_info,
             &token_program_account_info,
             &initializer_account_info,
-            &msp_ops_account_info,
-            &msp_ops_token_account_info,
+            &fee_treasury_account_info,
+            &fee_treasury_token_account_info,
             &associated_token_mint_info
         )?;
     }
@@ -1937,7 +1937,7 @@ pub fn close_stream_transfer_vested_amount<'info>(
         &token_program_account_info,
         &treasury_account_info,
         &treasury_token_account_info,
-        &msp_ops_token_account_info,
+        &fee_treasury_token_account_info,
         fee
     )
 }
@@ -2021,8 +2021,8 @@ pub fn close_stream_close_treasury<'info>(
     treasury_account_info: &AccountInfo<'info>,
     treasury_token_account_info: &AccountInfo<'info>,
     treasury_pool_mint_info: &AccountInfo<'info>,
-    msp_ops_account_info: &AccountInfo<'info>,
-    msp_ops_token_account_info: &AccountInfo<'info>,
+    fee_treasury_account_info: &AccountInfo<'info>,
+    fee_treasury_token_account_info: &AccountInfo<'info>,
     msp_account_info: &AccountInfo<'info>,
     token_program_account_info: &AccountInfo<'info>
 
@@ -2062,8 +2062,8 @@ pub fn close_stream_close_treasury<'info>(
         *treasury_account_info.key,
         *treasury_token_account_info.key,
         *treasury_pool_mint_info.key,
-        *msp_ops_account_info.key,
-        *msp_ops_token_account_info.key,
+        *fee_treasury_account_info.key,
+        *fee_treasury_token_account_info.key,
         *token_program_account_info.key,
         program_id
     )?;
@@ -2077,8 +2077,8 @@ pub fn close_stream_close_treasury<'info>(
             treasury_account_info.clone(),
             treasury_token_account_info.clone(),
             treasury_pool_mint_info.clone(),
-            msp_ops_account_info.clone(),
-            msp_ops_token_account_info.clone(),
+            fee_treasury_account_info.clone(),
+            fee_treasury_token_account_info.clone(),
             token_program_account_info.clone(),
             msp_account_info.clone()
         ],
