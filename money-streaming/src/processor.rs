@@ -401,7 +401,7 @@ impl Processor {
             &system_account_info
         )?;
 
-        // Mint treasury pool tokens
+        // Create contributor deposit receipt
         let _ = create_deposit_receipt(
             &treasury_account_info,
             &treasury_pool_mint_info,
@@ -421,18 +421,13 @@ impl Processor {
             amount
         )?;
 
-        let mut treasury = TreasuryV1::unpack_from_slice(&treasury_account_info.data.borrow())?;
-
-        // Update treasury
+        // Update and save treasury
         let _ = add_funds_update_treasury(
-            &mut treasury,
+            &treasury_account_info,
             &associated_token_mint_info,
             allocation_type,
             amount
         )?;
-
-        // Save
-        TreasuryV1::pack_into_slice(&treasury, &mut treasury_account_info.data.borrow_mut());
 
         if stream_account_info.data_len() == StreamV1::LEN
         {

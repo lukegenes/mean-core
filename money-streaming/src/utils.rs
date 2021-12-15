@@ -1458,13 +1458,14 @@ pub fn create_deposit_receipt<'info>(
 }
 
 pub fn add_funds_update_treasury<'info>(
-    treasury: &mut TreasuryV1,
+    treasury_account_info: &AccountInfo<'info>,
     associated_token_mint_info: &AccountInfo<'info>,
     allocation_type: u8,
     amount: f64
 
 ) -> ProgramResult {
 
+    let mut treasury = TreasuryV1::unpack_from_slice(&treasury_account_info.data.borrow())?;
     let associated_token_mint = spl_token::state::Mint::unpack_from_slice(&associated_token_mint_info.data.borrow())?;
     let pow = num_traits::pow(10f64, associated_token_mint.decimals.into());
 
@@ -1499,6 +1500,9 @@ pub fn add_funds_update_treasury<'info>(
     }
 
     treasury.associated_token_address = *associated_token_mint_info.key;
+
+    // Save
+    TreasuryV1::pack_into_slice(&treasury, &mut treasury_account_info.data.borrow_mut());
 
     Ok(())
 }
