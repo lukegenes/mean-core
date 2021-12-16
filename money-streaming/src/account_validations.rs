@@ -240,6 +240,7 @@ pub fn check_can_add_funds<'info>(
         )?;
     }
 
+    // Check treasury address
     let treasury = TreasuryV1::unpack_from_slice(&treasury_account_info.data.borrow())?;
     let (treasury_pool_address, _) = Pubkey::find_program_address(
         &[
@@ -252,6 +253,21 @@ pub fn check_can_add_funds<'info>(
     if treasury_pool_address != *treasury_account_info.key 
     {
         return Err(StreamError::InvalidTreasuryPool.into());
+    }
+
+    // Check treasury pool mint address
+    let (treasury_pool_mint_address, _) = Pubkey::find_program_address(
+        &[
+            treasury.treasurer_address.as_ref(),
+            treasury_pool_address.as_ref(),
+            &slot.to_le_bytes()
+        ], 
+        msp_account_info.key
+    );
+
+    if treasury_pool_mint_address.ne(treasury_pool_token_mint_info.key)
+    {
+        return Err(StreamError::InvalidTreasuryPoolMint.into());
     }
 
     if contributor_treasury_pool_token_account_info.data_len() == 0
