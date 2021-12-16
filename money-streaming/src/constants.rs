@@ -1,8 +1,5 @@
 // Accounts
 pub const FEE_TREASURY_ACCOUNT: &str = "3TD6SWY9M1mLY2kZWJNavPLhwXvcRsWdnZLRaMzERJBw";
-pub const ASSOCIATED_TOKEN_PROGRAM: &str = "3TD6SWY9M1mLY2kZWJNavPLhwXvcRsWdnZLRaMzERJBw";
-pub const TOKEN_PROGRAM: &str = "3TD6SWY9M1mLY2kZWJNavPLhwXvcRsWdnZLRaMzERJBw";
-
 // Fee constants
 pub const CREATE_TREASURY_FLAT_FEE: f64 = 0.00001;
 pub const CREATE_STREAM_FLAT_FEE: f64 = 0.00001;

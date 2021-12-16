@@ -7,6 +7,7 @@ use crate::state::*;
 use crate::constants::*;
 use solana_program::{
     // msg,
+    system_program,
     system_instruction,
     program::{ invoke, invoke_signed },
     pubkey::Pubkey,
@@ -305,4 +306,40 @@ pub fn get_stream_vested_amount<'info>(
     }
 
     return Ok(escrow_vested_amount);
+}
+
+pub fn check_programs_accounts<'info>(
+    associated_token_program_account: Option<&AccountInfo<'info>>,
+    token_program_account: Option<&AccountInfo<'info>>,
+    rent_account: Option<&AccountInfo<'info>>,
+    system_account: Option<&AccountInfo<'info>>
+
+) -> ProgramResult {
+
+    // Check associated token program account info
+    if let Some(associated_token_program_account_info) = associated_token_program_account {
+        if associated_token_program_account_info.key.ne(&spl_associated_token_account::id()) {
+            return Err(StreamError::IncorrectProgramId.into());
+        }
+    }
+    // Check token program account info
+    if let Some(token_program_account_info) = token_program_account {
+        if token_program_account_info.key.ne(&spl_token::id()) {
+            return Err(StreamError::IncorrectProgramId.into());
+        }
+    }
+    // Check rent program account info
+    if let Some(rent_account_info) = rent_account {
+        if rent_account_info.key.ne(&solana_program::sysvar::rent::id()) {
+            return Err(StreamError::IncorrectProgramId.into());
+        }
+    }
+    // Check system program account info
+    if let Some(system_account_info) = system_account {
+        if system_account_info.key.ne(&system_program::id()){
+            return Err(StreamError::IncorrectProgramId.into());
+        }
+    }
+
+    Ok(())
 }

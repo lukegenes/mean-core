@@ -5,7 +5,6 @@ use crate::constants::*;
 use crate::utils::*;
 use solana_program::{
     // msg,
-    system_program,
     pubkey::Pubkey,
     account_info::AccountInfo,
     entrypoint::ProgramResult,
@@ -25,6 +24,14 @@ pub fn check_can_create_stream<'info>(
     allocation_reserved: f64
 
 ) -> ProgramResult {
+
+    // Check system accounts
+    let _ = check_programs_accounts(
+        Option::None,
+        Option::None,
+        Option::Some(rent_account_info),
+        Option::Some(system_account_info)
+    );
 
     // Check the tresurer is the signer
     if !treasurer_account_info.is_signer
@@ -56,18 +63,6 @@ pub fn check_can_create_stream<'info>(
 
     // Check Money Streaming Program account info
     if msp_account_info.key.ne(program_id)
-    {
-        return Err(StreamError::IncorrectProgramId.into());
-    }
-
-    // Check if the system account is valid
-    if system_account_info.key.ne(&system_program::id())
-    {
-        return Err(StreamError::IncorrectProgramId.into());
-    }
-
-    // Check if the rent sysvar is valid
-    if rent_account_info.key.ne(&solana_program::sysvar::rent::id())
     {
         return Err(StreamError::IncorrectProgramId.into());
     }
@@ -110,6 +105,14 @@ pub fn check_can_add_funds_v0<'info>(
     system_account_info: &AccountInfo<'info>
 
 ) -> ProgramResult {
+
+    // Check system accounts
+    let _ = check_programs_accounts(
+        Option::Some(associated_token_program_account_info),
+        Option::Some(token_program_account_info),
+        Option::Some(rent_account_info),
+        Option::Some(system_account_info)
+    );
 
     // Check the Money Streaming Program account info
     if msp_account_info.key.ne(program_id)
@@ -232,30 +235,6 @@ pub fn check_can_add_funds_v0<'info>(
         }
     }
 
-    // Check associated token program account info
-    if associated_token_program_account_info.key.ne(&ASSOCIATED_TOKEN_PROGRAM.parse().unwrap())
-    {
-        return Err(StreamError::IncorrectProgramId.into());
-    }
-
-    // Check token program account info
-    if token_program_account_info.key.ne(&TOKEN_PROGRAM.parse().unwrap())
-    {
-        return Err(StreamError::IncorrectProgramId.into());
-    }
-
-    // Check system program account info
-    if rent_account_info.key.ne(&solana_program::sysvar::rent::id())
-    {
-        return Err(StreamError::IncorrectProgramId.into());
-    }
-
-    // Check system program account info
-    if system_account_info.key.ne(&system_program::id())
-    {
-        return Err(StreamError::IncorrectProgramId.into());
-    }
-
     Ok(())
 }
 
@@ -276,6 +255,14 @@ pub fn check_can_add_funds<'info>(
     system_account_info: &AccountInfo<'info>
 
 ) -> ProgramResult {
+
+    // Check system accounts
+    let _ = check_programs_accounts(
+        Option::Some(associated_token_program_account_info),
+        Option::Some(token_program_account_info),
+        Option::Some(rent_account_info),
+        Option::Some(system_account_info)
+    );
 
     // Check the Money Streaming Program account info
     if msp_account_info.key.ne(program_id)
@@ -398,30 +385,6 @@ pub fn check_can_add_funds<'info>(
         }
     }
 
-    // Check associated token program account info
-    if associated_token_program_account_info.key.ne(&ASSOCIATED_TOKEN_PROGRAM.parse().unwrap())
-    {
-        return Err(StreamError::IncorrectProgramId.into());
-    }
-
-    // Check token program account info
-    if token_program_account_info.key.ne(&TOKEN_PROGRAM.parse().unwrap())
-    {
-        return Err(StreamError::IncorrectProgramId.into());
-    }
-
-    // Check system program account info
-    if rent_account_info.key.ne(&solana_program::sysvar::rent::id())
-    {
-        return Err(StreamError::IncorrectProgramId.into());
-    }
-
-    // Check system program account info
-    if system_account_info.key.ne(&system_program::id())
-    {
-        return Err(StreamError::IncorrectProgramId.into());
-    }
-
     Ok(())
 }
 
@@ -441,6 +404,14 @@ pub fn check_can_withdraw_funds_v0<'info>(
     system_account_info: &AccountInfo<'info>
 
 ) -> ProgramResult {
+
+    // Check system accounts
+    let _ = check_programs_accounts(
+        Option::Some(associated_token_program_account_info),
+        Option::Some(token_program_account_info),
+        Option::Some(rent_account_info),
+        Option::Some(system_account_info)
+    );
 
     // Check the Money Streaming Program account info
     if msp_account_info.key.ne(program_id)
@@ -519,30 +490,6 @@ pub fn check_can_withdraw_funds_v0<'info>(
         return Err(StreamError::InvalidMspOpsToken.into());
     }
 
-    // Check associated token program account info
-    if associated_token_program_account_info.key.ne(&ASSOCIATED_TOKEN_PROGRAM.parse().unwrap())
-    {
-        return Err(StreamError::IncorrectProgramId.into());
-    }
-
-    // Check token program account info
-    if token_program_account_info.key.ne(&TOKEN_PROGRAM.parse().unwrap())
-    {
-        return Err(StreamError::IncorrectProgramId.into());
-    }
-
-    // Check system program account info
-    if rent_account_info.key.ne(&solana_program::sysvar::rent::id())
-    {
-        return Err(StreamError::IncorrectProgramId.into());
-    }
-
-    // Check system program account info
-    if system_account_info.key.ne(&system_program::id())
-    {
-        return Err(StreamError::IncorrectProgramId.into());
-    }
-
     Ok(())
 }
 
@@ -562,6 +509,14 @@ pub fn check_can_withdraw_funds<'info>(
     system_account_info: &AccountInfo<'info>
 
 ) -> ProgramResult {
+
+    // Check system accounts
+    let _ = check_programs_accounts(
+        Option::Some(associated_token_program_account_info),
+        Option::Some(token_program_account_info),
+        Option::Some(rent_account_info),
+        Option::Some(system_account_info)
+    );
 
     // Check the Money Streaming Program account info
     if msp_account_info.key.ne(program_id)
@@ -648,30 +603,6 @@ pub fn check_can_withdraw_funds<'info>(
         return Err(StreamError::InvalidMspOpsToken.into());
     }
 
-    // Check associated token program account info
-    if associated_token_program_account_info.key.ne(&ASSOCIATED_TOKEN_PROGRAM.parse().unwrap())
-    {
-        return Err(StreamError::IncorrectProgramId.into());
-    }
-
-    // Check token program account info
-    if token_program_account_info.key.ne(&TOKEN_PROGRAM.parse().unwrap())
-    {
-        return Err(StreamError::IncorrectProgramId.into());
-    }
-
-    // Check system program account info
-    if rent_account_info.key.ne(&solana_program::sysvar::rent::id())
-    {
-        return Err(StreamError::IncorrectProgramId.into());
-    }
-
-    // Check system program account info
-    if system_account_info.key.ne(&system_program::id())
-    {
-        return Err(StreamError::IncorrectProgramId.into());
-    }
-
     Ok(())
 }
 
@@ -753,6 +684,14 @@ pub fn check_can_close_stream_v0<'info>(
     system_account_info: &AccountInfo<'info>
 
 ) -> ProgramResult {
+
+    // Check system accounts
+    let _ = check_programs_accounts(
+        Option::Some(associated_token_program_account_info),
+        Option::Some(token_program_account_info),
+        Option::Some(rent_account_info),
+        Option::Some(system_account_info)
+    );
 
     // Check the initializer is the signer
     if !initializer_account_info.is_signer 
@@ -882,30 +821,6 @@ pub fn check_can_close_stream_v0<'info>(
         return Err(StreamError::IncorrectProgramId.into());
     }
 
-    // Check associated token program account info
-    if associated_token_program_account_info.key.ne(&ASSOCIATED_TOKEN_PROGRAM.parse().unwrap())
-    {
-        return Err(StreamError::IncorrectProgramId.into());
-    }
-
-    // Check token program account info
-    if token_program_account_info.key.ne(&TOKEN_PROGRAM.parse().unwrap())
-    {
-        return Err(StreamError::IncorrectProgramId.into());
-    }
-
-    // Check system program account info
-    if rent_account_info.key.ne(&solana_program::sysvar::rent::id())
-    {
-        return Err(StreamError::IncorrectProgramId.into());
-    }
-
-    // Check system program account info
-    if system_account_info.key.ne(&system_program::id())
-    {
-        return Err(StreamError::IncorrectProgramId.into());
-    } 
-
     Ok(())
 }
 
@@ -929,6 +844,14 @@ pub fn check_can_close_stream<'info>(
     system_account_info: &AccountInfo<'info>
 
 ) -> ProgramResult {
+
+    // Check system accounts
+    let _ = check_programs_accounts(
+        Option::Some(associated_token_program_account_info),
+        Option::Some(token_program_account_info),
+        Option::Some(rent_account_info),
+        Option::Some(system_account_info)
+    );
 
     // Check the initializer is the signer
     if !initializer_account_info.is_signer 
@@ -1059,30 +982,6 @@ pub fn check_can_close_stream<'info>(
         return Err(StreamError::IncorrectProgramId.into());
     }
 
-    // Check associated token program account info
-    if associated_token_program_account_info.key.ne(&ASSOCIATED_TOKEN_PROGRAM.parse().unwrap())
-    {
-        return Err(StreamError::IncorrectProgramId.into());
-    }
-
-    // Check token program account info
-    if token_program_account_info.key.ne(&TOKEN_PROGRAM.parse().unwrap())
-    {
-        return Err(StreamError::IncorrectProgramId.into());
-    }
-
-    // Check system program account info
-    if rent_account_info.key.ne(&solana_program::sysvar::rent::id())
-    {
-        return Err(StreamError::IncorrectProgramId.into());
-    }
-
-    // Check system program account info
-    if system_account_info.key.ne(&system_program::id())
-    {
-        return Err(StreamError::IncorrectProgramId.into());
-    } 
-
     Ok(())
 }
 
@@ -1100,6 +999,14 @@ pub fn check_can_close_treasury_v0<'info>(
     token_program_account_info: &AccountInfo<'info>
 
 ) -> ProgramResult {
+
+    // Check system accounts
+    let _ = check_programs_accounts(
+        Option::None,
+        Option::Some(token_program_account_info),
+        Option::None,
+        Option::None
+    );
 
     // Check the tresurer is the signer
     if !treasurer_account_info.is_signer
@@ -1165,12 +1072,6 @@ pub fn check_can_close_treasury_v0<'info>(
 
     // Check Money Streaming Program account info
     if msp_account_info.key.ne(program_id)
-    {
-        return Err(StreamError::IncorrectProgramId.into());
-    }
-
-    // Check token program account info
-    if token_program_account_info.key.ne(&TOKEN_PROGRAM.parse().unwrap())
     {
         return Err(StreamError::IncorrectProgramId.into());
     }
