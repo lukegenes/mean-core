@@ -5,7 +5,7 @@ use std::{ string::String, convert::TryInto };
 use crate::instruction::{ close_treasury };
 use crate::error::StreamError;
 use crate::state::{ Treasury, TreasuryV1, Stream, StreamV1, StreamStatus };
-use crate::accounts_validations::*;
+use crate::account_validations::*;
 use crate::constants::{
     ADD_FUNDS_FLAT_FEE,
     CLOSE_STREAM_FLAT_FEE,

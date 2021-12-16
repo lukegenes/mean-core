@@ -5,7 +5,7 @@ pub mod instruction;
 pub mod processor;
 pub mod state;
 pub mod constants;
-pub mod accounts_validations;
+pub mod account_validations;
 
 #[cfg(not(feature = "no-entrypoint"))]
 pub mod entrypoint;
