@@ -779,9 +779,11 @@ impl Processor {
             return Err(StreamError::InstructionNotAuthorized.into());
         }
 
-        let _ = check_can_pause_stream(
+        let _ = check_can_pause_or_resume_stream(
             program_id,
             &initializer_account_info,
+            &treasury_account_info,
+            &associated_token_mint_info,
             &stream_account_info,
             &msp_account_info
         )?;
@@ -847,9 +849,11 @@ impl Processor {
             return Err(StreamError::InstructionNotAuthorized.into());
         }
 
-        let _ = check_can_resume_stream(
+        let _ = check_can_pause_or_resume_stream(
             program_id,
             &initializer_account_info,
+            &treasury_account_info,
+            &associated_token_mint_info,
             &stream_account_info,
             &msp_account_info
         )?;

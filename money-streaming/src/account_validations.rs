@@ -675,19 +675,17 @@ pub fn check_can_withdraw_funds<'info>(
     Ok(())
 }
 
-pub fn check_can_pause_stream<'info>(
+pub fn check_can_pause_or_resume_stream<'info>(
     program_id: &Pubkey,
     initializer_account_info: &AccountInfo<'info>,
+    treasury_account_info: &AccountInfo<'info>,
+    associated_token_mint_info: &AccountInfo<'info>,
     stream_account_info: &AccountInfo<'info>,
     msp_account_info: &AccountInfo<'info>
 
 ) -> ProgramResult {
 
-    if msp_account_info.key.ne(program_id)
-    {
-        return Err(StreamError::IncorrectProgramId.into());
-    }
-
+    // Check the initializer is the signer
     if !initializer_account_info.is_signer 
     {
         return Err(StreamError::MissingInstructionSignature.into());
@@ -695,6 +693,7 @@ pub fn check_can_pause_stream<'info>(
 
     let stream = StreamV1::unpack_from_slice(&stream_account_info.data.borrow())?;
 
+    // Check that only the treasurer or the beneficiary can pause the stream
     if stream_account_info.owner != program_id ||
     (
         stream.treasurer_address.ne(initializer_account_info.key) && 
@@ -704,36 +703,31 @@ pub fn check_can_pause_stream<'info>(
         return Err(StreamError::InstructionNotAuthorized.into());
     }
 
-    Ok(())
-}
+    // Check the treasury account info
+    if stream.treasury_address.ne(treasury_account_info.key)
+    {
+        return Err(StreamError::InstructionNotAuthorized.into());
+    }
 
-pub fn check_can_resume_stream<'info>(
-    program_id: &Pubkey,
-    initializer_account_info: &AccountInfo<'info>,
-    stream_account_info: &AccountInfo<'info>,
-    msp_account_info: &AccountInfo<'info>
+    // Check the size of the Treasury in the correct
+    if treasury_account_info.data_len() != TreasuryV1::LEN
+    {
+        return Err(StreamError::InvalidTreasuryData.into());
+    }
 
-) -> ProgramResult {
+    let treasury = TreasuryV1::unpack_from_slice(&treasury_account_info.data.borrow())?;
 
+    // Check the associated token mint info
+    if stream.beneficiary_associated_token.ne(associated_token_mint_info.key) || 
+       treasury.associated_token_address.ne(associated_token_mint_info.key)
+    {
+        return Err(StreamError::InvalidTreasuryAssociatedToken.into());
+    }
+
+    // Check Money Streaming Program account info
     if msp_account_info.key.ne(program_id)
     {
         return Err(StreamError::IncorrectProgramId.into());
-    }
-
-    if !initializer_account_info.is_signer 
-    {
-        return Err(StreamError::MissingInstructionSignature.into());
-    }
-
-    let stream = StreamV1::unpack_from_slice(&stream_account_info.data.borrow())?;
-
-    if stream_account_info.owner != program_id ||
-    (
-        stream.treasurer_address.ne(initializer_account_info.key) && 
-        stream.beneficiary_address.ne(initializer_account_info.key)
-    )
-    {
-        return Err(StreamError::InstructionNotAuthorized.into());
     }
 
     Ok(())
