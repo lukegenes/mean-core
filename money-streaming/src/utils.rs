@@ -318,19 +318,19 @@ pub fn add_funds_v0<'info>(
 
 pub fn withdraw_v0<'info>(
     program_id: &Pubkey,
-    msp_account_info: &AccountInfo<'info>,
-    rent_account_info: &AccountInfo<'info>,
-    system_account_info: &AccountInfo<'info>,
-    token_program_account_info: &AccountInfo<'info>,
-    associated_token_program_account_info: &AccountInfo<'info>,
-    fee_treasury_account_info: &AccountInfo<'info>,
-    fee_treasury_token_account_info: &AccountInfo<'info>,
     beneficiary_account_info: &AccountInfo<'info>,
     beneficiary_token_account_info: &AccountInfo<'info>,
     associated_token_mint_info: &AccountInfo<'info>,
     treasury_account_info: &AccountInfo<'info>,
     treasury_token_account_info: &AccountInfo<'info>,
     stream_account_info: &AccountInfo<'info>,
+    fee_treasury_account_info: &AccountInfo<'info>,
+    fee_treasury_token_account_info: &AccountInfo<'info>,
+    msp_account_info: &AccountInfo<'info>,
+    associated_token_program_account_info: &AccountInfo<'info>,
+    token_program_account_info: &AccountInfo<'info>,
+    rent_account_info: &AccountInfo<'info>,
+    system_account_info: &AccountInfo<'info>,
     clock: &Clock,
     amount: f64
 
@@ -345,7 +345,11 @@ pub fn withdraw_v0<'info>(
         &treasury_token_account_info,
         &stream_account_info,
         &fee_treasury_token_account_info,
-        &msp_account_info
+        &msp_account_info,
+        &associated_token_program_account_info,
+        &token_program_account_info,
+        &rent_account_info,
+        &system_account_info
     )?;
 
     let mut stream = Stream::unpack_from_slice(&stream_account_info.data.borrow())?;
@@ -617,7 +621,7 @@ pub fn close_stream_v0<'info>(
     );
 
     let msp_ops_token_address = spl_associated_token_account::get_associated_token_address(
-        &FEE_TREASURY_ACCOUNT_ADDRESS.parse().unwrap(),
+        &FEE_TREASURY_ACCOUNT.parse().unwrap(),
         associated_token_mint_info.key
     );
 

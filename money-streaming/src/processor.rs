@@ -3,7 +3,6 @@
 use num_traits;
 use solana_program::{
     msg,
-    // system_instruction,
     program::{ invoke, invoke_signed },
     pubkey::Pubkey,
     entrypoint::ProgramResult,
@@ -246,26 +245,24 @@ impl Processor {
         let rent_account_info = next_account_info(account_info_iter)?;
 
         // Verify the correct MSP Operations Account 
-        if fee_treasury_account_info.key.ne(&FEE_TREASURY_ACCOUNT_ADDRESS.parse().unwrap())
+        if fee_treasury_account_info.key.ne(&FEE_TREASURY_ACCOUNT.parse().unwrap())
         {
             return Err(StreamError::InstructionNotAuthorized.into());
-        }
-
-        if allocation_reserved > allocation
-        {
-            return Err(StreamError::StreamAllocationExceeded.into());
         }
 
         // Deserialize treasury
         let mut treasury = TreasuryV1::unpack_from_slice(&treasury_account_info.data.borrow())?;
         let _ = check_can_create_stream(
             program_id,
-            &msp_account_info,
             &treasurer_account_info,
             &treasury_account_info,
-            &stream_account_info,
             &associated_token_mint_info,
-            allocation
+            &stream_account_info,
+            &msp_account_info,
+            &system_account_info,
+            &rent_account_info,
+            allocation,
+            allocation_reserved
         )?;
         
         // Create stream account
@@ -354,7 +351,7 @@ impl Processor {
         let rent_account_info = next_account_info(account_info_iter)?;
 
         // Verify the correct MSP Operations Account 
-        if fee_treasury_account_info.key.ne(&FEE_TREASURY_ACCOUNT_ADDRESS.parse().unwrap())
+        if fee_treasury_account_info.key.ne(&FEE_TREASURY_ACCOUNT.parse().unwrap())
         {
             return Err(StreamError::InstructionNotAuthorized.into());
         }
@@ -478,7 +475,7 @@ impl Processor {
             return Err(StreamError::MissingInstructionSignature.into());
         }
         
-        if fee_treasury_account_info.key.ne(&FEE_TREASURY_ACCOUNT_ADDRESS.parse().unwrap()) ||
+        if fee_treasury_account_info.key.ne(&FEE_TREASURY_ACCOUNT.parse().unwrap()) ||
            treasury_account_info.owner != program_id
         {
             return Err(StreamError::InstructionNotAuthorized.into());
@@ -623,7 +620,7 @@ impl Processor {
         let system_account_info = next_account_info(account_info_iter)?;
         let clock = Clock::get()?;
 
-        if fee_treasury_account_info.key.ne(&FEE_TREASURY_ACCOUNT_ADDRESS.parse().unwrap())
+        if fee_treasury_account_info.key.ne(&FEE_TREASURY_ACCOUNT.parse().unwrap())
         {
             return Err(StreamError::InstructionNotAuthorized.into());
         }
@@ -632,19 +629,19 @@ impl Processor {
         {
             return withdraw_v0(
                 program_id,
-                msp_account_info,
-                rent_account_info,
-                system_account_info,
-                token_program_account_info,
-                associated_token_program_account_info,
-                fee_treasury_account_info,
-                fee_treasury_token_account_info,
                 beneficiary_account_info,
                 beneficiary_token_account_info,
                 associated_token_mint_info,
                 treasury_account_info,
                 treasury_token_account_info,
                 stream_account_info,
+                fee_treasury_account_info,
+                fee_treasury_token_account_info,
+                msp_account_info,
+                associated_token_program_account_info,
+                token_program_account_info,
+                rent_account_info,
+                system_account_info,
                 &clock,
                 amount
             );
@@ -659,7 +656,11 @@ impl Processor {
             &treasury_token_account_info,
             &stream_account_info,
             &fee_treasury_token_account_info,
-            &msp_account_info
+            &msp_account_info,
+            &associated_token_program_account_info,
+            &token_program_account_info,
+            &rent_account_info,
+            &system_account_info
         )?;
 
         let mut stream = StreamV1::unpack_from_slice(&stream_account_info.data.borrow())?;
@@ -773,7 +774,7 @@ impl Processor {
         let msp_account_info = next_account_info(account_info_iter)?;
         let clock = Clock::get()?;
 
-        if fee_treasury_account_info.key.ne(&FEE_TREASURY_ACCOUNT_ADDRESS.parse().unwrap())
+        if fee_treasury_account_info.key.ne(&FEE_TREASURY_ACCOUNT.parse().unwrap())
         {
             return Err(StreamError::InstructionNotAuthorized.into());
         }
@@ -841,7 +842,7 @@ impl Processor {
         let msp_account_info = next_account_info(account_info_iter)?;
         let clock = Clock::get()?;
 
-        if fee_treasury_account_info.key.ne(&FEE_TREASURY_ACCOUNT_ADDRESS.parse().unwrap())
+        if fee_treasury_account_info.key.ne(&FEE_TREASURY_ACCOUNT.parse().unwrap())
         {
             return Err(StreamError::InstructionNotAuthorized.into());
         }
@@ -1141,7 +1142,7 @@ impl Processor {
         let rent_account_info = next_account_info(account_info_iter)?;
         let system_account_info = next_account_info(account_info_iter)?;
 
-        if fee_treasury_account_info.key.ne(&FEE_TREASURY_ACCOUNT_ADDRESS.parse().unwrap())
+        if fee_treasury_account_info.key.ne(&FEE_TREASURY_ACCOUNT.parse().unwrap())
         {
             return Err(StreamError::InstructionNotAuthorized.into());
         }
@@ -1444,7 +1445,7 @@ impl Processor {
         let msp_account_info = next_account_info(account_info_iter)?;
         let token_program_account_info = next_account_info(account_info_iter)?;
 
-        if fee_treasury_account_info.key.ne(&FEE_TREASURY_ACCOUNT_ADDRESS.parse().unwrap())
+        if fee_treasury_account_info.key.ne(&FEE_TREASURY_ACCOUNT.parse().unwrap())
         {
             return Err(StreamError::InstructionNotAuthorized.into());
         }
@@ -1529,7 +1530,7 @@ impl Processor {
             return Err(StreamError::MissingInstructionSignature.into());
         }
 
-        if fee_treasury_account_info.key.ne(&FEE_TREASURY_ACCOUNT_ADDRESS.parse().unwrap())
+        if fee_treasury_account_info.key.ne(&FEE_TREASURY_ACCOUNT.parse().unwrap())
         {
             return Err(StreamError::InstructionNotAuthorized.into());
         }

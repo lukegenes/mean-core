@@ -11,7 +11,7 @@ use solana_program::{
 use crate::{ 
     processor::Processor,
     error::StreamError,
-    constants::FEE_TREASURY_ACCOUNT_ADDRESS
+    constants::FEE_TREASURY_ACCOUNT
 };
 
 entrypoint!(process_instruction);
@@ -23,7 +23,7 @@ pub fn process_instruction(
 
 ) -> ProgramResult {
 
-    let msp_ops_account = FEE_TREASURY_ACCOUNT_ADDRESS.parse().unwrap();
+    let msp_ops_account = FEE_TREASURY_ACCOUNT.parse().unwrap();
     
     if let Err(error) = verify_msp_ops_account(&msp_ops_account, accounts) {
         error.print::<StreamError>();
