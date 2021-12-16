@@ -311,12 +311,8 @@ impl Processor {
         }
 
         let associated_token_mint = spl_token::state::Mint::unpack_from_slice(&associated_token_mint_info.data.borrow())?;
-        let _ = create_stream_update_treasury(
-            &mut treasury, 
-            &stream, 
-            associated_token_mint.decimals.into()
-        )?;
-
+        let _ = create_stream_update_treasury(&mut treasury, &stream, associated_token_mint.decimals.into())?;
+        
         // Save treasury
         TreasuryV1::pack_into_slice(&treasury, &mut treasury_account_info.data.borrow_mut());
         // Save stream
@@ -389,6 +385,7 @@ impl Processor {
             program_id,
             &msp_account_info,
             &contributor_account_info,
+            &contributor_token_account_info,
             &contributor_treasury_pool_token_account_info,
             &associated_token_mint_info,
             &treasury_account_info,
@@ -631,8 +628,7 @@ impl Processor {
             return Err(StreamError::InstructionNotAuthorized.into());
         }
 
-        if treasury_account_info.data_len() == Treasury::LEN &&
-           stream_account_info.data_len() == Stream::LEN
+        if treasury_account_info.data_len() == Treasury::LEN && stream_account_info.data_len() == Stream::LEN
         {
             return withdraw_v0(
                 msp_account_info,

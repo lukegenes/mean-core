@@ -103,6 +103,8 @@ pub enum StreamError {
     #[error("InvalidStreamAccount")]
     InvalidStreamAccount,
 
+    #[error("InvalidAssociatedTokenAccount")]
+    InvalidAssociatedTokenAccount,
 }
 
 impl From<StreamError> for ProgramError {
@@ -150,6 +152,7 @@ impl PrintProgramError for StreamError {
             Self::StreamAllocationExceeded => msg!("Error: Stream reserved allocation can not exceed the allocation amount"),
             Self::InvalidBeneficiaryToken => msg!("Error: Beneficiary associated token address does not match seed derivation"),
             Self::InvalidStreamAccount => msg!("Error: Invalid stream account is not valid"),
+            Self::InvalidAssociatedTokenAccount => msg!("Error: The associated token account is not valid"),
         }
     }
 }

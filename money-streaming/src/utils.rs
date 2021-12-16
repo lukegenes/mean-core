@@ -217,6 +217,7 @@ pub fn add_funds_v0<'info>(
         program_id,
         &msp_account_info,
         &contributor_account_info,
+        &contributor_token_account_info,
         &contributor_treasury_pool_token_account_info,
         &associated_token_mint_info,
         &treasury_account_info,
