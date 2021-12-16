@@ -17,6 +17,8 @@ use crate::instruction::{ StreamInstruction };
 use crate::state::*;
 use crate::constants::*;
 use crate::account_validations::*;
+use crate::extensions::*;
+use crate::backwards_comp::*;
 
 pub struct Processor {}
 

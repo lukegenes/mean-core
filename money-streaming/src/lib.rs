@@ -6,6 +6,8 @@ pub mod processor;
 pub mod state;
 pub mod constants;
 pub mod account_validations;
+pub mod extensions;
+pub mod backwards_comp;
 
 #[cfg(not(feature = "no-entrypoint"))]
 pub mod entrypoint;
