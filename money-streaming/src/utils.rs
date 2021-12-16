@@ -2,18 +2,11 @@
 use std::cmp;
 use num_traits;
 use std::{ string::String, convert::TryInto };
-use crate::instruction::{ close_treasury };
+use crate::instruction::*;
 use crate::error::StreamError;
-use crate::state::{ Treasury, TreasuryV1, Stream, StreamV1, StreamStatus };
+use crate::state::*;
 use crate::account_validations::*;
-use crate::constants::{
-    ADD_FUNDS_FLAT_FEE,
-    CLOSE_STREAM_FLAT_FEE,
-    CLOSE_STREAM_PERCENT_FEE,
-    WITHDRAW_PERCENT_FEE,
-    LAMPORTS_PER_SOL,
-    FEE_TREASURY_ACCOUNT_ADDRESS
-};
+use crate::constants::*;
 use solana_program::{
     // msg,
     system_instruction,
@@ -358,9 +351,7 @@ pub fn withdraw_v0<'info>(
     let mut stream = Stream::unpack_from_slice(&stream_account_info.data.borrow())?;
     let associated_token_mint = spl_token::state::Mint::unpack_from_slice(&associated_token_mint_info.data.borrow())?;        
     let mut escrow_vested_amount = get_stream_vested_amount_v0(
-        &stream, 
-        &clock, 
-        associated_token_mint.decimals.into()
+        &stream, &clock, associated_token_mint.decimals.into()
     )?;
 
     let pow = num_traits::pow(10f64, associated_token_mint.decimals.into());
@@ -976,8 +967,7 @@ pub fn get_stream_vested_amount_v0<'info>(
     }
 
     let mut escrow_vested_amount = (stream.escrow_vested_amount_snap as u64 * pow)
-        .checked_add(cliff_vest_amount)
-        .unwrap()
+        .checked_add(cliff_vest_amount).unwrap()
         .checked_add(rate_time as u64 * pow)
         .ok_or(StreamError::Overflow)?;
 
@@ -1092,20 +1082,16 @@ pub fn create_stream_update_treasury(
 
     if stream.allocation > 0.0
     {
-        let treasury_allocation = ((treasury.allocation * pow) as u64)
+        treasury.allocation = ((treasury.allocation * pow) as u64)
             .checked_add((stream.allocation * pow) as u64)
-            .ok_or(StreamError::Overflow)?;
-
-        treasury.allocation = treasury_allocation as f64 / pow;
+            .ok_or(StreamError::Overflow)? as f64 / pow;
     }
 
     if stream.allocation_reserved > 0.0
     {
-        let treasury_allocation = ((treasury.allocation * pow) as u64)
+        treasury.allocation = ((treasury.allocation * pow) as u64)
             .checked_add((stream.allocation_reserved * pow) as u64)
-            .ok_or(StreamError::Overflow)?;
-
-        treasury.allocation = treasury_allocation as f64 / pow;
+            .ok_or(StreamError::Overflow)? as f64 / pow;
     }
 
     Ok(())
@@ -1231,26 +1217,20 @@ pub fn add_funds_update_treasury<'info>(
 
     if allocation_type == 0
     {
-        let treasury_allocation = ((treasury.allocation * pow) as u64)
+        treasury.allocation = ((treasury.allocation * pow) as u64)
             .checked_add((amount * pow) as u64)
-            .ok_or(StreamError::Overflow)?;
-
-        treasury.allocation = treasury_allocation as f64 / pow;
+            .ok_or(StreamError::Overflow)? as f64 / pow;
 
     } 
     else if allocation_type == 1
-    {
-        let treasury_allocation = ((treasury.allocation * pow) as u64)
+    {   
+        treasury.allocation = ((treasury.allocation * pow) as u64)
             .checked_add((amount * pow) as u64)
-            .ok_or(StreamError::Overflow)?;
+            .ok_or(StreamError::Overflow)? as f64 / pow;
 
-        treasury.allocation = treasury_allocation as f64 / pow;
-        
-        let treasury_allocation_reserved = ((treasury.allocation_reserved * pow) as u64)
+        treasury.allocation_reserved = ((treasury.allocation_reserved * pow) as u64)
             .checked_add((amount * pow) as u64)
-            .ok_or(StreamError::Overflow)?;
-
-        treasury.allocation_reserved = treasury_allocation_reserved as f64 / pow;
+            .ok_or(StreamError::Overflow)? as f64 / pow;
     }
 
     treasury.associated_token_address = *associated_token_mint_info.key;
@@ -1275,9 +1255,7 @@ pub fn add_funds_update_stream_v0<'info>(
     let associated_token_mint = spl_token::state::Mint::unpack_from_slice(&associated_token_mint_info.data.borrow())?;
 
     let escrow_vested_amount = get_stream_vested_amount_v0(
-        &stream, 
-        &clock, 
-        associated_token_mint.decimals.try_into().unwrap()
+        &stream, &clock, associated_token_mint.decimals.try_into().unwrap()
     )?;
 
     let pow = num_traits::pow(10f64, associated_token_mint.decimals.into());
@@ -1325,9 +1303,7 @@ pub fn add_funds_update_stream<'info>(
     let associated_token_mint = spl_token::state::Mint::unpack_from_slice(&associated_token_mint_info.data.borrow())?;
 
     let escrow_vested_amount = get_stream_vested_amount(
-        &stream, 
-        &clock, 
-        associated_token_mint.decimals.try_into().unwrap()
+        &stream, &clock, associated_token_mint.decimals.try_into().unwrap()
     )?;
 
     let pow = num_traits::pow(10f64, associated_token_mint.decimals.into());
