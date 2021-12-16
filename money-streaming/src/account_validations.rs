@@ -26,7 +26,7 @@ pub fn check_can_create_stream<'info>(
 ) -> ProgramResult {
 
     // Check system accounts
-    let _ = check_programs_accounts(
+    let _ = check_system_accounts(
         Option::None,
         Option::None,
         Option::Some(rent_account_info),
@@ -107,7 +107,7 @@ pub fn check_can_add_funds_v0<'info>(
 ) -> ProgramResult {
 
     // Check system accounts
-    let _ = check_programs_accounts(
+    let _ = check_system_accounts(
         Option::Some(associated_token_program_account_info),
         Option::Some(token_program_account_info),
         Option::Some(rent_account_info),
@@ -257,7 +257,7 @@ pub fn check_can_add_funds<'info>(
 ) -> ProgramResult {
 
     // Check system accounts
-    let _ = check_programs_accounts(
+    let _ = check_system_accounts(
         Option::Some(associated_token_program_account_info),
         Option::Some(token_program_account_info),
         Option::Some(rent_account_info),
@@ -406,7 +406,7 @@ pub fn check_can_withdraw_funds_v0<'info>(
 ) -> ProgramResult {
 
     // Check system accounts
-    let _ = check_programs_accounts(
+    let _ = check_system_accounts(
         Option::Some(associated_token_program_account_info),
         Option::Some(token_program_account_info),
         Option::Some(rent_account_info),
@@ -511,7 +511,7 @@ pub fn check_can_withdraw_funds<'info>(
 ) -> ProgramResult {
 
     // Check system accounts
-    let _ = check_programs_accounts(
+    let _ = check_system_accounts(
         Option::Some(associated_token_program_account_info),
         Option::Some(token_program_account_info),
         Option::Some(rent_account_info),
@@ -686,7 +686,7 @@ pub fn check_can_close_stream_v0<'info>(
 ) -> ProgramResult {
 
     // Check system accounts
-    let _ = check_programs_accounts(
+    let _ = check_system_accounts(
         Option::Some(associated_token_program_account_info),
         Option::Some(token_program_account_info),
         Option::Some(rent_account_info),
@@ -846,7 +846,7 @@ pub fn check_can_close_stream<'info>(
 ) -> ProgramResult {
 
     // Check system accounts
-    let _ = check_programs_accounts(
+    let _ = check_system_accounts(
         Option::Some(associated_token_program_account_info),
         Option::Some(token_program_account_info),
         Option::Some(rent_account_info),
@@ -1001,7 +1001,7 @@ pub fn check_can_close_treasury_v0<'info>(
 ) -> ProgramResult {
 
     // Check system accounts
-    let _ = check_programs_accounts(
+    let _ = check_system_accounts(
         Option::None,
         Option::Some(token_program_account_info),
         Option::None,

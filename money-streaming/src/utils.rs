@@ -308,7 +308,7 @@ pub fn get_stream_vested_amount<'info>(
     return Ok(escrow_vested_amount);
 }
 
-pub fn check_programs_accounts<'info>(
+pub fn check_system_accounts<'info>(
     associated_token_program_account: Option<&AccountInfo<'info>>,
     token_program_account: Option<&AccountInfo<'info>>,
     rent_account: Option<&AccountInfo<'info>>,
