@@ -350,36 +350,52 @@ pub fn check_can_add_funds<'info>(
     Ok(())
 }
 
-pub fn check_can_withdraw_funds<'info>(
+pub fn check_can_withdraw_funds_v0<'info>(
     program_id: &Pubkey,
-    treasury_account_info: &AccountInfo<'info>,
-    treasury_token_account_info: &AccountInfo<'info>,
     beneficiary_account_info: &AccountInfo<'info>,
     beneficiary_token_account_info: &AccountInfo<'info>,
     associated_token_mint_info: &AccountInfo<'info>,
+    treasury_account_info: &AccountInfo<'info>,
+    treasury_token_account_info: &AccountInfo<'info>,
     stream_account_info: &AccountInfo<'info>,
     fee_treasury_token_account_info: &AccountInfo<'info>,
     msp_account_info: &AccountInfo<'info>
 
 ) -> ProgramResult {
 
+    // Check the Money Streaming Program account info
     if msp_account_info.key.ne(program_id)
     {
         return Err(StreamError::IncorrectProgramId.into());
     }
 
+    // Check the treasury and the stream are owned by the MSP
+    if treasury_account_info.owner != program_id || stream_account_info.owner != program_id
+    {
+        return Err(StreamError::InstructionNotAuthorized.into());
+    }
+
+    // Check the beneficiary is the signer
     if !beneficiary_account_info.is_signer
     {
         return Err(StreamError::MissingInstructionSignature.into());
     }
 
-    if treasury_account_info.owner != program_id ||
-       stream_account_info.owner != program_id
+    // Check if the stream data has a valid size
+    if stream_account_info.data_len() != Stream::LEN
+    {
+        return Err(StreamError::InvalidStreamData.into());
+    }
+
+    let stream = Stream::unpack_from_slice(&stream_account_info.data.borrow())?;
+
+    // Check the beneficiary account info
+    if stream.beneficiary_address.ne(beneficiary_account_info.key)
     {
         return Err(StreamError::InstructionNotAuthorized.into());
     }
 
-    let stream = StreamV1::unpack_from_slice(&stream_account_info.data.borrow())?;
+    // Check the beneficiary token account info
     let beneficiary_token_address = spl_associated_token_account::get_associated_token_address(
         &stream.beneficiary_address,
         associated_token_mint_info.key
@@ -387,9 +403,22 @@ pub fn check_can_withdraw_funds<'info>(
 
     if beneficiary_token_address.ne(beneficiary_token_account_info.key)
     {
+        return Err(StreamError::InvalidAssociatedTokenAccount.into());
+    }
+
+    // Check the associated token mint account
+    if stream.beneficiary_associated_token.ne(associated_token_mint_info.key)
+    {
+        return Err(StreamError::InvalidTreasuryAssociatedToken.into());
+    }
+
+    // Check treasury account info
+    if stream.treasury_address.ne(treasury_token_account_info.key)
+    {
         return Err(StreamError::InstructionNotAuthorized.into());
     }
 
+    // Check treasury token account info
     let treasury_token_address = spl_associated_token_account::get_associated_token_address(
         &stream.treasury_address,
         associated_token_mint_info.key
@@ -397,17 +426,119 @@ pub fn check_can_withdraw_funds<'info>(
 
     if treasury_token_address.ne(treasury_token_account_info.key)
     {
-        return Err(StreamError::InstructionNotAuthorized.into());
+        return Err(StreamError::InvalidAssociatedTokenAccount.into());
     }
 
-    let msp_ops_token_address = spl_associated_token_account::get_associated_token_address(
+    // Check the fee treasury token account info
+    let fee_treasury_token_address = spl_associated_token_account::get_associated_token_address(
         &FEE_TREASURY_ACCOUNT_ADDRESS.parse().unwrap(),
         associated_token_mint_info.key
     );
 
-    if msp_ops_token_address.ne(fee_treasury_token_account_info.key)
+    if fee_treasury_token_address.ne(fee_treasury_token_account_info.key)
+    {
+        return Err(StreamError::InvalidMspOpsToken.into());
+    }
+
+    Ok(())
+}
+
+pub fn check_can_withdraw_funds<'info>(
+    program_id: &Pubkey,
+    beneficiary_account_info: &AccountInfo<'info>,
+    beneficiary_token_account_info: &AccountInfo<'info>,
+    associated_token_mint_info: &AccountInfo<'info>,
+    treasury_account_info: &AccountInfo<'info>,
+    treasury_token_account_info: &AccountInfo<'info>,
+    stream_account_info: &AccountInfo<'info>,
+    fee_treasury_token_account_info: &AccountInfo<'info>,
+    msp_account_info: &AccountInfo<'info>
+
+) -> ProgramResult {
+
+    // Check the Money Streaming Program account info
+    if msp_account_info.key.ne(program_id)
+    {
+        return Err(StreamError::IncorrectProgramId.into());
+    }
+
+    // Check the treasury and the stream are owned by the MSP
+    if treasury_account_info.owner != program_id || stream_account_info.owner != program_id
     {
         return Err(StreamError::InstructionNotAuthorized.into());
+    }
+
+    // Check the beneficiary is the signer
+    if !beneficiary_account_info.is_signer
+    {
+        return Err(StreamError::MissingInstructionSignature.into());
+    }
+
+    // Check if the stream data has a valid size
+    if stream_account_info.data_len() != StreamV1::LEN
+    {
+        return Err(StreamError::InvalidStreamData.into());
+    }
+
+    let stream = StreamV1::unpack_from_slice(&stream_account_info.data.borrow())?;
+
+    // Check the beneficiary account info
+    if stream.beneficiary_address.ne(beneficiary_account_info.key)
+    {
+        return Err(StreamError::InstructionNotAuthorized.into());
+    }
+
+    // Check the beneficiary token account info
+    let beneficiary_token_address = spl_associated_token_account::get_associated_token_address(
+        &stream.beneficiary_address,
+        associated_token_mint_info.key
+    );
+
+    if beneficiary_token_address.ne(beneficiary_token_account_info.key)
+    {
+        return Err(StreamError::InvalidAssociatedTokenAccount.into());
+    }
+
+    // Check the associated token mint account
+    if stream.beneficiary_associated_token.ne(associated_token_mint_info.key)
+    {
+        return Err(StreamError::InvalidTreasuryAssociatedToken.into());
+    }
+
+    // Check treasury account info
+    if stream.treasury_address.ne(treasury_token_account_info.key)
+    {
+        return Err(StreamError::InstructionNotAuthorized.into());
+    }
+
+    // Check treasury token account info
+    let treasury_token_address = spl_associated_token_account::get_associated_token_address(
+        &stream.treasury_address,
+        associated_token_mint_info.key
+    );
+
+    if treasury_token_address.ne(treasury_token_account_info.key)
+    {
+        return Err(StreamError::InvalidAssociatedTokenAccount.into());
+    }
+
+    let treasury = TreasuryV1::unpack_from_slice(&treasury_account_info.data.borrow())?;
+
+    // Check the treasury token mint account
+    if treasury.associated_token_address.ne(associated_token_mint_info.key)
+    {
+        return Err(StreamError::InvalidTreasuryAssociatedToken.into());
+    }
+
+    // Check the fee treasury token account info
+    let fee_treasury_token_address = spl_associated_token_account::get_associated_token_address(
+        &FEE_TREASURY_ACCOUNT_ADDRESS.parse().unwrap(),
+        associated_token_mint_info.key
+    );
+
+    if fee_treasury_token_address.ne(fee_treasury_token_account_info.key)
+    {
+        return Err(StreamError::InvalidMspOpsToken.into());
     }
 
     Ok(())

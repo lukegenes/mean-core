@@ -631,6 +631,7 @@ impl Processor {
         if treasury_account_info.data_len() == Treasury::LEN && stream_account_info.data_len() == Stream::LEN
         {
             return withdraw_v0(
+                program_id,
                 msp_account_info,
                 rent_account_info,
                 system_account_info,
@@ -644,17 +645,18 @@ impl Processor {
                 treasury_account_info,
                 treasury_token_account_info,
                 stream_account_info,
+                &clock,
                 amount
             );
         }
 
         let _ = check_can_withdraw_funds(
             program_id,
-            &treasury_account_info,
-            &treasury_token_account_info,
             &beneficiary_account_info,
             &beneficiary_token_account_info,
             &associated_token_mint_info,
+            &treasury_account_info,
+            &treasury_token_account_info,
             &stream_account_info,
             &fee_treasury_token_account_info,
             &msp_account_info
@@ -715,26 +717,20 @@ impl Processor {
  
         // Update stream data
         let _ = withdraw_funds_update_stream(
-            &mut stream, 
+            &mut stream,
+            &stream_account_info,
             &associated_token_mint_info,
             &clock,
             escrow_vested_amount,
             transfer_amount
         )?;
 
-        // Save
-        StreamV1::pack_into_slice(&stream, &mut stream_account_info.data.borrow_mut());
-
-        let mut treasury = TreasuryV1::unpack_from_slice(&treasury_account_info.data.borrow())?;
         // Update treasury account data
         let _ = withdraw_funds_update_treasury(
-            &mut treasury,
+            &treasury_account_info,
             &associated_token_mint_info,
             transfer_amount
         )?;
-
-        // Save
-        TreasuryV1::pack_into_slice(&treasury, &mut treasury_account_info.data.borrow_mut());
 
         if fee_treasury_token_account_info.data_len() == 0
         {
