@@ -1,4 +1,3 @@
-
 use std::cmp;
 use num_traits;
 use std::{ string::String, convert::TryInto };
@@ -21,7 +20,6 @@ pub fn unpack_pubkey(input: &[u8]) -> Result<(Pubkey, &[u8]), StreamError> {
     if input.len() >= 32 {
         let (key, rest) = input.split_at(32);
         let pk = Pubkey::new(key);
-
         Ok((pk, rest))
     } else {
         Err(StreamError::InvalidArgument.into())
@@ -150,8 +148,7 @@ pub fn claim_treasury_funds<'info>(
         msp_account_info.key
     );
 
-    if treasury_pool_address.ne(treasury_account_info.key)
-    {
+    if treasury_pool_address.ne(treasury_account_info.key) {
         return Err(StreamError::InvalidTreasuryData.into());
     }
 
@@ -240,13 +237,11 @@ pub fn get_stream_status<'info>(
 
     let now = clock.unix_timestamp as u64 * 1000u64;
 
-    if stream.start_utc > now
-    {
+    if stream.start_utc > now {
         return Ok(StreamStatus::Scheduled);
     }
 
-    if stream.stream_resumed_block_time >= stream.escrow_vested_amount_snap_block_time
-    {
+    if stream.stream_resumed_block_time >= stream.escrow_vested_amount_snap_block_time {
         return Ok(StreamStatus::Running);
     }
 
@@ -262,19 +257,16 @@ pub fn get_stream_vested_amount<'info>(
 
     let status = get_stream_status(stream, clock)?;
 
-    if status == StreamStatus::Scheduled
-    {
+    if status == StreamStatus::Scheduled{
         return Ok(0);
     }
 
-    let is_running = match status
-    {
+    let is_running = match status {
         k if k == StreamStatus::Running => 1,
         _ => 0
     };
 
-    let rate = match stream.rate_interval_in_seconds
-    {
+    let rate = match stream.rate_interval_in_seconds {
         k if k > 0 => stream.rate_amount / (stream.rate_interval_in_seconds as f64) * (is_running as f64),
         _ => stream.allocation
     };
@@ -300,8 +292,7 @@ pub fn get_stream_vested_amount<'info>(
         .checked_add(rate_time as u64 * pow)
         .ok_or(StreamError::Overflow)?;
 
-    if escrow_vested_amount > stream_allocation
-    {
+    if escrow_vested_amount > stream_allocation {
         escrow_vested_amount = stream_allocation;
     }
 

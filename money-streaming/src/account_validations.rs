@@ -1002,24 +1002,16 @@ pub fn check_can_close_treasury_v0<'info>(
 
     // Check system accounts
     let _ = check_system_accounts(
-        Option::None,
-        Option::Some(token_program_account_info),
-        Option::None,
-        Option::None
+        Option::None, Option::Some(token_program_account_info),  Option::None, Option::None
     );
-
     // Check the tresurer is the signer
-    if !treasurer_account_info.is_signer
-    {
+    if !treasurer_account_info.is_signer {
         return Err(StreamError::MissingInstructionSignature.into());
     }
-
     // Check the treasury account size is valid
-    if treasury_account_info.data_len() != Treasury::LEN
-    {
+    if treasury_account_info.data_len() != Treasury::LEN {
         return Err(StreamError::InvalidTreasuryData.into());
     }
-
     // Check that the treasury address is the valid PDA
     let treasury = Treasury::unpack_from_slice(&treasury_account_info.data.borrow())?;
     let (treasury_pool_address, _) = Pubkey::find_program_address(
@@ -1030,17 +1022,13 @@ pub fn check_can_close_treasury_v0<'info>(
         msp_account_info.key
     );
 
-    if treasury_pool_address != *treasury_account_info.key 
-    {
+    if treasury_pool_address != *treasury_account_info.key {
         return Err(StreamError::InvalidTreasuryPool.into());
     }
-
     // Check the treasurer account info
-    if treasury.treasury_base_address.ne(treasurer_account_info.key)
-    {
+    if treasury.treasury_base_address.ne(treasurer_account_info.key) {
         return Err(StreamError::InstructionNotAuthorized.into());
     }
-
     // Check all associated token accounts info
     let treasurer_token_address = spl_associated_token_account::get_associated_token_address(
         &treasury.treasury_base_address,
@@ -1065,14 +1053,13 @@ pub fn check_can_close_treasury_v0<'info>(
     if treasurer_token_address.ne(treasurer_token_account_info.key) || 
        treasurer_treasury_pool_token_address.ne(treasurer_treasury_pool_token_account_info.key) ||
        treasury_token_address.ne(treasury_token_account_info.key) ||
-       fee_treasury_token_address.ne(fee_treasury_token_account_info.key)
+       fee_treasury_token_address.ne(fee_treasury_token_account_info.key) 
     {
         return Err(StreamError::InstructionNotAuthorized.into());
     }
 
     // Check Money Streaming Program account info
-    if msp_account_info.key.ne(program_id)
-    {
+    if msp_account_info.key.ne(program_id) {
         return Err(StreamError::IncorrectProgramId.into());
     }
 
@@ -1083,29 +1070,31 @@ pub fn check_can_close_treasury<'info>(
     program_id: &Pubkey,
     treasurer_account_info: &AccountInfo<'info>,
     treasury_account_info: &AccountInfo<'info>,
-    msp_account_info: &AccountInfo<'info>
+    msp_account_info: &AccountInfo<'info>,
+    token_program_account_info: &AccountInfo<'info>
 
 ) -> ProgramResult {
 
-    if msp_account_info.key.ne(program_id)
-    {
+    // Check system accounts
+    let _ = check_system_accounts(
+        Option::None, Option::Some(token_program_account_info), Option::None, Option::None
+    );
+
+    if msp_account_info.key.ne(program_id) {
         return Err(StreamError::IncorrectProgramId.into());
     }
 
-    if !treasurer_account_info.is_signer
-    {
+    if !treasurer_account_info.is_signer {
         return Err(StreamError::MissingInstructionSignature.into());
     }
     
     let treasury = TreasuryV1::unpack_from_slice(&treasury_account_info.data.borrow())?;
 
-    if treasury.treasurer_address.ne(treasurer_account_info.key)
-    {
+    if treasury.treasurer_address.ne(treasurer_account_info.key) {
         return Err(StreamError::InstructionNotAuthorized.into());
     }
 
-    if treasury.streams_amount > 0
-    {
+    if treasury.streams_amount > 0 {
         return Err(StreamError::CloseTreasuryWithStreams.into());
     }
 

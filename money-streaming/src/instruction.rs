@@ -175,13 +175,6 @@ pub enum StreamInstruction {
     /// 9. `[]` The Money Streaming Program account
     /// 10. `[]` The token program account
     CloseTreasury,
-
-    /// 0. `[signer, writable]` The treasurer account (the creator of the treasury)
-    /// 1. `[writable]` The treasury account
-    /// 2. `[]` The treasury token account
-    /// 3. `[]` The associated token mint account  
-    /// 4. `[]` SysvarRent account.
-    UpgradeTreasury,
 }
 
 impl StreamInstruction {
@@ -205,7 +198,6 @@ impl StreamInstruction {
             8 => Self::unpack_close_stream(result)?,
             9 => Self::unpack_create_treasury(result)?,
             10 => Ok(Self::CloseTreasury)?,
-            11 => Ok(Self::UpgradeTreasury)?,
 
             _ => return Err(StreamError::InvalidStreamInstruction.into()),
         })
@@ -339,8 +331,6 @@ impl StreamInstruction {
             },
 
             Self::CloseTreasury => buf.push(10),
-
-            Self::UpgradeTreasury => buf.push(11),
 
         };
 

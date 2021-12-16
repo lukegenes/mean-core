@@ -8,7 +8,7 @@ use solana_program::{
     entrypoint::ProgramResult,
     account_info::{ next_account_info, AccountInfo },
     program_pack::{ IsInitialized, Pack },
-    sysvar::{ clock::Clock, rent::Rent, Sysvar } 
+    sysvar::{ clock::Clock, Sysvar } 
 };
 
 use crate::error::StreamError;
@@ -201,15 +201,6 @@ impl Processor {
                 msg!("Instruction: CloseTreasury");
 
                 Self::process_close_treasury(
-                    accounts, 
-                    program_id
-                )
-            },
-
-            StreamInstruction::UpgradeTreasury => {
-                msg!("Instruction: UpgradeTreasury");
-
-                Self::process_upgrade_treasury(
                     accounts, 
                     program_id
                 )
@@ -1488,7 +1479,8 @@ impl Processor {
             &program_id,
             &treasurer_account_info,
             &treasury_account_info,
-            &msp_account_info
+            &msp_account_info,
+            &token_program_account_info
         )?;
 
         let treasury = TreasuryV1::unpack_from_slice(&treasury_account_info.data.borrow())?;
@@ -1523,86 +1515,6 @@ impl Processor {
         **treasury_account_info.lamports.borrow_mut() = 0;
         **treasurer_account_info.lamports.borrow_mut() = treasurer_lamports
             .checked_add(treasury_lamports)
-            .ok_or(StreamError::Overflow)?;
-
-        Ok(())
-    }
-
-    fn process_upgrade_treasury(
-        accounts: &[AccountInfo],
-        _program_id: &Pubkey
-
-    ) -> ProgramResult {
-
-        let account_info_iter = &mut accounts.iter();
-        let treasurer_account_info = next_account_info(account_info_iter)?;
-        let treasury_account_info = next_account_info(account_info_iter)?;
-        let treasury_token_account_info = next_account_info(account_info_iter)?;
-        let associated_token_mint_info = next_account_info(account_info_iter)?;
-        let fee_treasury_account_info = next_account_info(account_info_iter)?;
-        let rent_account_info = next_account_info(account_info_iter)?;
-        let rent = &Rent::from_account_info(rent_account_info)?;
-        // let clock = Clock::get()?;
-
-        if !treasurer_account_info.is_signer
-        {
-            return Err(StreamError::MissingInstructionSignature.into());
-        }
-
-        if fee_treasury_account_info.key.ne(&FEE_TREASURY_ACCOUNT.parse().unwrap())
-        {
-            return Err(StreamError::InstructionNotAuthorized.into());
-        }
-
-        let treasury = Treasury::unpack_from_slice(&treasury_account_info.data.borrow())?;
-        let mut streams_amount = 0;
-        let treasury_token = spl_token::state::Account::unpack_from_slice(&treasury_token_account_info.data.borrow())?;
-        let associated_token_mint = spl_token::state::Mint::unpack_from_slice(&associated_token_mint_info.data.borrow())?;
-        let associated_token_mint_pow = num_traits::pow(10f64, associated_token_mint.decimals.into());
-        
-        if treasury_token.amount > 0
-        {
-            streams_amount = 1;
-        }
-
-        let new_treasury_data: &[u8; TreasuryV1::LEN] = &[0; TreasuryV1::LEN];
-        let mut new_treasury = TreasuryV1::unpack_from_slice(new_treasury_data)?;
-            
-        // Cleaning data
-        new_treasury.balance = treasury_token.amount as f64 / associated_token_mint_pow;
-        new_treasury.allocation = treasury_token.amount as f64 / associated_token_mint_pow;
-        new_treasury.allocation_reserved = 0.0;
-        new_treasury.streams_amount = streams_amount;
-        new_treasury.slot = treasury.treasury_block_height;
-        new_treasury.treasurer_address = treasury.treasury_base_address;
-        new_treasury.associated_token_address = *associated_token_mint_info.key;
-        new_treasury.mint_address = treasury.treasury_mint_address;
-        new_treasury.created_on_utc = 0;
-        new_treasury.label = String::default();
-        new_treasury.initialized = treasury.initialized;
-
-        // Save
-        TreasuryV1::pack_into_slice(&new_treasury, &mut treasury_account_info.data.borrow_mut());
-        
-        let new_treasury_balance = rent.minimum_balance(TreasuryV1::LEN);
-        // Update treasury rent excempt balance 
-        let treasurer_lamports = treasurer_account_info.lamports();
-        let treasury_lamports = treasury_account_info.lamports();
-
-        **treasurer_account_info.lamports.borrow_mut() = treasurer_lamports
-            .checked_add(treasury_lamports)
-            .ok_or(StreamError::Overflow)?;
-
-        **treasurer_account_info.lamports.borrow_mut() = treasurer_lamports
-            .checked_sub(new_treasury_balance)            
-            .ok_or(StreamError::Overflow)?;
-        
-        **treasury_account_info.lamports.borrow_mut() = treasury_lamports
-            .checked_add(new_treasury_balance)
-            .ok_or(StreamError::Overflow)?;
-
-        **treasury_account_info.lamports.borrow_mut() = treasury_lamports
-            .checked_sub(treasury_lamports)            
             .ok_or(StreamError::Overflow)?;
 
         Ok(())
