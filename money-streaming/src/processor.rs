@@ -12,13 +12,12 @@ use solana_program::{
     sysvar::{ clock::Clock, rent::Rent, Sysvar } 
 };
 
-use crate::{
-    error::StreamError,
-    utils::*,
-    instruction::{ StreamInstruction },
-    state::{ Stream, StreamV1, StreamTerms, Treasury, TreasuryV1, StreamStatus },
-    constants::*
-};
+use crate::error::StreamError;
+use crate::utils::*;
+use crate::instruction::{ StreamInstruction };
+use crate::state::*;
+use crate::constants::*;
+use crate::accounts_validations::*;
 
 pub struct Processor {}
 
@@ -367,6 +366,7 @@ impl Processor {
         if treasury_account_info.data_len() == Treasury::LEN
         {
             return add_funds_v0(
+                program_id,
                 msp_account_info,
                 fee_treasury_account_info,
                 associated_token_program_account_info,
@@ -380,9 +380,8 @@ impl Processor {
                 treasury_token_account_info,
                 associated_token_mint_info,   
                 treasury_pool_mint_info,
-                stream_account_info,                
-                amount,
-                true
+                stream_account_info,               
+                amount
             );
         }
 
