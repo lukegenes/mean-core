@@ -733,68 +733,446 @@ pub fn check_can_pause_or_resume_stream<'info>(
     Ok(())
 }
 
-pub fn check_can_close_stream<'info>(
+pub fn check_can_close_stream_v0<'info>(
     program_id: &Pubkey,
     initializer_account_info: &AccountInfo<'info>,
-    treasury_account_info: &AccountInfo<'info>,
-    treasury_token_account_info: &AccountInfo<'info>,
+    treasurer_account_info: &AccountInfo<'info>,
+    treasurer_token_account_info: &AccountInfo<'info>,
+    beneficiary_account_info: &AccountInfo<'info>,
     beneficiary_token_account_info: &AccountInfo<'info>,
     associated_token_mint_info: &AccountInfo<'info>,
+    treasury_account_info: &AccountInfo<'info>, 
+    treasury_token_account_info: &AccountInfo<'info>,
+    treasury_pool_mint_info: &AccountInfo<'info>,
     stream_account_info: &AccountInfo<'info>,
     fee_treasury_token_account_info: &AccountInfo<'info>,
-    msp_account_info: &AccountInfo<'info>
+    msp_account_info: &AccountInfo<'info>,
+    associated_token_program_account_info: &AccountInfo<'info>,
+    token_program_account_info: &AccountInfo<'info>,
+    rent_account_info: &AccountInfo<'info>,
+    system_account_info: &AccountInfo<'info>
 
 ) -> ProgramResult {
 
-    if msp_account_info.key.ne(program_id)
-    {
-        return Err(StreamError::IncorrectProgramId.into());
-    }
-
+    // Check the initializer is the signer
     if !initializer_account_info.is_signer 
     {
         return Err(StreamError::MissingInstructionSignature.into());
     }
 
+    // Check that the stream and treasury accounts owner is the MSP 
     if stream_account_info.owner != program_id || treasury_account_info.owner != program_id
     {
         return Err(StreamError::InstructionNotAuthorized.into());
     }
 
-    let stream = StreamV1::unpack_from_slice(&stream_account_info.data.borrow())?;
+    // Check the stream account has a valid size
+    if stream_account_info.data_len() != Stream::LEN
+    {
+        return Err(StreamError::InvalidStreamData.into());
+    }
 
+    let stream = Stream::unpack_from_slice(&stream_account_info.data.borrow())?;
+
+    // Validate that only the treasurer or the beneficiary can close the stream
     if stream.treasurer_address.ne(initializer_account_info.key) &&
        stream.beneficiary_address.ne(initializer_account_info.key) 
     {
-        return Err(StreamError::InstructionNotAuthorized.into()); // Just the treasurer or the beneficiary can close a stream
+        return Err(StreamError::InstructionNotAuthorized.into());
     }
+
+    // Check the treasurer account info in the stream
+    if stream.treasurer_address.ne(treasurer_account_info.key)
+    {
+        return Err(StreamError::InstructionNotAuthorized.into());
+    }
+
+    // Check the associated token mint account info
+    if stream.beneficiary_address.ne(beneficiary_account_info.key)
+    {
+        return Err(StreamError::InstructionNotAuthorized.into());
+    }
+
+    // Check the treasury account has a valid size
+    if treasury_account_info.data_len() != Treasury::LEN
+    {
+        return Err(StreamError::InvalidTreasuryData.into());
+    }
+
+    // Check that the treasury address is the valid PDA
+    let treasury = Treasury::unpack_from_slice(&treasury_account_info.data.borrow())?;
+    let (treasury_pool_address, _) = Pubkey::find_program_address(
+        &[
+            treasury.treasury_base_address.as_ref(),
+            &treasury.treasury_block_height.to_le_bytes()
+        ], 
+        msp_account_info.key
+    );
+
+    if treasury_pool_address != *treasury_account_info.key 
+    {
+        return Err(StreamError::InvalidTreasuryPool.into());
+    }
+    
+    // Check the treasurer account info in the treasury
+    if treasury.treasury_base_address.ne(treasurer_account_info.key)
+    {
+        return Err(StreamError::InstructionNotAuthorized.into());
+    }
+
+    // Check the associated token mint account info
+    if stream.beneficiary_associated_token.ne(associated_token_mint_info.key)
+    {
+        return Err(StreamError::InvalidTreasuryAssociatedToken.into());
+    }
+
+    // Check all associated token accounts info
+    let treasurer_token_address = spl_associated_token_account::get_associated_token_address(
+        &stream.treasurer_address,
+        associated_token_mint_info.key
+    );
 
     let beneficiary_token_address = spl_associated_token_account::get_associated_token_address(
         &stream.beneficiary_address,
         associated_token_mint_info.key
     );
 
-    let treasury = TreasuryV1::unpack_from_slice(&treasury_account_info.data.borrow())?;
     let treasury_token_address = spl_associated_token_account::get_associated_token_address(
         &stream.treasury_address,
         associated_token_mint_info.key
     );
 
-    let msp_ops_token_address = spl_associated_token_account::get_associated_token_address(
+    let fee_treasury_token_address = spl_associated_token_account::get_associated_token_address(
         &FEE_TREASURY_ACCOUNT.parse().unwrap(),
         associated_token_mint_info.key
     );
 
-    if beneficiary_token_address.ne(beneficiary_token_account_info.key) ||
+    if treasurer_token_address.ne(treasurer_token_account_info.key) || 
+       beneficiary_token_address.ne(beneficiary_token_account_info.key) ||
        treasury_token_address.ne(treasury_token_account_info.key) ||
-       msp_ops_token_address.ne(fee_treasury_token_account_info.key)
+       fee_treasury_token_address.ne(fee_treasury_token_account_info.key)
     {
         return Err(StreamError::InstructionNotAuthorized.into());
     }
 
-    if treasury.associated_token_address.ne(associated_token_mint_info.key)
+    // Check the treasury pool mint account info
+    if treasury.treasury_mint_address.ne(treasury_pool_mint_info.key)
+    {
+        return Err(StreamError::InvalidTreasuryPoolMint.into());
+    }
+
+    // Check that the treasury pool mint address is the valid PDA
+    let (treasury_pool_mint_address, _) = Pubkey::find_program_address(
+        &[
+            treasury.treasury_base_address.as_ref(),
+            treasury_pool_address.as_ref(),
+            &treasury.treasury_block_height.to_le_bytes()
+        ], 
+        msp_account_info.key
+    );
+
+    if treasury_pool_mint_address.ne(treasury_pool_mint_info.key)
+    {
+        return Err(StreamError::InvalidTreasuryPoolMint.into());
+    }
+
+    // Check the Money Streaming Program account info
+    if msp_account_info.key.ne(program_id)
+    {
+        return Err(StreamError::IncorrectProgramId.into());
+    }
+
+    // Check associated token program account info
+    if associated_token_program_account_info.key.ne(&ASSOCIATED_TOKEN_PROGRAM.parse().unwrap())
+    {
+        return Err(StreamError::IncorrectProgramId.into());
+    }
+
+    // Check token program account info
+    if token_program_account_info.key.ne(&TOKEN_PROGRAM.parse().unwrap())
+    {
+        return Err(StreamError::IncorrectProgramId.into());
+    }
+
+    // Check system program account info
+    if rent_account_info.key.ne(&solana_program::sysvar::rent::id())
+    {
+        return Err(StreamError::IncorrectProgramId.into());
+    }
+
+    // Check system program account info
+    if system_account_info.key.ne(&system_program::id())
+    {
+        return Err(StreamError::IncorrectProgramId.into());
+    } 
+
+    Ok(())
+}
+
+pub fn check_can_close_stream<'info>(
+    program_id: &Pubkey,
+    initializer_account_info: &AccountInfo<'info>,
+    treasurer_account_info: &AccountInfo<'info>,
+    treasurer_token_account_info: &AccountInfo<'info>,
+    beneficiary_account_info: &AccountInfo<'info>,
+    beneficiary_token_account_info: &AccountInfo<'info>,
+    associated_token_mint_info: &AccountInfo<'info>,
+    treasury_account_info: &AccountInfo<'info>, 
+    treasury_token_account_info: &AccountInfo<'info>,
+    treasury_pool_mint_info: &AccountInfo<'info>,
+    stream_account_info: &AccountInfo<'info>,
+    fee_treasury_token_account_info: &AccountInfo<'info>,
+    msp_account_info: &AccountInfo<'info>,
+    associated_token_program_account_info: &AccountInfo<'info>,
+    token_program_account_info: &AccountInfo<'info>,
+    rent_account_info: &AccountInfo<'info>,
+    system_account_info: &AccountInfo<'info>
+
+) -> ProgramResult {
+
+    // Check the initializer is the signer
+    if !initializer_account_info.is_signer 
+    {
+        return Err(StreamError::MissingInstructionSignature.into());
+    }
+
+    // Check that the stream and treasury accounts owner is the MSP 
+    if stream_account_info.owner != program_id || treasury_account_info.owner != program_id
+    {
+        return Err(StreamError::InstructionNotAuthorized.into());
+    }
+
+    // Check the stream account has a valid size
+    if stream_account_info.data_len() != StreamV1::LEN
+    {
+        return Err(StreamError::InvalidStreamData.into());
+    }
+
+    let stream = StreamV1::unpack_from_slice(&stream_account_info.data.borrow())?;
+
+    // Validate that only the treasurer or the beneficiary can close the stream
+    if stream.treasurer_address.ne(initializer_account_info.key) &&
+       stream.beneficiary_address.ne(initializer_account_info.key) 
+    {
+        return Err(StreamError::InstructionNotAuthorized.into());
+    }
+
+    // Check the treasurer account info in the stream
+    if stream.treasurer_address.ne(treasurer_account_info.key)
+    {
+        return Err(StreamError::InstructionNotAuthorized.into());
+    }
+
+    // Check the beneficiary account info in the stream
+    if stream.beneficiary_address.ne(beneficiary_account_info.key)
+    {
+        return Err(StreamError::InstructionNotAuthorized.into());
+    }
+
+    // Check the treasury account has a valid size
+    if treasury_account_info.data_len() != TreasuryV1::LEN
+    {
+        return Err(StreamError::InvalidTreasuryData.into());
+    }
+
+    // Check that the treasury address is the valid PDA
+    let treasury = TreasuryV1::unpack_from_slice(&treasury_account_info.data.borrow())?;
+    let (treasury_pool_address, _) = Pubkey::find_program_address(
+        &[
+            treasury.treasurer_address.as_ref(),
+            &treasury.slot.to_le_bytes()
+        ], 
+        msp_account_info.key
+    );
+
+    if treasury_pool_address != *treasury_account_info.key 
+    {
+        return Err(StreamError::InvalidTreasuryPool.into());
+    }
+    
+    // Check the treasurer account info in the treasury
+    if treasury.treasurer_address.ne(treasurer_account_info.key)
+    {
+        return Err(StreamError::InstructionNotAuthorized.into());
+    }
+
+    // Check the associated token mint account info
+    if stream.beneficiary_associated_token.ne(associated_token_mint_info.key) ||
+       treasury.associated_token_address.ne(associated_token_mint_info.key)
     {
         return Err(StreamError::InvalidTreasuryAssociatedToken.into());
+    }
+
+    // Check all associated token accounts info
+    let treasurer_token_address = spl_associated_token_account::get_associated_token_address(
+        &stream.treasurer_address,
+        associated_token_mint_info.key
+    );
+
+    let beneficiary_token_address = spl_associated_token_account::get_associated_token_address(
+        &stream.beneficiary_address,
+        associated_token_mint_info.key
+    );
+
+    let treasury_token_address = spl_associated_token_account::get_associated_token_address(
+        &stream.treasury_address,
+        associated_token_mint_info.key
+    );
+
+    let fee_treasury_token_address = spl_associated_token_account::get_associated_token_address(
+        &FEE_TREASURY_ACCOUNT.parse().unwrap(),
+        associated_token_mint_info.key
+    );
+
+    if treasurer_token_address.ne(treasurer_token_account_info.key) || 
+       beneficiary_token_address.ne(beneficiary_token_account_info.key) ||
+       treasury_token_address.ne(treasury_token_account_info.key) ||
+       fee_treasury_token_address.ne(fee_treasury_token_account_info.key)
+    {
+        return Err(StreamError::InstructionNotAuthorized.into());
+    }
+
+    // Check the treasury pool mint account info
+    if treasury.mint_address.ne(treasury_pool_mint_info.key)
+    {
+        return Err(StreamError::InvalidTreasuryPoolMint.into());
+    }
+
+    // Check that the treasury pool mint address is the valid PDA
+    let (treasury_pool_mint_address, _) = Pubkey::find_program_address(
+        &[
+            treasury.treasurer_address.as_ref(),
+            treasury_pool_address.as_ref(),
+            &treasury.slot.to_le_bytes()
+        ], 
+        msp_account_info.key
+    );
+
+    if treasury_pool_mint_address.ne(treasury_pool_mint_info.key)
+    {
+        return Err(StreamError::InvalidTreasuryPoolMint.into());
+    }
+
+    // Check the Money Streaming Program account info
+    if msp_account_info.key.ne(program_id)
+    {
+        return Err(StreamError::IncorrectProgramId.into());
+    }
+
+    // Check associated token program account info
+    if associated_token_program_account_info.key.ne(&ASSOCIATED_TOKEN_PROGRAM.parse().unwrap())
+    {
+        return Err(StreamError::IncorrectProgramId.into());
+    }
+
+    // Check token program account info
+    if token_program_account_info.key.ne(&TOKEN_PROGRAM.parse().unwrap())
+    {
+        return Err(StreamError::IncorrectProgramId.into());
+    }
+
+    // Check system program account info
+    if rent_account_info.key.ne(&solana_program::sysvar::rent::id())
+    {
+        return Err(StreamError::IncorrectProgramId.into());
+    }
+
+    // Check system program account info
+    if system_account_info.key.ne(&system_program::id())
+    {
+        return Err(StreamError::IncorrectProgramId.into());
+    } 
+
+    Ok(())
+}
+
+pub fn check_can_close_treasury_v0<'info>(
+    program_id: &Pubkey,
+    treasurer_account_info: &AccountInfo<'info>,
+    treasurer_token_account_info: &AccountInfo<'info>,
+    treasurer_treasury_pool_token_account_info: &AccountInfo<'info>,
+    associated_token_mint_info: &AccountInfo<'info>,
+    treasury_account_info: &AccountInfo<'info>,
+    treasury_token_account_info: &AccountInfo<'info>,
+    treasury_pool_mint_info: &AccountInfo<'info>,
+    fee_treasury_token_account_info: &AccountInfo<'info>,
+    msp_account_info: &AccountInfo<'info>,
+    token_program_account_info: &AccountInfo<'info>
+
+) -> ProgramResult {
+
+    // Check the tresurer is the signer
+    if !treasurer_account_info.is_signer
+    {
+        return Err(StreamError::MissingInstructionSignature.into());
+    }
+
+    // Check the treasury account size is valid
+    if treasury_account_info.data_len() != Treasury::LEN
+    {
+        return Err(StreamError::InvalidTreasuryData.into());
+    }
+
+    // Check that the treasury address is the valid PDA
+    let treasury = Treasury::unpack_from_slice(&treasury_account_info.data.borrow())?;
+    let (treasury_pool_address, _) = Pubkey::find_program_address(
+        &[
+            treasury.treasury_base_address.as_ref(),
+            &treasury.treasury_block_height.to_le_bytes()
+        ], 
+        msp_account_info.key
+    );
+
+    if treasury_pool_address != *treasury_account_info.key 
+    {
+        return Err(StreamError::InvalidTreasuryPool.into());
+    }
+
+    // Check the treasurer account info
+    if treasury.treasury_base_address.ne(treasurer_account_info.key)
+    {
+        return Err(StreamError::InstructionNotAuthorized.into());
+    }
+
+    // Check all associated token accounts info
+    let treasurer_token_address = spl_associated_token_account::get_associated_token_address(
+        &treasury.treasury_base_address,
+        associated_token_mint_info.key
+    );
+
+    let treasurer_treasury_pool_token_address = spl_associated_token_account::get_associated_token_address(
+        &treasury.treasury_mint_address,
+        treasury_pool_mint_info.key
+    );
+
+    let treasury_token_address = spl_associated_token_account::get_associated_token_address(
+        &treasury_pool_address,
+        associated_token_mint_info.key
+    );
+
+    let fee_treasury_token_address = spl_associated_token_account::get_associated_token_address(
+        &FEE_TREASURY_ACCOUNT.parse().unwrap(),
+        associated_token_mint_info.key
+    );
+
+    if treasurer_token_address.ne(treasurer_token_account_info.key) || 
+       treasurer_treasury_pool_token_address.ne(treasurer_treasury_pool_token_account_info.key) ||
+       treasury_token_address.ne(treasury_token_account_info.key) ||
+       fee_treasury_token_address.ne(fee_treasury_token_account_info.key)
+    {
+        return Err(StreamError::InstructionNotAuthorized.into());
+    }
+
+    // Check Money Streaming Program account info
+    if msp_account_info.key.ne(program_id)
+    {
+        return Err(StreamError::IncorrectProgramId.into());
+    }
+
+    // Check token program account info
+    if token_program_account_info.key.ne(&TOKEN_PROGRAM.parse().unwrap())
+    {
+        return Err(StreamError::IncorrectProgramId.into());
     }
 
     Ok(())

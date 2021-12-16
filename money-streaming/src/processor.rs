@@ -629,19 +629,19 @@ impl Processor {
         {
             return withdraw_v0(
                 program_id,
-                beneficiary_account_info,
-                beneficiary_token_account_info,
-                associated_token_mint_info,
-                treasury_account_info,
-                treasury_token_account_info,
-                stream_account_info,
-                fee_treasury_account_info,
-                fee_treasury_token_account_info,
-                msp_account_info,
-                associated_token_program_account_info,
-                token_program_account_info,
-                rent_account_info,
-                system_account_info,
+                &beneficiary_account_info,
+                &beneficiary_token_account_info,
+                &associated_token_mint_info,
+                &treasury_account_info,
+                &treasury_token_account_info,
+                &stream_account_info,
+                &fee_treasury_account_info,
+                &fee_treasury_token_account_info,
+                &msp_account_info,
+                &associated_token_program_account_info,
+                &token_program_account_info,
+                &rent_account_info,
+                &system_account_info,
                 &clock,
                 amount
             );
@@ -1154,21 +1154,25 @@ impl Processor {
         if stream_account_info.data_len() == Stream::LEN 
         {
             return close_stream_v0(
-                &msp_account_info,
-                &fee_treasury_account_info,
-                &fee_treasury_token_account_info,
-                &token_program_account_info,
-                &system_account_info,
+                program_id,
                 &initializer_account_info,
                 &treasurer_account_info,
                 &treasurer_token_account_info,
                 &treasurer_treasury_pool_token_account_info,
+                &beneficiary_account_info,
                 &beneficiary_token_account_info,
                 &associated_token_mint_info,
-                &treasury_account_info,
+                &treasury_account_info, 
                 &treasury_token_account_info,
                 &treasury_pool_mint_info,
                 &stream_account_info,
+                &fee_treasury_account_info,
+                &fee_treasury_token_account_info,
+                &msp_account_info,
+                &associated_token_program_account_info,
+                &token_program_account_info,
+                &rent_account_info,
+                &system_account_info,
                 auto_close_treasury,
             );
         }
@@ -1176,13 +1180,21 @@ impl Processor {
         let _ = check_can_close_stream(
             program_id,
             &initializer_account_info,
-            &treasury_account_info,
-            &treasury_token_account_info,
+            &treasurer_account_info,
+            &treasurer_token_account_info,
+            &beneficiary_account_info,
             &beneficiary_token_account_info,
             &associated_token_mint_info,
+            &treasury_account_info, 
+            &treasury_token_account_info,
+            &treasury_pool_mint_info,
             &stream_account_info,
             &fee_treasury_token_account_info,
-            &msp_account_info
+            &msp_account_info,
+            &associated_token_program_account_info,
+            &token_program_account_info,
+            &rent_account_info,
+            &system_account_info
         )?;
 
         let clock = Clock::get()?;
@@ -1190,9 +1202,7 @@ impl Processor {
         
         let mut stream = StreamV1::unpack_from_slice(&stream_account_info.data.borrow())?;  
         let mut escrow_vested_amount = get_stream_vested_amount(
-            &stream,
-            &clock,
-            associated_token_mint.decimals.into()
+            &stream, &clock, associated_token_mint.decimals.into()
         )?;
 
         let mut treasury = TreasuryV1::unpack_from_slice(&treasury_account_info.data.borrow())?;
@@ -1445,7 +1455,7 @@ impl Processor {
         let treasury_token_account_info = next_account_info(account_info_iter)?;
         let treasury_pool_mint_info = next_account_info(account_info_iter)?;
         let fee_treasury_account_info = next_account_info(account_info_iter)?;
-        let _fee_treasury_token_account_info = next_account_info(account_info_iter)?;
+        let fee_treasury_token_account_info = next_account_info(account_info_iter)?;
         let msp_account_info = next_account_info(account_info_iter)?;
         let token_program_account_info = next_account_info(account_info_iter)?;
 
@@ -1458,14 +1468,17 @@ impl Processor {
         {
             // close treasury
             return close_treasury_v0(
-                msp_account_info,
-                token_program_account_info,
-                treasurer_account_info,
-                treasurer_token_account_info,
-                treasurer_treasury_pool_token_account_info,
-                treasury_account_info,
-                treasury_token_account_info,
-                treasury_pool_mint_info
+                program_id,
+                &treasurer_account_info,
+                &treasurer_token_account_info,
+                &treasurer_treasury_pool_token_account_info,
+                &associated_token_mint_info,
+                &treasury_account_info,
+                &treasury_token_account_info,
+                &treasury_pool_mint_info,
+                &fee_treasury_token_account_info,
+                &msp_account_info,
+                &token_program_account_info
             );
         }
 
