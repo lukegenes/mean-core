@@ -63,8 +63,8 @@ pub fn check_can_create_stream<'info>(
         .checked_sub((treasury.allocation_assigned * pow) as u64)
         .ok_or(StreamError::Overflow)?;
 
-    if requested_allocation > unallocated_balance {
-        return Err(StreamError::AvailableTreasuryAmountExceeded.into());
+    if requested_allocation <= 0 || requested_allocation > unallocated_balance {
+        return Err(StreamError::InvalidAssignedAllocation.into());
     }
 
     Ok(())
