@@ -13,7 +13,7 @@ use crate::{
 };
 
 pub enum StreamInstruction {
-    
+
     /// Initialize a new stream contract
     ///
     /// 0. `[signer]` The treasurer account (The creator of the money stream).
@@ -112,7 +112,8 @@ pub enum StreamInstruction {
     CreateTreasury {
         slot: u64,
         label: String,
-        treasury_type: u8
+        treasury_type: u8,
+        auto_close: bool
     },
 
     /// 0. `[signer]` The treasurer account (the creator of the treasury)
@@ -223,7 +224,8 @@ impl StreamInstruction {
             Self::CreateTreasury {
                 slot,
                 label,
-                treasury_type
+                treasury_type,
+                auto_close
 
             } => {
 
@@ -232,6 +234,13 @@ impl StreamInstruction {
                 buf.extend_from_slice(&slot.to_le_bytes());
                 buf.extend_from_slice(label.as_ref());
                 buf.extend_from_slice(&treasury_type.to_le_bytes());
+
+                let auto_close = match auto_close {
+                    false => [0],
+                    true => [1]
+                };
+
+                buf.push(auto_close[0] as u8);
             },
 
             Self::CloseTreasury => buf.push(7),
@@ -309,12 +318,19 @@ impl StreamInstruction {
         let (label, result) = unpack_string(result)?;
         let (treasury_type, _result) = result.split_at(1);
         let treasury_type = unpack_u8(treasury_type)?;
+        let (auto_close, _result) = result.split_at(1);
+        let auto_close = match auto_close {
+            [0] => false,
+            [1] => true,
+            _ => false
+        };
 
 
         Ok(Self::CreateTreasury { 
             slot,
             label,
-            treasury_type
+            treasury_type,
+            auto_close
         })
     }
 

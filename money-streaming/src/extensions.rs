@@ -6,7 +6,7 @@ use crate::state::*;
 use crate::constants::*;
 use crate::utils::*;
 use solana_program::{
-    msg,
+    // msg,
     system_instruction,
     program::{ invoke, invoke_signed },
     pubkey::Pubkey,

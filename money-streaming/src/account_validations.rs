@@ -4,7 +4,7 @@ use crate::state::*;
 use crate::constants::*;
 use crate::utils::*;
 use solana_program::{
-    msg,
+    // msg,
     pubkey::Pubkey,
     account_info::AccountInfo,
     entrypoint::ProgramResult,
@@ -59,11 +59,11 @@ pub fn check_can_create_stream<'info>(
     let associated_token_mint = spl_token::state::Mint::unpack_from_slice(&associated_token_mint_info.data.borrow())?;
     let pow = num_traits::pow(10f64, associated_token_mint.decimals.into());
     let requested_allocation = (allocation_assigned * pow) as u64;
-    let available_allocation = ((treasury.allocation_left * pow) as u64)
-        .checked_sub((treasury.allocation_reserved * pow) as u64) 
+    let unallocated_balance = ((treasury.balance * pow) as u64)
+        .checked_sub((treasury.allocation_assigned * pow) as u64)
         .ok_or(StreamError::Overflow)?;
 
-    if requested_allocation > available_allocation {
+    if requested_allocation > unallocated_balance {
         return Err(StreamError::AvailableTreasuryAmountExceeded.into());
     }
 

@@ -548,6 +548,7 @@ pub struct TreasuryV1 {
     pub created_on_utc: u64,
     pub depletion_rate: f64,
     pub treasury_type: u8,
+    pub auto_close: bool,
     pub allocation_assigned: f64
 }
 
@@ -575,6 +576,7 @@ impl Default for TreasuryV1 {
             streams_amount: 0,    
             depletion_rate: 0.0,
             treasury_type: 0,
+            auto_close: false,
             allocation_assigned: 0.0
         }
     }
@@ -600,10 +602,11 @@ impl Pack for TreasuryV1 {
             created_on_utc_output,
             depletion_rate_output,
             treasury_type_output,
+            auto_close_output,
             allocation_assigned_output,
             _additional_data
             
-        ) = mut_array_refs![output, 1, 8, 32, 32, 32, 32, 8, 8, 8, 8, 8, 8, 1, 8, 106];
+        ) = mut_array_refs![output, 1, 8, 32, 32, 32, 32, 8, 8, 8, 8, 8, 8, 1, 1, 8, 105];
 
         let TreasuryV1 {
             initialized,
@@ -619,6 +622,7 @@ impl Pack for TreasuryV1 {
             created_on_utc,
             depletion_rate,
             treasury_type,
+            auto_close,
             allocation_assigned
 
         } = self;
@@ -636,6 +640,7 @@ impl Pack for TreasuryV1 {
         *created_on_utc_output = created_on_utc.to_le_bytes();
         *depletion_rate_output = depletion_rate.to_le_bytes();
         *treasury_type_output = treasury_type.to_le_bytes();
+        auto_close_output[0] = *auto_close as u8;
         *allocation_assigned_output = allocation_assigned.to_le_bytes();
     }
     
@@ -656,12 +661,19 @@ impl Pack for TreasuryV1 {
             created_on_utc,
             depletion_rate,
             treasury_type,
+            auto_close,
             allocation_assigned,
             _additional_data
 
-        ) = array_refs![input, 1, 8, 32, 32, 32, 32, 8, 8, 8, 8, 8, 8, 1, 8, 106];
+        ) = array_refs![input, 1, 8, 32, 32, 32, 32, 8, 8, 8, 8, 8, 8, 1, 1, 8, 105];
 
         let initialized = match initialized {
+            [0] => false,
+            [1] => true,
+            _ => return Err(TreasuryError::InvalidTreasuryData.into()),
+        };
+
+        let auto_close = match auto_close {
             [0] => false,
             [1] => true,
             _ => return Err(TreasuryError::InvalidTreasuryData.into()),
@@ -681,6 +693,7 @@ impl Pack for TreasuryV1 {
             created_on_utc: u64::from_le_bytes(*created_on_utc),
             depletion_rate: f64::from_le_bytes(*depletion_rate),
             treasury_type: u8::from_le_bytes(*treasury_type),
+            auto_close,
             allocation_assigned: f64::from_le_bytes(*allocation_assigned)
         })
     }

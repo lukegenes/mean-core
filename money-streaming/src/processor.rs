@@ -96,13 +96,14 @@ impl Processor {
             StreamInstruction::CreateTreasury { 
                 slot,
                 label,
-                treasury_type
+                treasury_type,
+                auto_close
 
             } => {
 
                 msg!("Instruction: CreateTreasury");
                 Self::process_create_treasury(
-                    accounts, program_id, slot, label, treasury_type
+                    accounts, program_id, slot, label, treasury_type, auto_close
                 )
             },
 
@@ -631,7 +632,8 @@ impl Processor {
         program_id: &Pubkey,
         slot: u64,
         label: String,
-        treasury_type: u8
+        treasury_type: u8,
+        auto_close: bool,
 
     ) -> ProgramResult {
 
@@ -732,6 +734,7 @@ impl Processor {
         treasury.created_on_utc = clock.unix_timestamp as u64 * 1000u64;
         treasury.depletion_rate = 0.0;
         treasury.treasury_type = treasury_type;
+        treasury.auto_close = auto_close;
         treasury.initialized = true;
         // Save
         TreasuryV1::pack_into_slice(&treasury, &mut treasury_account_info.data.borrow_mut());
