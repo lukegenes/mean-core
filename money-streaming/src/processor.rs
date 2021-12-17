@@ -637,6 +637,8 @@ impl Processor {
 
     ) -> ProgramResult {
 
+        msg!("auto_close => {:?}", auto_close);
+
         let account_info_iter = &mut accounts.iter();
         let treasurer_account_info = next_account_info(account_info_iter)?;
         let treasury_account_info = next_account_info(account_info_iter)?;

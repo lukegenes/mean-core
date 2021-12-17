@@ -1,6 +1,7 @@
 // Program API, (de)serializing instruction data
 use std::{ mem::size_of };
 use solana_program::{
+    // msg,
     system_program,
     pubkey::Pubkey,
     instruction::{ AccountMeta, Instruction }
@@ -316,7 +317,7 @@ impl StreamInstruction {
         let (slot, result) = input.split_at(8);
         let slot = unpack_u64(slot)?;        
         let (label, result) = unpack_string(result)?;
-        let (treasury_type, _result) = result.split_at(1);
+        let (treasury_type, result) = result.split_at(1);
         let treasury_type = unpack_u8(treasury_type)?;
         let (auto_close, _result) = result.split_at(1);
         let auto_close = match auto_close {
@@ -324,7 +325,6 @@ impl StreamInstruction {
             [1] => true,
             _ => false
         };
-
 
         Ok(Self::CreateTreasury { 
             slot,

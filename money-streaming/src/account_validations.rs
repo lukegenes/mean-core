@@ -60,10 +60,14 @@ pub fn check_can_create_stream<'info>(
     let pow = num_traits::pow(10f64, associated_token_mint.decimals.into());
     let requested_allocation = (allocation_assigned * pow) as u64;
     let unallocated_balance = ((treasury.balance * pow) as u64)
-        .checked_sub((treasury.allocation_assigned * pow) as u64)
+        .checked_sub((treasury.allocation_left * pow) as u64)
         .ok_or(StreamError::Overflow)?;
 
-    if requested_allocation <= 0 || requested_allocation > unallocated_balance {
+    if requested_allocation <= 0 {
+        return Err(StreamError::InvalidAssignedAllocation.into());
+    }
+
+    if treasury.auto_close == false && requested_allocation > unallocated_balance {
         return Err(StreamError::InvalidAssignedAllocation.into());
     }
 
