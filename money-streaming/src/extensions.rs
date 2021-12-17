@@ -59,18 +59,20 @@ pub fn create_stream_update_treasury<'info>(
         .ok_or(StreamError::Overflow)? as f64 / pow;
 
     treasury.depletion_rate = depletion_rate;        
-    treasury.streams_amount = treasury.streams_amount
-        .checked_add(1)
-        .ok_or(StreamError::Overflow)?;
+    treasury.streams_amount = treasury.streams_amount.checked_add(1).ok_or(StreamError::Overflow)?;
 
-    if stream.allocation > 0.0 {
-        treasury.allocation = ((treasury.allocation * pow) as u64)
-            .checked_add((stream.allocation * pow) as u64)
+    if stream.allocation_assigned > 0.0 {
+        treasury.allocation_assigned = ((treasury.allocation_assigned * pow) as u64)
+            .checked_add((stream.allocation_assigned * pow) as u64)
+            .ok_or(StreamError::Overflow)? as f64 / pow;
+
+        treasury.allocation_left = ((treasury.allocation_left * pow) as u64)
+            .checked_add((stream.allocation_left * pow) as u64)
             .ok_or(StreamError::Overflow)? as f64 / pow;
     }
 
     if stream.allocation_reserved > 0.0 {
-        treasury.allocation = ((treasury.allocation * pow) as u64)
+        treasury.allocation_reserved = ((treasury.allocation_reserved * pow) as u64)
             .checked_add((stream.allocation_reserved * pow) as u64)
             .ok_or(StreamError::Overflow)? as f64 / pow;
     }
@@ -98,8 +100,7 @@ pub fn create_deposit_receipt<'info>(
             &treasury.slot.to_le_bytes()
         ], 
         msp_account_info.key
-    );
-    
+    );    
     // Mint just if there is a treasury pool
     let treasury_pool_mint = spl_token::state::Mint::unpack_from_slice(&treasury_pool_mint_info.data.borrow())?;
     let treasury_pool_mint_signer_seed: &[&[_]] = &[
@@ -110,7 +111,6 @@ pub fn create_deposit_receipt<'info>(
 
     let pow = num_traits::pow(10f64, treasury_pool_mint.decimals.into());
     let mint_amount = (amount * pow) as u64;
-
     let mint_to_ix = spl_token::instruction::mint_to(
         token_program_account_info.key,
         treasury_pool_mint_info.key,
@@ -142,7 +142,6 @@ pub fn add_funds_update_treasury<'info>(
     let mut treasury = TreasuryV1::unpack_from_slice(&treasury_account_info.data.borrow())?;
     let associated_token_mint = spl_token::state::Mint::unpack_from_slice(&associated_token_mint_info.data.borrow())?;
     let pow = num_traits::pow(10f64, associated_token_mint.decimals.into());
-
     let balance = ((treasury.balance * pow) as u64)
         .checked_add((amount * pow) as u64)
         .ok_or(StreamError::Overflow)?;
@@ -150,12 +149,20 @@ pub fn add_funds_update_treasury<'info>(
     treasury.balance = balance as f64 / pow;
 
     if allocation_type == 0 {
-        treasury.allocation = ((treasury.allocation * pow) as u64)
+        treasury.allocation_assigned = ((treasury.allocation_assigned * pow) as u64)
+            .checked_add((amount * pow) as u64)
+            .ok_or(StreamError::Overflow)? as f64 / pow;
+        
+        treasury.allocation_left = ((treasury.allocation_left * pow) as u64)
             .checked_add((amount * pow) as u64)
             .ok_or(StreamError::Overflow)? as f64 / pow;
 
     } else if allocation_type == 1 {   
-        treasury.allocation = ((treasury.allocation * pow) as u64)
+        treasury.allocation_assigned = ((treasury.allocation_assigned * pow) as u64)
+            .checked_add((amount * pow) as u64)
+            .ok_or(StreamError::Overflow)? as f64 / pow;
+
+        treasury.allocation_left = ((treasury.allocation_left * pow) as u64)
             .checked_add((amount * pow) as u64)
             .ok_or(StreamError::Overflow)? as f64 / pow;
 
@@ -165,7 +172,6 @@ pub fn add_funds_update_treasury<'info>(
     }
 
     treasury.associated_token_address = *associated_token_mint_info.key;
-
     // Save
     TreasuryV1::pack_into_slice(&treasury, &mut treasury_account_info.data.borrow_mut());
 
@@ -186,27 +192,26 @@ pub fn add_funds_update_stream<'info>(
     let current_block_time = clock.unix_timestamp as u64;
     let mut stream = StreamV1::unpack_from_slice(&stream_account_info.data.borrow())?;
     let associated_token_mint = spl_token::state::Mint::unpack_from_slice(&associated_token_mint_info.data.borrow())?;
-
     let escrow_vested_amount = get_stream_vested_amount(
         &stream, &clock, associated_token_mint.decimals.try_into().unwrap()
     )?;
-
     let pow = num_traits::pow(10f64, associated_token_mint.decimals.into());
-    let allocation = (stream.allocation * pow) as u64;
-
+    let allocation_assigned = (stream.allocation_assigned * pow) as u64;
     // Pause because the allocation amount was reached
-    if escrow_vested_amount > allocation
-    {
+    if escrow_vested_amount > allocation_assigned {
         stream.escrow_vested_amount_snap = escrow_vested_amount as f64 / pow;
         stream.escrow_vested_amount_snap_slot = current_slot;
         stream.escrow_vested_amount_snap_block_time = current_block_time;
     }
 
-    if allocation_type == 1 &&
-       allocation_stream_address.ne(&Pubkey::default()) && 
+    if allocation_type == 1 && allocation_stream_address.ne(&Pubkey::default()) && 
        stream_account_info.key.eq(&allocation_stream_address)
     {
-        stream.allocation = allocation
+        stream.allocation_assigned = allocation_assigned
+            .checked_add((amount * pow) as u64)
+            .ok_or(StreamError::Overflow)? as f64 / pow;
+
+        stream.allocation_left = ((stream.allocation_left * pow) as u64)
             .checked_add((amount * pow) as u64)
             .ok_or(StreamError::Overflow)? as f64 / pow;
 
@@ -214,10 +219,8 @@ pub fn add_funds_update_stream<'info>(
             .checked_add((amount * pow) as u64)
             .ok_or(StreamError::Overflow)? as f64 / pow;
     }
-
     // if it was paused before because of lack of money then resume it again 
-    if escrow_vested_amount > allocation
-    {
+    if escrow_vested_amount > allocation_assigned {
         stream.stream_resumed_slot = clock.slot as u64;
         stream.stream_resumed_block_time = clock.unix_timestamp as u64;
     }
@@ -280,27 +283,24 @@ pub fn withdraw_funds_update_stream<'info>(
     stream.escrow_vested_amount_snap_slot = clock.slot as u64;
     stream.escrow_vested_amount_snap_block_time = clock.unix_timestamp as u64;
 
-    let stream_allocation = (stream.allocation * pow) as u64;
+    let stream_allocation_left = (stream.allocation_left * pow) as u64;
 
-    if escrow_vested_amount_snap < stream_allocation
-    {
+    if escrow_vested_amount_snap < stream_allocation_left {
         stream.stream_resumed_slot = clock.slot as u64;
         stream.stream_resumed_block_time = clock.unix_timestamp as u64;
     }
 
-    stream.allocation = stream_allocation
+    stream.allocation_left = stream_allocation_left
         .checked_sub(transfer_amount)
         .ok_or(StreamError::Overflow)? as f64 / pow;
 
     let stream_allocation_reserved = (stream.allocation_reserved * pow) as u64;
 
-    if stream_allocation_reserved >= transfer_amount
-    {
+    if stream_allocation_reserved >= transfer_amount {
         stream.allocation_reserved = stream_allocation_reserved
             .checked_sub(transfer_amount)
             .ok_or(StreamError::Overflow)? as f64 / pow;
     }
-
     // Save
     StreamV1::pack_into_slice(&stream, &mut stream_account_info.data.borrow_mut());
 
@@ -317,19 +317,17 @@ pub fn withdraw_funds_update_treasury<'info>(
     let mut treasury = TreasuryV1::unpack_from_slice(&treasury_account_info.data.borrow())?;
     let associated_token_mint = spl_token::state::Mint::unpack_from_slice(&associated_token_mint_info.data.borrow())?;
     let pow = num_traits::pow(10f64, associated_token_mint.decimals.into());
-    let treasury_allocation = (treasury.allocation * pow) as u64;
+    let treasury_allocation_left = (treasury.allocation_left * pow) as u64;
 
-    if treasury_allocation >= transfer_amount
-    {
-        treasury.allocation = treasury_allocation
+    if treasury_allocation_left >= transfer_amount {
+        treasury.allocation_left = treasury_allocation_left
             .checked_sub(transfer_amount)
             .ok_or(StreamError::Overflow)? as f64 / pow;
     }
 
     let treasury_allocation_reserved = (treasury.allocation_reserved * pow) as u64;
 
-    if treasury_allocation_reserved >= transfer_amount
-    {
+    if treasury_allocation_reserved >= transfer_amount {
         treasury.allocation_reserved = treasury_allocation_reserved
             .checked_sub(transfer_amount)
             .ok_or(StreamError::Overflow)? as f64 / pow;
@@ -337,13 +335,11 @@ pub fn withdraw_funds_update_treasury<'info>(
 
     let treasury_balance = (treasury.balance * pow) as u64;
 
-    if treasury_balance >= transfer_amount
-    {
+    if treasury_balance >= transfer_amount {
         treasury.balance = treasury_balance
             .checked_sub(transfer_amount)
             .ok_or(StreamError::Overflow)? as f64 / pow;
     }
-
     // Save
     TreasuryV1::pack_into_slice(&treasury, &mut treasury_account_info.data.borrow_mut());
 
@@ -412,58 +408,35 @@ pub fn close_stream_update_treasury<'info>(
     let treasury_balance = (treasury.balance * pow) as u64;
 
     treasury.balance = treasury_balance
-        .checked_sub(vested_amount)
+        .checked_sub(vested_amount).unwrap().checked_sub(unvested_amount)
         .ok_or(StreamError::Overflow)? as f64 / pow;
 
-    let treasury_allocation = (treasury.allocation * pow) as u64;
+    let treasury_allocation_left = (treasury.allocation_left * pow) as u64;
 
-    treasury.allocation = treasury_allocation
-        .checked_sub(vested_amount)
+    treasury.allocation_left = treasury_allocation_left
+        .checked_sub(vested_amount).unwrap().checked_sub(unvested_amount)
         .ok_or(StreamError::Overflow)? as f64 / pow;
 
     let treasury_allocation_reserved = (treasury.allocation_reserved * pow) as u64;
 
-    if treasury_allocation_reserved >= vested_amount
-    {
+    if treasury_allocation_reserved >= vested_amount {
         treasury.allocation_reserved = treasury_allocation_reserved
-            .checked_sub(vested_amount)
+            .checked_sub(vested_amount).unwrap().checked_sub(unvested_amount)
             .ok_or(StreamError::Overflow)? as f64 / pow;
     }
 
-    let stream_rate = match stream.rate_interval_in_seconds
-    {
+    let stream_rate = match stream.rate_interval_in_seconds {
         k if k > 0 => stream.rate_amount / (stream.rate_interval_in_seconds as f64),
         _ => 0.0
     };
 
-    if treasury.depletion_rate >= stream_rate
-    {
+    if treasury.depletion_rate >= stream_rate {
         treasury.depletion_rate = ((treasury.depletion_rate * pow) as u64)
             .checked_sub((stream_rate * pow) as u64)
             .ok_or(StreamError::Overflow)? as f64 / pow;
     }
 
-    let treasury_allocation = (treasury.allocation * pow) as u64;
-
-    if treasury_allocation >= unvested_amount
-    {
-        treasury.allocation = treasury_allocation
-            .checked_sub(unvested_amount)
-            .ok_or(StreamError::Overflow)? as f64 / pow;
-    }
-
-    let treasury_allocation_reserved = (treasury.allocation_reserved * pow) as u64;
-
-    if treasury_allocation_reserved >= unvested_amount
-    {
-        treasury.allocation_reserved = treasury_allocation_reserved
-            .checked_sub(unvested_amount)
-            .ok_or(StreamError::Overflow)? as f64 / pow;
-    }
-
-    treasury.streams_amount = treasury.streams_amount
-        .checked_sub(1)
-        .ok_or(StreamError::Overflow)?;
+    treasury.streams_amount = treasury.streams_amount.checked_sub(1).ok_or(StreamError::Overflow)?;
 
     Ok(())
 }

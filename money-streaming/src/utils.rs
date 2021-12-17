@@ -268,7 +268,7 @@ pub fn get_stream_vested_amount<'info>(
 
     let rate = match stream.rate_interval_in_seconds {
         k if k > 0 => stream.rate_amount / (stream.rate_interval_in_seconds as f64) * (is_running as f64),
-        _ => stream.allocation
+        _ => stream.allocation_left
     };
 
     let marker_block_time = cmp::max(stream.stream_resumed_block_time, stream.escrow_vested_amount_snap_block_time);
@@ -278,7 +278,7 @@ pub fn get_stream_vested_amount<'info>(
 
     let rate_time = rate * elapsed_time as f64;    
     let pow = num_traits::pow(10f64, decimals.try_into().unwrap());
-    let stream_allocation = (stream.allocation * pow) as u64;
+    let stream_allocation_left = (stream.allocation_left * pow) as u64;
     // let mut cliff_vest_amount = stream.cliff_vest_amount as u64 * pow;
 
     // if stream.cliff_vest_percent > 0.0
@@ -292,8 +292,8 @@ pub fn get_stream_vested_amount<'info>(
         .checked_add((rate_time * pow) as u64)
         .ok_or(StreamError::Overflow)?;
 
-    if escrow_vested_amount > stream_allocation {
-        escrow_vested_amount = stream_allocation;
+    if escrow_vested_amount > stream_allocation_left {
+        escrow_vested_amount = stream_allocation_left;
     }
 
     return Ok(escrow_vested_amount);
