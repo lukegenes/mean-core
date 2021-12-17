@@ -277,8 +277,8 @@ pub fn get_stream_vested_amount<'info>(
         .ok_or(StreamError::Overflow)?;
 
     let rate_time = rate * elapsed_time as f64;    
-    let pow = num_traits::pow(10u64, decimals.try_into().unwrap());
-    let stream_allocation = stream.allocation as u64 * pow;
+    let pow = num_traits::pow(10f64, decimals.try_into().unwrap());
+    let stream_allocation = (stream.allocation * pow) as u64;
     // let mut cliff_vest_amount = stream.cliff_vest_amount as u64 * pow;
 
     // if stream.cliff_vest_percent > 0.0
@@ -286,10 +286,10 @@ pub fn get_stream_vested_amount<'info>(
     //     cliff_vest_amount = stream.cliff_vest_percent * stream_allocation as f64 / 100f64;
     // }
 
-    let mut escrow_vested_amount = (stream.escrow_vested_amount_snap as u64 * pow)
+    let mut escrow_vested_amount = ((stream.escrow_vested_amount_snap * pow) as u64)
         // .checked_add(cliff_vest_amount as u64)
         // .unwrap()
-        .checked_add(rate_time as u64 * pow)
+        .checked_add((rate_time * pow) as u64)
         .ok_or(StreamError::Overflow)?;
 
     if escrow_vested_amount > stream_allocation {

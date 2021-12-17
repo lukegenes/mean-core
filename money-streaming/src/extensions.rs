@@ -6,7 +6,7 @@ use crate::state::*;
 use crate::constants::*;
 use crate::utils::*;
 use solana_program::{
-    // msg,
+    msg,
     system_instruction,
     program::{ invoke, invoke_signed },
     pubkey::Pubkey,
@@ -44,13 +44,14 @@ pub fn create_stream_account<'info>(
     ])
 } 
 
-pub fn create_stream_update_treasury(
-    treasury: &mut TreasuryV1,
+pub fn create_stream_update_treasury<'info>(
+    treasury_account_info: &AccountInfo<'info>,
     stream: &StreamV1,
     decimals: usize
 
 ) -> ProgramResult {
 
+    let mut treasury = TreasuryV1::unpack_from_slice(&treasury_account_info.data.borrow())?;
     let pow = num_traits::pow(10f64, decimals.into());
     let rate = stream.rate_amount / stream.rate_interval_in_seconds as f64;
     let depletion_rate = ((treasury.depletion_rate * pow) as u64)
@@ -62,19 +63,20 @@ pub fn create_stream_update_treasury(
         .checked_add(1)
         .ok_or(StreamError::Overflow)?;
 
-    if stream.allocation > 0.0
-    {
+    if stream.allocation > 0.0 {
         treasury.allocation = ((treasury.allocation * pow) as u64)
             .checked_add((stream.allocation * pow) as u64)
             .ok_or(StreamError::Overflow)? as f64 / pow;
     }
 
-    if stream.allocation_reserved > 0.0
-    {
+    if stream.allocation_reserved > 0.0 {
         treasury.allocation = ((treasury.allocation * pow) as u64)
             .checked_add((stream.allocation_reserved * pow) as u64)
             .ok_or(StreamError::Overflow)? as f64 / pow;
     }
+
+    // Save treasury
+    TreasuryV1::pack_into_slice(&treasury, &mut treasury_account_info.data.borrow_mut());
 
     Ok(())
 }
@@ -147,15 +149,12 @@ pub fn add_funds_update_treasury<'info>(
 
     treasury.balance = balance as f64 / pow;
 
-    if allocation_type == 0
-    {
+    if allocation_type == 0 {
         treasury.allocation = ((treasury.allocation * pow) as u64)
             .checked_add((amount * pow) as u64)
             .ok_or(StreamError::Overflow)? as f64 / pow;
 
-    } 
-    else if allocation_type == 1
-    {   
+    } else if allocation_type == 1 {   
         treasury.allocation = ((treasury.allocation * pow) as u64)
             .checked_add((amount * pow) as u64)
             .ok_or(StreamError::Overflow)? as f64 / pow;
@@ -369,58 +368,33 @@ pub fn close_stream_transfer_vested_amount<'info>(
 
 ) -> ProgramResult {
 
-    if beneficiary_token_account_info.data_len() == 0
-    {
+    if beneficiary_token_account_info.data_len() == 0 {
         let _ = create_ata_account(
-            &system_account_info,
-            &rent_account_info,
-            &associated_token_program_account_info,
-            &token_program_account_info,
-            &initializer_account_info,
-            &beneficiary_account_info,
-            &beneficiary_token_account_info,
-            &associated_token_mint_info
+            &system_account_info, &rent_account_info, &associated_token_program_account_info,
+            &token_program_account_info, &initializer_account_info, &beneficiary_account_info,
+            &beneficiary_token_account_info, &associated_token_mint_info
         );
     }
 
     let fee = (CLOSE_STREAM_PERCENT_FEE * vested_amount as f64 / 100f64) as u64;
-    let transfer_amount = vested_amount
-        .checked_sub(fee)
-        .ok_or(StreamError::Overflow)?;
-
+    let transfer_amount = vested_amount.checked_sub(fee).ok_or(StreamError::Overflow)?;
     // Credit vested amount minus fee to the beneficiary
     let _ = claim_treasury_funds(
-        &msp_account_info,
-        &token_program_account_info,
-        &treasury_account_info,
-        &treasury_token_account_info,
-        &beneficiary_token_account_info,
-        transfer_amount
+        &msp_account_info, &token_program_account_info, &treasury_account_info,
+        &treasury_token_account_info, &beneficiary_token_account_info, transfer_amount
     )?;
 
-    if fee_treasury_token_account_info.data_len() == 0
-    {
-        // Create treasury associated token account if doesn't exist
+    if fee_treasury_token_account_info.data_len() == 0 { // Create treasury associated token account if doesn't exist
         let _ = create_ata_account(
-            &system_account_info,
-            &rent_account_info,
-            &associated_token_program_account_info,
-            &token_program_account_info,
-            &initializer_account_info,
-            &fee_treasury_account_info,
-            &fee_treasury_token_account_info,
-            &associated_token_mint_info
+            &system_account_info, &rent_account_info, &associated_token_program_account_info,
+            &token_program_account_info, &initializer_account_info, &fee_treasury_account_info,
+            &fee_treasury_token_account_info, &associated_token_mint_info
         )?;
     }
-
     // Pay fee by the beneficiary from the vested amount
     claim_treasury_funds(
-        &msp_account_info,
-        &token_program_account_info,
-        &treasury_account_info,
-        &treasury_token_account_info,
-        &fee_treasury_token_account_info,
-        fee
+        &msp_account_info, &token_program_account_info, &treasury_account_info,
+        &treasury_token_account_info, &fee_treasury_token_account_info, fee
     )
 }
 
@@ -512,9 +486,8 @@ pub fn close_stream_close_treasury<'info>(
 
     let treasury = TreasuryV1::unpack_from_slice(&treasury_account_info.data.borrow())?;
     
-    if treasury.streams_amount == 0
-    {
-        return Ok(());
+    if treasury.streams_amount > 0 {
+        return Err(StreamError::InstructionNotAuthorized.into());
     }
 
     let (treasury_pool_address, treasury_pool_bump_seed) = Pubkey::find_program_address(
@@ -525,8 +498,7 @@ pub fn close_stream_close_treasury<'info>(
         msp_account_info.key
     );
 
-    if treasury_pool_address.ne(treasury_account_info.key)
-    {
+    if treasury_pool_address.ne(treasury_account_info.key) {
         return Err(StreamError::InvalidTreasuryData.into());
     }
 

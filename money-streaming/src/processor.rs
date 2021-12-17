@@ -1,6 +1,13 @@
 // Program
-
 use num_traits;
+use crate::error::StreamError;
+use crate::utils::*;
+use crate::instruction::{ StreamInstruction };
+use crate::state::*;
+use crate::constants::*;
+use crate::account_validations::*;
+use crate::extensions::*;
+use crate::backwards_comp::*;
 use solana_program::{
     msg,
     program::{ invoke, invoke_signed },
@@ -10,15 +17,6 @@ use solana_program::{
     program_pack::{ IsInitialized, Pack },
     sysvar::{ clock::Clock, Sysvar } 
 };
-
-use crate::error::StreamError;
-use crate::utils::*;
-use crate::instruction::{ StreamInstruction };
-use crate::state::*;
-use crate::constants::*;
-use crate::account_validations::*;
-use crate::extensions::*;
-use crate::backwards_comp::*;
 
 pub struct Processor {}
 
@@ -238,38 +236,23 @@ impl Processor {
         let rent_account_info = next_account_info(account_info_iter)?;
 
         // Verify the correct MSP Operations Account 
-        if fee_treasury_account_info.key.ne(&FEE_TREASURY_ACCOUNT.parse().unwrap())
-        {
+        if fee_treasury_account_info.key.ne(&FEE_TREASURY_ACCOUNT.parse().unwrap()) {
             return Err(StreamError::InstructionNotAuthorized.into());
         }
 
-        // Deserialize treasury
-        let mut treasury = TreasuryV1::unpack_from_slice(&treasury_account_info.data.borrow())?;
         let _ = check_can_create_stream(
-            program_id,
-            &treasurer_account_info,
-            &treasury_account_info,
-            &associated_token_mint_info,
-            &stream_account_info,
-            &msp_account_info,
-            &system_account_info,
-            &rent_account_info,
-            allocation,
-            allocation_reserved
-        )?;
-        
+            program_id, &treasurer_account_info, &treasury_account_info, 
+            &associated_token_mint_info, &stream_account_info, &msp_account_info,
+            &system_account_info, &rent_account_info, allocation, allocation_reserved
+        )?;        
         // Create stream account
         let _ = create_stream_account(
-            &treasurer_account_info,
-            &stream_account_info,
-            &msp_account_info,
-            &rent_account_info,
-            &system_account_info
+            &treasurer_account_info, &stream_account_info, &msp_account_info,
+            &rent_account_info, &system_account_info
         )?;
 
         let clock = Clock::get()?;
         let mut stream = StreamV1::unpack_from_slice(&stream_account_info.data.borrow())?;
-
         // Updating stream data
         stream.stream_name = stream_name;
         stream.treasurer_address = *treasurer_account_info.key;
@@ -295,16 +278,12 @@ impl Processor {
 
         let status = get_stream_status(&stream, &clock)?;
 
-        if status == StreamStatus::Scheduled
-        {
+        if status == StreamStatus::Scheduled {
             stream.stream_resumed_block_time = start_utc / 1000u64;
         }
 
         let associated_token_mint = spl_token::state::Mint::unpack_from_slice(&associated_token_mint_info.data.borrow())?;
-        let _ = create_stream_update_treasury(&mut treasury, &stream, associated_token_mint.decimals.into())?;
-        
-        // Save treasury
-        TreasuryV1::pack_into_slice(&treasury, &mut treasury_account_info.data.borrow_mut());
+        let _ = create_stream_update_treasury(&treasury_account_info, &stream, associated_token_mint.decimals.into())?;        
         // Save stream
         stream.initialized = true;
         StreamV1::pack_into_slice(&stream, &mut stream_account_info.data.borrow_mut());
@@ -410,10 +389,8 @@ impl Processor {
 
         // Update and save treasury
         let _ = add_funds_update_treasury(
-            &treasury_account_info,
-            &associated_token_mint_info,
-            allocation_type,
-            amount
+            &treasury_account_info, &associated_token_mint_info,
+            allocation_type, amount
         )?;
 
         if stream_account_info.data_len() == StreamV1::LEN
@@ -613,131 +590,76 @@ impl Processor {
         let system_account_info = next_account_info(account_info_iter)?;
         let clock = Clock::get()?;
 
-        if fee_treasury_account_info.key.ne(&FEE_TREASURY_ACCOUNT.parse().unwrap())
-        {
+        if fee_treasury_account_info.key.ne(&FEE_TREASURY_ACCOUNT.parse().unwrap()){
             return Err(StreamError::InstructionNotAuthorized.into());
         }
 
-        if treasury_account_info.data_len() == Treasury::LEN && stream_account_info.data_len() == Stream::LEN
-        {
+        if treasury_account_info.data_len() == Treasury::LEN && stream_account_info.data_len() == Stream::LEN {
             return withdraw_v0(
-                program_id,
-                &beneficiary_account_info,
-                &beneficiary_token_account_info,
-                &associated_token_mint_info,
-                &treasury_account_info,
-                &treasury_token_account_info,
-                &stream_account_info,
-                &fee_treasury_account_info,
-                &fee_treasury_token_account_info,
-                &msp_account_info,
-                &associated_token_program_account_info,
-                &token_program_account_info,
-                &rent_account_info,
-                &system_account_info,
-                &clock,
-                amount
+                program_id, &beneficiary_account_info, &beneficiary_token_account_info,
+                &associated_token_mint_info, &treasury_account_info, &treasury_token_account_info,
+                &stream_account_info, &fee_treasury_account_info, &fee_treasury_token_account_info,
+                &msp_account_info, &associated_token_program_account_info, &token_program_account_info,
+                &rent_account_info, &system_account_info, &clock, amount
             );
         }
 
         let _ = check_can_withdraw_funds(
-            program_id,
-            &beneficiary_account_info,
-            &beneficiary_token_account_info,
-            &associated_token_mint_info,
-            &treasury_account_info,
-            &treasury_token_account_info,
-            &stream_account_info,
-            &fee_treasury_token_account_info,
-            &msp_account_info,
-            &associated_token_program_account_info,
-            &token_program_account_info,
-            &rent_account_info,
-            &system_account_info
+            program_id, &beneficiary_account_info, &beneficiary_token_account_info,
+            &associated_token_mint_info, &treasury_account_info, &treasury_token_account_info,
+            &stream_account_info, &fee_treasury_token_account_info, &msp_account_info,
+            &associated_token_program_account_info, &token_program_account_info,
+            &rent_account_info, &system_account_info
         )?;
 
         let mut stream = StreamV1::unpack_from_slice(&stream_account_info.data.borrow())?;
         let associated_token_mint = spl_token::state::Mint::unpack_from_slice(&associated_token_mint_info.data.borrow())?;        
         let mut escrow_vested_amount = get_stream_vested_amount(
-            &stream, 
-            &clock, 
-            associated_token_mint.decimals.into()
+            &stream, &clock, associated_token_mint.decimals.into()
         )?;
-
         let pow = num_traits::pow(10f64, associated_token_mint.decimals.into());
         let treasury_token = spl_token::state::Account::unpack_from_slice(&treasury_token_account_info.data.borrow())?;
         let stream_allocation = (stream.allocation * pow) as u64;
 
-        if stream_allocation > 0 && escrow_vested_amount > stream_allocation
-        {
+        if stream_allocation > 0 && escrow_vested_amount > stream_allocation {
             escrow_vested_amount = stream_allocation;
-        }
-        else if escrow_vested_amount > treasury_token.amount
-        {
+        } else if escrow_vested_amount > treasury_token.amount{
             escrow_vested_amount = treasury_token.amount;
         }
 
         let transfer_amount = (amount * pow) as u64;
 
-        if transfer_amount > escrow_vested_amount
-        {
+        if transfer_amount > escrow_vested_amount {
             return Err(StreamError::NotAllowedWithdrawalAmount.into());
         }
 
-        if beneficiary_token_account_info.data_len() == 0
-        {
-            // Create treasury associated token account if doesn't exist
+        if beneficiary_token_account_info.data_len() == 0 { // Create treasury associated token account if doesn't exist
             let _ = create_ata_account(
-                &system_account_info,
-                &rent_account_info,
-                &associated_token_program_account_info,
-                &token_program_account_info,
-                &beneficiary_account_info,
-                &beneficiary_account_info,
-                &beneficiary_token_account_info,
-                &associated_token_mint_info
+                &system_account_info, &rent_account_info, &associated_token_program_account_info,
+                &token_program_account_info, &beneficiary_account_info, &beneficiary_account_info,
+                &beneficiary_token_account_info, &associated_token_mint_info
             )?;
         }
-
         // Withdraw
         let _ = claim_treasury_funds(
-            &msp_account_info,
-            &token_program_account_info,
-            &treasury_account_info,
-            &treasury_token_account_info,
-            &beneficiary_token_account_info,
-            transfer_amount
+            &msp_account_info, &token_program_account_info, &treasury_account_info,
+            &treasury_token_account_info, &beneficiary_token_account_info, transfer_amount
         )?;
- 
         // Update stream data
         let _ = withdraw_funds_update_stream(
-            &mut stream,
-            &stream_account_info,
-            &associated_token_mint_info,
-            &clock,
-            escrow_vested_amount,
-            transfer_amount
+            &mut stream, &stream_account_info, &associated_token_mint_info,
+            &clock, escrow_vested_amount, transfer_amount
         )?;
-
         // Update treasury account data
         let _ = withdraw_funds_update_treasury(
-            &treasury_account_info,
-            &associated_token_mint_info,
-            transfer_amount
+            &treasury_account_info, &associated_token_mint_info, transfer_amount
         )?;
 
-        if fee_treasury_token_account_info.data_len() == 0
-        {
-            // Create treasury associated token account if doesn't exist
+        if fee_treasury_token_account_info.data_len() == 0 { // Create fee treasury associated token account if doesn't exist
             let _ = create_ata_account(
-                &system_account_info,
-                &rent_account_info,
-                &associated_token_program_account_info,
-                &token_program_account_info,
-                &beneficiary_account_info,
-                &fee_treasury_account_info,
-                &fee_treasury_token_account_info,
-                &associated_token_mint_info
+                &system_account_info, &rent_account_info, &associated_token_program_account_info,
+                &token_program_account_info, &beneficiary_account_info, &fee_treasury_account_info,
+                &fee_treasury_token_account_info, &associated_token_mint_info
             )?;
         }
         
@@ -1139,153 +1061,94 @@ impl Processor {
         let rent_account_info = next_account_info(account_info_iter)?;
         let system_account_info = next_account_info(account_info_iter)?;
 
-        if fee_treasury_account_info.key.ne(&FEE_TREASURY_ACCOUNT.parse().unwrap())
-        {
+        if fee_treasury_account_info.key.ne(&FEE_TREASURY_ACCOUNT.parse().unwrap()) {
             return Err(StreamError::InstructionNotAuthorized.into());
         }
 
-        if stream_account_info.data_len() == Stream::LEN 
-        {
+        if stream_account_info.data_len() == Stream::LEN {
             return close_stream_v0(
-                program_id,
-                &initializer_account_info,
-                &treasurer_account_info,
-                &treasurer_token_account_info,
-                &treasurer_treasury_pool_token_account_info,
-                &beneficiary_account_info,
-                &beneficiary_token_account_info,
-                &associated_token_mint_info,
-                &treasury_account_info, 
-                &treasury_token_account_info,
-                &treasury_pool_mint_info,
-                &stream_account_info,
-                &fee_treasury_account_info,
-                &fee_treasury_token_account_info,
-                &msp_account_info,
-                &associated_token_program_account_info,
-                &token_program_account_info,
-                &rent_account_info,
-                &system_account_info,
-                auto_close_treasury,
+                program_id, &initializer_account_info, &treasurer_account_info,
+                &treasurer_token_account_info, &treasurer_treasury_pool_token_account_info,
+                &beneficiary_account_info, &beneficiary_token_account_info, &associated_token_mint_info,
+                &treasury_account_info, &treasury_token_account_info, &treasury_pool_mint_info,
+                &stream_account_info, &fee_treasury_account_info, &fee_treasury_token_account_info,
+                &msp_account_info, &associated_token_program_account_info, &token_program_account_info,
+                &rent_account_info, &system_account_info, auto_close_treasury,
             );
         }
 
         let _ = check_can_close_stream(
-            program_id,
-            &initializer_account_info,
-            &treasurer_account_info,
-            &treasurer_token_account_info,
-            &beneficiary_account_info,
-            &beneficiary_token_account_info,
-            &associated_token_mint_info,
-            &treasury_account_info, 
-            &treasury_token_account_info,
-            &treasury_pool_mint_info,
-            &stream_account_info,
-            &fee_treasury_token_account_info,
-            &msp_account_info,
-            &associated_token_program_account_info,
-            &token_program_account_info,
-            &rent_account_info,
-            &system_account_info
+            program_id, &initializer_account_info, &treasurer_account_info,
+            &treasurer_token_account_info, &beneficiary_account_info, &beneficiary_token_account_info,
+            &associated_token_mint_info, &treasury_account_info, &treasury_token_account_info,
+            &treasury_pool_mint_info, &stream_account_info, &fee_treasury_token_account_info,
+            &msp_account_info, &associated_token_program_account_info, &token_program_account_info,
+            &rent_account_info, &system_account_info
         )?;
 
         let clock = Clock::get()?;
-        let associated_token_mint = spl_token::state::Mint::unpack_from_slice(&associated_token_mint_info.data.borrow())?;
-        
+        let associated_token_mint = spl_token::state::Mint::unpack_from_slice(&associated_token_mint_info.data.borrow())?;        
         let mut stream = StreamV1::unpack_from_slice(&stream_account_info.data.borrow())?;  
         let mut escrow_vested_amount = get_stream_vested_amount(
             &stream, &clock, associated_token_mint.decimals.into()
         )?;
-
         let mut treasury = TreasuryV1::unpack_from_slice(&treasury_account_info.data.borrow())?;
         let pow = num_traits::pow(10f64, associated_token_mint.decimals.into());
         let treasury_token = spl_token::state::Account::unpack_from_slice(&treasury_token_account_info.data.borrow())?;
 
-        if stream.allocation < 0f64 // TODO: Remove (this is temp)
-        {
+        if stream.allocation < 0f64 { // TODO: Remove (this is temp)
             stream.allocation = 0f64;
         }
 
         let stream_allocation = (stream.allocation * pow) as u64;
 
-        if escrow_vested_amount > stream_allocation
-        {
+        if escrow_vested_amount > stream_allocation {
             escrow_vested_amount = stream_allocation;
         }
         
-        if escrow_vested_amount > treasury_token.amount
-        {
+        if escrow_vested_amount > treasury_token.amount { // TODO: Remove (this is temp)
             escrow_vested_amount = treasury_token.amount;
         }
-
         // Pausing the stream
         stream.escrow_vested_amount_snap = escrow_vested_amount as f64 / pow;
         stream.escrow_vested_amount_snap_slot = clock.slot as u64;
         stream.escrow_vested_amount_snap_block_time = clock.unix_timestamp as u64;
 
-        if escrow_vested_amount > 0u64
-        {
-            // Transfer vested amount to beneficiary and deduct fee
+        if escrow_vested_amount > 0u64 { // Transfer vested amount to beneficiary and deduct fee
             let _ = close_stream_transfer_vested_amount(
-                &initializer_account_info,
-                &treasury_account_info,
-                &treasury_token_account_info,
-                &beneficiary_account_info,
-                &beneficiary_token_account_info,
-                &associated_token_mint_info,
-                &fee_treasury_account_info,
-                &fee_treasury_token_account_info,
-                &msp_account_info,
-                &associated_token_program_account_info,
-                &token_program_account_info,
-                &rent_account_info,
-                &system_account_info,
-                escrow_vested_amount
+                &initializer_account_info, &treasury_account_info, &treasury_token_account_info,
+                &beneficiary_account_info, &beneficiary_token_account_info, &associated_token_mint_info,
+                &fee_treasury_account_info, &fee_treasury_token_account_info, &msp_account_info,
+                &associated_token_program_account_info, &token_program_account_info, &rent_account_info,
+                &system_account_info, escrow_vested_amount
             )?;
         }
 
         let escrow_unvested_amount = ((stream.allocation * pow) as u64)
             .checked_sub(escrow_vested_amount)
             .ok_or(StreamError::Overflow)?;
-
+        
         let _ = close_stream_update_treasury(
-            &mut treasury,
-            &stream,
-            &associated_token_mint_info,
-            escrow_vested_amount,
-            escrow_unvested_amount
+            &mut treasury, &stream, &associated_token_mint_info,
+            escrow_vested_amount, escrow_unvested_amount
         )?;
-
         // Save
         TreasuryV1::pack_into_slice(&treasury, &mut treasury_account_info.data.borrow_mut());
 
-        if auto_close_treasury == true && stream.treasurer_address.eq(initializer_account_info.key)
-        {
+        if auto_close_treasury == true && stream.treasurer_address.eq(initializer_account_info.key) {
             let _ = close_stream_close_treasury(
-                program_id,
-                &treasurer_account_info,
-                &treasurer_token_account_info,
-                &treasurer_treasury_pool_token_account_info,
-                &associated_token_mint_info,
-                &treasury_account_info,
-                &treasury_token_account_info,
-                &treasury_pool_mint_info,
-                &fee_treasury_account_info,
-                &fee_treasury_token_account_info,
-                &msp_account_info,
-                &token_program_account_info
+                program_id, &treasurer_account_info, &treasurer_token_account_info,
+                &treasurer_treasury_pool_token_account_info, &associated_token_mint_info,
+                &treasury_account_info, &treasury_token_account_info, &treasury_pool_mint_info,
+                &fee_treasury_account_info, &fee_treasury_token_account_info, 
+                &msp_account_info, &token_program_account_info
             )?;
         }
-
         // Debit fees from the initializer of the instruction
         let _ = transfer_sol_fee(
-            &system_account_info,
-            &initializer_account_info,
-            &fee_treasury_account_info,
-            CLOSE_STREAM_FLAT_FEE
+            &system_account_info, &initializer_account_info,
+            &fee_treasury_account_info, CLOSE_STREAM_FLAT_FEE
         );
-
         // Close stream account
         let treasurer_lamports = treasurer_account_info.lamports();
         let stream_lamports = stream_account_info.lamports();
