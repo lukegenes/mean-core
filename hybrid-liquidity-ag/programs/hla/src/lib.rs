@@ -6,7 +6,7 @@ pub mod state;
 pub mod saber;
 pub mod orca;
 pub mod raydium;
-pub mod serum;
+// pub mod serum;
 
 use crate::state::*;
 
@@ -42,7 +42,7 @@ pub mod hla {
             ORCA => orca::swap(swap_info),
             SABER => saber::swap(swap_info),
             RAYDIUM => raydium::swap(swap_info),
-            SERUM => serum::swap(swap_info),
+            // SERUM => serum::swap(swap_info),
     
             _ => return Err(errors::ErrorCode::PoolNotFound.into())
         }
