@@ -88,7 +88,7 @@ pub fn get_stream_status_v0<'info>(
     return Ok(StreamStatus::Paused);
 }
 
-pub fn get_stream_vested_amount_v0<'info>(
+pub fn get_beneficiary_withdrawable_amount_v0<'info>(
     stream: &Stream,
     clock: &Clock,
     decimals: u64
@@ -229,7 +229,7 @@ pub fn withdraw_v0<'info>(
 
     let mut stream = Stream::unpack_from_slice(&stream_account_info.data.borrow())?;
     let associated_token_mint = spl_token::state::Mint::unpack_from_slice(&associated_token_mint_info.data.borrow())?;        
-    let mut escrow_vested_amount = get_stream_vested_amount_v0(
+    let mut escrow_vested_amount = get_beneficiary_withdrawable_amount_v0(
         &stream, &clock, associated_token_mint.decimals.into()
     )?;
 
@@ -432,7 +432,7 @@ pub fn close_stream_v0<'info>(
     let clock = Clock::get()?;
     let associated_token_mint = spl_token::state::Mint::unpack_from_slice(&associated_token_mint_info.data.borrow())?;    
     let mut stream = Stream::unpack_from_slice(&stream_account_info.data.borrow())?;  
-    let mut escrow_vested_amount = get_stream_vested_amount_v0(
+    let mut escrow_vested_amount = get_beneficiary_withdrawable_amount_v0(
         &stream, &clock, associated_token_mint.decimals.into()
     )?;
     let pow = num_traits::pow(10f64, associated_token_mint.decimals.into());
@@ -581,7 +581,7 @@ pub fn add_funds_update_stream_v0<'info>(
     let mut stream = Stream::unpack_from_slice(&stream_account_info.data.borrow())?;
     let associated_token_mint = spl_token::state::Mint::unpack_from_slice(&associated_token_mint_info.data.borrow())?;
 
-    let escrow_vested_amount = get_stream_vested_amount_v0(
+    let escrow_vested_amount = get_beneficiary_withdrawable_amount_v0(
         &stream, &clock, associated_token_mint.decimals.try_into().unwrap()
     )?;
 
@@ -632,16 +632,17 @@ pub fn withdraw_funds_update_stream_v0<'info>(
         .checked_sub(transfer_amount)
         .ok_or(StreamError::Overflow)?;
 
-    stream.escrow_vested_amount_snap = escrow_vested_amount_snap as f64 / pow;
-    stream.escrow_vested_amount_snap_block_height = clock.slot as u64;
-    stream.escrow_vested_amount_snap_block_time = clock.unix_timestamp as u64;
-
     let stream_allocation = ((stream.total_deposits * pow) as u64)
         .checked_sub((stream.total_withdrawals * pow) as u64)
         .ok_or(StreamError::Overflow)?;
 
-    if escrow_vested_amount_snap < stream_allocation
-    {
+    stream.escrow_vested_amount_snap = escrow_vested_amount_snap as f64 / pow;
+    let status = get_stream_status_v0(stream, clock)?;
+
+    if status == StreamStatus::Paused {
+        stream.escrow_vested_amount_snap_block_height = clock.slot as u64;
+        stream.escrow_vested_amount_snap_block_time = clock.unix_timestamp as u64;
+    } else if escrow_vested_amount_snap <= stream_allocation {
         stream.stream_resumed_block_height = clock.slot as u64;
         stream.stream_resumed_block_time = clock.unix_timestamp as u64;
     }

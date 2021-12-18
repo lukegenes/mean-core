@@ -6,7 +6,7 @@ use crate::state::*;
 use crate::constants::*;
 use crate::utils::*;
 use solana_program::{
-    // msg,
+    msg,
     system_instruction,
     program::{ invoke, invoke_signed },
     pubkey::Pubkey,
@@ -192,7 +192,7 @@ pub fn add_funds_update_stream<'info>(
     let current_block_time = clock.unix_timestamp as u64;
     let mut stream = StreamV1::unpack_from_slice(&stream_account_info.data.borrow())?;
     let associated_token_mint = spl_token::state::Mint::unpack_from_slice(&associated_token_mint_info.data.borrow())?;
-    let escrow_vested_amount = get_stream_vested_amount(
+    let escrow_vested_amount = get_beneficiary_withdrawable_amount(
         &stream, &clock, associated_token_mint.decimals.try_into().unwrap()
     )?;
     let pow = num_traits::pow(10f64, associated_token_mint.decimals.into());
@@ -204,23 +204,29 @@ pub fn add_funds_update_stream<'info>(
         stream.escrow_vested_amount_snap_block_time = current_block_time;
     }
 
+    msg!("amount => {:?}", amount);
+    msg!("allocation_assigned => {:?}", allocation_assigned);
+    msg!("escrow_vested_amount => {:?}", escrow_vested_amount);
+    msg!("allocation_left => {:?}", (stream.allocation_left * pow) as u64);
+
+    stream.allocation_assigned = allocation_assigned
+            .checked_add((amount * pow) as u64)
+            .ok_or(StreamError::Overflow)? as f64 / pow;
+
+    stream.allocation_left = ((stream.allocation_left * pow) as u64)
+        .checked_add((amount * pow) as u64)
+        .ok_or(StreamError::Overflow)? as f64 / pow;
+
     if allocation_type == 1 && allocation_stream_address.ne(&Pubkey::default()) && 
        stream_account_info.key.eq(&allocation_stream_address)
     {
-        stream.allocation_assigned = allocation_assigned
-            .checked_add((amount * pow) as u64)
-            .ok_or(StreamError::Overflow)? as f64 / pow;
-
-        stream.allocation_left = ((stream.allocation_left * pow) as u64)
-            .checked_add((amount * pow) as u64)
-            .ok_or(StreamError::Overflow)? as f64 / pow;
-
         stream.allocation_reserved = ((stream.allocation_reserved * pow) as u64)
             .checked_add((amount * pow) as u64)
             .ok_or(StreamError::Overflow)? as f64 / pow;
     }
+
     // if it was paused before because of lack of money then resume it again 
-    if escrow_vested_amount > allocation_assigned {
+    if escrow_vested_amount >= allocation_assigned {
         stream.stream_resumed_slot = clock.slot as u64;
         stream.stream_resumed_block_time = clock.unix_timestamp as u64;
     }
@@ -279,13 +285,14 @@ pub fn withdraw_funds_update_stream<'info>(
         .checked_sub(transfer_amount)
         .ok_or(StreamError::Overflow)?;
 
-    stream.escrow_vested_amount_snap = escrow_vested_amount_snap as f64 / pow;
-    stream.escrow_vested_amount_snap_slot = clock.slot as u64;
-    stream.escrow_vested_amount_snap_block_time = clock.unix_timestamp as u64;
-
     let stream_allocation_left = (stream.allocation_left * pow) as u64;
+    stream.escrow_vested_amount_snap = escrow_vested_amount_snap as f64 / pow;
+    let status = get_stream_status(stream, clock)?;
 
-    if escrow_vested_amount_snap < stream_allocation_left {
+    if status == StreamStatus::Paused {
+        stream.escrow_vested_amount_snap_slot = clock.slot as u64;
+        stream.escrow_vested_amount_snap_block_time = clock.unix_timestamp as u64;
+    } else if escrow_vested_amount_snap <= stream_allocation_left {
         stream.stream_resumed_slot = clock.slot as u64;
         stream.stream_resumed_block_time = clock.unix_timestamp as u64;
     }
@@ -293,7 +300,7 @@ pub fn withdraw_funds_update_stream<'info>(
     stream.allocation_left = stream_allocation_left
         .checked_sub(transfer_amount)
         .ok_or(StreamError::Overflow)? as f64 / pow;
-
+    
     let stream_allocation_reserved = (stream.allocation_reserved * pow) as u64;
 
     if stream_allocation_reserved >= transfer_amount {

@@ -248,6 +248,61 @@ pub fn get_stream_status<'info>(
     return Ok(StreamStatus::Paused);
 }
 
+pub fn get_beneficiary_withdrawable_amount<'info>( //rename to get_beneficiary_withdrawable_amount 
+    stream: &StreamV1,
+    clock: &Clock,
+    decimals: u64
+
+) -> Result<u64, StreamError> {
+
+    let status = get_stream_status(stream, clock)?;
+
+    if status == StreamStatus::Scheduled{
+        return Ok(0);
+    }
+
+    let pow = num_traits::pow(10f64, decimals.try_into().unwrap());
+
+    if status == StreamStatus::Paused{
+        let is_manual_pause = stream.escrow_vested_amount_snap_block_time > stream.stream_resumed_block_time;
+
+        let paused_withdrawable = match is_manual_pause {
+            true => (stream.escrow_vested_amount_snap * pow) as u64,
+            _ => (stream.allocation_left * pow) as u64
+        };
+        
+        return Ok(paused_withdrawable);
+    }
+
+    //Else this stream is running, do the hard calculation (capped by the Allocation Left)
+    if stream.rate_interval_in_seconds <= 0 || stream.rate_amount <= 0.0 {
+        return Err(StreamError::InvalidArgument.into());
+    }
+
+    let rate_amount_per_second = stream.rate_amount / (stream.rate_interval_in_seconds as f64);
+
+    let block_time_at_last_snap_or_resume = cmp::max(stream.stream_resumed_block_time, stream.escrow_vested_amount_snap_block_time);
+
+    let elapsed_time_since_last_snap_or_resume = (clock.unix_timestamp as u64)
+                                                .checked_sub(block_time_at_last_snap_or_resume)
+                                                .ok_or(StreamError::Overflow)?;
+
+    let vested_amount_since_last_snap_or_resume = rate_amount_per_second * elapsed_time_since_last_snap_or_resume as f64; 
+
+    let allocation_left_vested_amount = ((stream.escrow_vested_amount_snap * pow) as u64)
+                                .checked_add((vested_amount_since_last_snap_or_resume * pow) as u64)
+                                .ok_or(StreamError::Overflow)?;
+
+    let stream_allocation_left = (stream.allocation_left * pow) as u64;
+
+    let withdrawable = match stream_allocation_left < allocation_left_vested_amount{
+            true => stream_allocation_left,
+            _ => allocation_left_vested_amount
+    };
+
+    return Ok(withdrawable);
+}
+
 pub fn get_stream_vested_amount<'info>(
     stream: &StreamV1,
     clock: &Clock,
@@ -279,16 +334,7 @@ pub fn get_stream_vested_amount<'info>(
     let rate_time = rate * elapsed_time as f64;    
     let pow = num_traits::pow(10f64, decimals.try_into().unwrap());
     let stream_allocation_left = (stream.allocation_left * pow) as u64;
-    // let mut cliff_vest_amount = stream.cliff_vest_amount as u64 * pow;
-
-    // if stream.cliff_vest_percent > 0.0
-    // {
-    //     cliff_vest_amount = stream.cliff_vest_percent * stream_allocation as f64 / 100f64;
-    // }
-
     let mut escrow_vested_amount = ((stream.escrow_vested_amount_snap * pow) as u64)
-        // .checked_add(cliff_vest_amount as u64)
-        // .unwrap()
         .checked_add((rate_time * pow) as u64)
         .ok_or(StreamError::Overflow)?;
 
