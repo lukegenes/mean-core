@@ -606,8 +606,7 @@ impl Processor {
         // Save
         TreasuryV1::pack_into_slice(&treasury, &mut treasury_account_info.data.borrow_mut());
 
-        if treasury.auto_close == true && auto_close_treasury == true && stream.treasurer_address.eq(initializer_account_info.key) 
-        {
+        if treasury.auto_close == true && auto_close_treasury == true && stream.treasurer_address.eq(initializer_account_info.key) {
             let _ = close_stream_close_treasury(
                 program_id, &treasurer_account_info, &treasurer_token_account_info,
                 &treasurer_treasury_pool_token_account_info, &associated_token_mint_info,

@@ -471,41 +471,25 @@ pub fn close_stream_v0<'info>(
         let _ = close_stream_transfer_vested_amount_v0(
             &initializer_account_info, &treasury_account_info, &treasury_token_account_info,
             &beneficiary_account_info, &beneficiary_token_account_info, &associated_token_mint_info,
-            &fee_treasury_account_info, &fee_treasury_token_account_info,
-            &msp_account_info,
-            &associated_token_program_account_info,
-            &token_program_account_info,
-            &rent_account_info,
-            &system_account_info,
-            escrow_vested_amount
+            &fee_treasury_account_info, &fee_treasury_token_account_info, &msp_account_info,
+            &associated_token_program_account_info, &token_program_account_info,
+            &rent_account_info, &system_account_info, escrow_vested_amount
         )?;
     }
 
-    if close_treasury == true && stream.treasurer_address.eq(initializer_account_info.key)
-    {
+    if close_treasury == true && stream.treasurer_address.eq(initializer_account_info.key) {
         let _ = close_treasury_v0(
-            program_id,
-            &treasurer_account_info,
-            &treasurer_token_account_info,
-            &treasurer_treasury_pool_token_account_info,
-            &associated_token_mint_info,
-            &treasury_account_info,
-            &treasury_token_account_info,
-            &treasury_pool_mint_info,
-            &fee_treasury_token_account_info,
-            &msp_account_info,
-            &token_program_account_info,
+            program_id, &treasurer_account_info, &treasurer_token_account_info,
+            &treasurer_treasury_pool_token_account_info, &associated_token_mint_info,
+            &treasury_account_info, &treasury_token_account_info, &treasury_pool_mint_info,
+            &fee_treasury_token_account_info, &msp_account_info, &token_program_account_info,
         )?;
     }
-
     // Debit fees from the initializer of the instruction
     let _ = transfer_sol_fee(
-        &system_account_info,
-        &initializer_account_info,
-        &fee_treasury_account_info,
-        CLOSE_STREAM_FLAT_FEE
+        &system_account_info, &initializer_account_info,
+        &fee_treasury_account_info, CLOSE_STREAM_FLAT_FEE
     );
-
     // Close stream account
     let treasurer_lamports = treasurer_account_info.lamports();
     let stream_lamports = stream_account_info.lamports();
@@ -675,17 +659,11 @@ pub fn close_stream_transfer_vested_amount_v0<'info>(
 
 ) -> ProgramResult {
 
-    if beneficiary_token_account_info.data_len() == 0
-    {
+    if beneficiary_token_account_info.data_len() == 0 {
         let _ = create_ata_account(
-            &system_account_info,
-            &rent_account_info,
-            &associated_token_program_account_info,
-            &token_program_account_info,
-            &initializer_account_info,
-            &beneficiary_account_info,
-            &beneficiary_token_account_info,
-            &associated_token_mint_info
+            &system_account_info, &rent_account_info, &associated_token_program_account_info,
+            &token_program_account_info, &initializer_account_info, &beneficiary_account_info,
+            &beneficiary_token_account_info,&associated_token_mint_info
         );
     }
 
@@ -696,26 +674,15 @@ pub fn close_stream_transfer_vested_amount_v0<'info>(
 
     // Credit vested amount minus fee to the beneficiary
     let _ = claim_treasury_funds_v0(
-        &msp_account_info,
-        &token_program_account_info,
-        &treasury_account_info,
-        &treasury_token_account_info,
-        &beneficiary_token_account_info,
-        transfer_amount
+        &msp_account_info, &token_program_account_info, &treasury_account_info,
+        &treasury_token_account_info, &beneficiary_token_account_info, transfer_amount
     )?;
 
-    if fee_treasury_token_account_info.data_len() == 0
-    {
-        // Create treasury associated token account if doesn't exist
+    if fee_treasury_token_account_info.data_len() == 0 { // Create treasury associated token account if doesn't exist
         let _ = create_ata_account(
-            &system_account_info,
-            &rent_account_info,
-            &associated_token_program_account_info,
-            &token_program_account_info,
-            &initializer_account_info,
-            &fee_treasury_account_info,
-            &fee_treasury_token_account_info,
-            &associated_token_mint_info
+            &system_account_info, &rent_account_info, &associated_token_program_account_info,
+            &token_program_account_info, &initializer_account_info, &fee_treasury_account_info,
+            &fee_treasury_token_account_info, &associated_token_mint_info
         )?;
     }
 
