@@ -267,7 +267,7 @@ impl IsInitialized for StreamV1 {
     fn is_initialized(&self) -> bool {
         self.initialized
     }
-}
+} 
 
 impl Default for StreamV1 {
     fn default() -> Self {
