@@ -21,7 +21,6 @@ pub struct StreamV2 {
     pub rate_amount_units: u64,
     pub rate_interval_in_seconds: u64,
     pub start_utc: u64,
-    pub rate_cliff_in_seconds: u64,
     pub cliff_vest_amount_units: u64,
     pub cliff_vest_percent: f64,
     pub beneficiary_address: Pubkey,
@@ -34,33 +33,122 @@ pub struct StreamV2 {
     pub last_withdrawal_units: u64,
     pub last_withdrawal_slot: u64,
     pub last_withdrawal_block_time: u64,
-    pub last_stop_withdrawable_units_snap: u64, 
-    pub last_stop_slot: u64,
-    pub last_stop_block_time: u64,
-    pub last_resume_slot: u64,
-    pub last_resume_block_time: u64
+    
+    //how can a stream STOP? -> There are 2 ways: 
+    //1) by a Manual Action (recordable when it happens) or 
+    //2) by Running Out Of Funds (not recordable when it happens, needs to be calculated)
+    pub last_manual_stop_withdrawable_units_snap: u64, 
+    pub last_manual_stop_slot: u64,
+    pub last_manual_stop_block_time: u64,
+
+    //how can a RESUME take place? -> ONLY by a Manual Action
+    pub last_manual_resume_allocation_change_units: u64,
+    pub last_manual_resume_slot: u64,
+    pub last_manual_resume_block_time: u64,
+
+    //the total seconds that have been paused since the start_utc 
+    //set when resume is called manually
+    pub last_known_total_seconds_in_paused_status: u64 
 }
 
 impl StreamV2 {
-    fn get_est_depletion_time() -> Result<u64, StreamError>{
-        //Est. Depletion = GetEstDepletion() {return start_utc + allocation_assigned/rate}
+    fn primitive_get_cliff_units<'info> () -> Result<StreamStatus, StreamError> {
+        if self.cliff_vest_amount_units > 0 {
+            return Ok(self.cliff_vest_amount_units);
+        }
+        if self.cliff_vest_percent > 0 {
+            let cliff_units = cliff_vest_percent * allocation_assigned / 100f64;
+            return Ok(cliff_units);
+        }
         Ok(0)
+    }
+
+    fn primitive_get_status<'info>(clock: &Clock) -> Result<StreamStatus, StreamError> {
+        let now = clock.unix_timestamp as u64 * 1000u64;
+        
+        //scheduled
+        if self.start_utc > now {
+            return Ok(StreamStatus::Scheduled);
+        }
+
+        //manually paused
+        if self.last_manual_stop_block_time > self.last_manual_resume_block_time {
+            return Ok(StreamStatus::Paused);
+        }
+
+        //running or automatically paused (ran out of funds)
+        let streamed_units_per_second = self.rate_amount_units / self.rate_interval_in_seconds;
+        let cliff_units = primitive_get_cliff_units(now);
+        let seconds_since_start = now - self.start_utc;
+        let non_stop_earning_units = cliff_units + (streamed_units_per_second * seconds_since_start);
+        let missed_earning_units_while_paused = streamed_units_per_second * self.last_known_total_seconds_in_paused_status;
+        let entitled_earnings = non_stop_earning_units - missed_earning_units_while_paused;
+
+        if self.allocation_assigned > entitled_earnings {
+            return Ok(StreamStatus::Running);
+        }
+
+        return Ok(StreamStatus::Paused);
+    }
+    fn get_est_depletion_time(clock: &Clock) -> Result<u64, StreamError>{
+        if rate_amount_per_second <= 0 {
+            return Ok(clock.unix_timestamp as u64);
+        }
+        let seconds_duration = allocation_assigned / rate_amount_per_second;
+        let est_depletion_time = start_utc.checked_add(seconds_duration).ok_or(StreamError::Overflow)?;
+        Ok(est_depletion_time)
     }
     fn get_funds_sent_to_beneficiary() -> Result<u64, StreamError>{
-        //Funds sent to recipient = total_withdrawals + GetWithdrawableAmount()
-        Ok(0)
+        let withdrawable = get_beneficiary_withdrawable_amount();
+        let funds_sent = total_withdrawals.checked_add(withdrawable).ok_or(StreamError::Overflow)?;
+        Ok(funds_sent)
     }
     fn get_funds_left_in_account() -> Result<u64, StreamError>{
-        //Funds left in account = allocation_assigned - total_withdrawals - GetWithdrawableAmount()
-        Ok(0)
-    }
-    fn get_withdrawable_amount() -> Result<u64, StreamError>{
-        //we did this one already
-        Ok(0)
+        let withdrawable = get_beneficiary_withdrawable_amount();
+        let funds_left_in_account = allocation_assigned
+            .checked_sub(total_withdrawals).unwrap()
+            .checked_sub(withdrawable).ok_or(StreamError::Overflow)
+        Ok(funds_left_in_account)
     }
     fn get_beneficiary_remaining_allocation() -> Result<u64, StreamError>{
         let remaining_allocation = allocation_assigned.checked_sub(total_withdrawals).ok_or(StreamError::Overflow)?;
-        Ok(remaining_allocation)
+        Ok(remaining_allocation)?
+    }
+    fn get_beneficiary_withdrawable_amount<'info>(clock: &Clock) -> Result<u64, StreamError> {
+        let status = get_status(stream, clock)?;
+    
+        //Check if SCHEDULED
+        if status == StreamStatus::Scheduled{
+            return Ok(0);
+        }
+    
+        //Check if PAUSED
+        if status == StreamStatus::Paused {
+            //let is_manual_pause = stream.escrow_vested_amount_snap_block_time > stream.stream_resumed_block_time;
+            let is_manual_pause = last_stop_block_time > last_resume_block_time;
+            let paused_withdrawable = match is_manual_pause {
+                true => (stream.escrow_vested_amount_snap * pow) as u64,
+                _ => (stream.allocation_left * pow) as u64
+            };
+            return Ok(paused_withdrawable);
+        }
+    
+        //Check if RUNNING
+        if stream.rate_interval_in_seconds <= 0 || stream.rate_amount <= 0.0 {
+            return Err(StreamError::InvalidArgument.into());
+        }
+        let rate_amount_per_second = stream.rate_amount / (stream.rate_interval_in_seconds as f64);
+        let block_time_at_last_snap_or_resume = cmp::max(stream.stream_resumed_block_time, stream.escrow_vested_amount_snap_block_time);
+        let elapsed_time_since_last_snap_or_resume = (clock.unix_timestamp as u64)
+                                                    .checked_sub(block_time_at_last_snap_or_resume)
+                                                    .ok_or(StreamError::Overflow)?;
+        let vested_amount_since_last_snap_or_resume = rate_amount_per_second * elapsed_time_since_last_snap_or_resume as f64; 
+        let allocation_left_vested_amount = ((stream.escrow_vested_amount_snap * pow) as u64)
+                                            .checked_add((vested_amount_since_last_snap_or_resume * pow) as u64)
+                                            .ok_or(StreamError::Overflow)?;
+        let stream_allocation_left = (stream.allocation_left * pow) as u64;
+        let withdrawable = cmp::min(stream_allocation_left, allocation_left_vested_amount);
+        return Ok(withdrawable);
     }
 }
 
