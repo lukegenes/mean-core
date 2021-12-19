@@ -6,7 +6,7 @@ use crate::state::*;
 use crate::constants::*;
 use crate::utils::*;
 use solana_program::{
-    msg,
+    // msg,
     system_instruction,
     program::{ invoke, invoke_signed },
     pubkey::Pubkey,
@@ -203,11 +203,6 @@ pub fn add_funds_update_stream<'info>(
         stream.escrow_vested_amount_snap_slot = current_slot;
         stream.escrow_vested_amount_snap_block_time = current_block_time;
     }
-
-    msg!("amount => {:?}", amount);
-    msg!("allocation_assigned => {:?}", allocation_assigned);
-    msg!("escrow_vested_amount => {:?}", escrow_vested_amount);
-    msg!("allocation_left => {:?}", (stream.allocation_left * pow) as u64);
 
     stream.allocation_assigned = allocation_assigned
             .checked_add((amount * pow) as u64)

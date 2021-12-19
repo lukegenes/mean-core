@@ -290,48 +290,6 @@ pub fn get_beneficiary_withdrawable_amount<'info>(
     return Ok(withdrawable);
 }
 
-pub fn get_stream_vested_amount<'info>(
-    stream: &StreamV1,
-    clock: &Clock,
-    decimals: u64
-
-) -> Result<u64, StreamError> {
-
-    let status = get_stream_status(stream, clock)?;
-
-    if status == StreamStatus::Scheduled{
-        return Ok(0);
-    }
-
-    let is_running = match status {
-        k if k == StreamStatus::Running => 1,
-        _ => 0
-    };
-
-    let rate = match stream.rate_interval_in_seconds {
-        k if k > 0 => stream.rate_amount / (stream.rate_interval_in_seconds as f64) * (is_running as f64),
-        _ => stream.allocation_left
-    };
-
-    let marker_block_time = cmp::max(stream.stream_resumed_block_time, stream.escrow_vested_amount_snap_block_time);
-    let elapsed_time = (clock.unix_timestamp as u64)
-        .checked_sub(marker_block_time)
-        .ok_or(StreamError::Overflow)?;
-
-    let rate_time = rate * elapsed_time as f64;    
-    let pow = num_traits::pow(10f64, decimals.try_into().unwrap());
-    let stream_allocation_left = (stream.allocation_left * pow) as u64;
-    let mut escrow_vested_amount = ((stream.escrow_vested_amount_snap * pow) as u64)
-        .checked_add((rate_time * pow) as u64)
-        .ok_or(StreamError::Overflow)?;
-
-    if escrow_vested_amount > stream_allocation_left {
-        escrow_vested_amount = stream_allocation_left;
-    }
-
-    return Ok(escrow_vested_amount);
-}
-
 pub fn check_system_accounts<'info>(
     associated_token_program_account: Option<&AccountInfo<'info>>,
     token_program_account: Option<&AccountInfo<'info>>,
