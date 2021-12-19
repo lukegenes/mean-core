@@ -63,46 +63,69 @@ impl StreamV2 {
         Ok(0)
     }
 
-    fn primitive_get_status<'info>(clock: &Clock) -> Result<StreamStatus, StreamError> {
+    fn primitive_is_manually_paused<'info>() -> bool {
+        if self.last_manual_stop_block_time <= 0 {
+            return false;
+        }
+        return self.last_manual_stop_block_time > self.last_manual_resume_block_time;
+    }
+
+    fn primitive_get_streamed_units_per_second<'info>() -> u64 {
+        if self.rate_interval_in_seconds <= 0 {
+            return 0;
+        }
+        let streamed_units_per_second = self.rate_amount_units / (stream.rate_interval_in_seconds as f64);
+        return streamed_units_per_second;
+    }
+
+    fn get_status<'info>(clock: &Clock) -> Result<StreamStatus, StreamError> {
         let now = clock.unix_timestamp as u64 * 1000u64;
         
         //scheduled
         if self.start_utc > now {
             return Ok(StreamStatus::Scheduled);
         }
-
+        
         //manually paused
-        if self.last_manual_stop_block_time > self.last_manual_resume_block_time {
+        let is_manual_pause = primitive_is_manually_paused();
+        if is_manual_pause {
             return Ok(StreamStatus::Paused);
         }
-
+        
         //running or automatically paused (ran out of funds)
-        let streamed_units_per_second = self.rate_amount_units / self.rate_interval_in_seconds;
+        let streamed_units_per_second = primitive_get_streamed_units_per_second();
         let cliff_units = primitive_get_cliff_units(now);
         let seconds_since_start = now - self.start_utc;
         let non_stop_earning_units = cliff_units + (streamed_units_per_second * seconds_since_start);
         let missed_earning_units_while_paused = streamed_units_per_second * self.last_known_total_seconds_in_paused_status;
         let entitled_earnings = non_stop_earning_units - missed_earning_units_while_paused;
 
+        //running
         if self.allocation_assigned > entitled_earnings {
             return Ok(StreamStatus::Running);
         }
-
+        
+        //automatically paused (ran out of funds)
         return Ok(StreamStatus::Paused);
     }
+
     fn get_est_depletion_time(clock: &Clock) -> Result<u64, StreamError>{
         if rate_amount_per_second <= 0 {
             return Ok(clock.unix_timestamp as u64);
         }
-        let seconds_duration = allocation_assigned / rate_amount_per_second;
-        let est_depletion_time = start_utc.checked_add(seconds_duration).ok_or(StreamError::Overflow)?;
+        let cliff_units = primitive_get_cliff_units(now);
+        let streamable_units = allocation_assigned - cliff_units;
+        let duration_span_seconds = (streamable_units / rate_amount_per_second) + self.last_known_total_seconds_in_paused_status;
+        let est_depletion_time = start_utc.checked_add(duration_span_seconds).ok_or(StreamError::Overflow)?;
         Ok(est_depletion_time)
     }
+
     fn get_funds_sent_to_beneficiary() -> Result<u64, StreamError>{
         let withdrawable = get_beneficiary_withdrawable_amount();
         let funds_sent = total_withdrawals.checked_add(withdrawable).ok_or(StreamError::Overflow)?;
         Ok(funds_sent)
     }
+
     fn get_funds_left_in_account() -> Result<u64, StreamError>{
         let withdrawable = get_beneficiary_withdrawable_amount();
         let funds_left_in_account = allocation_assigned
@@ -110,13 +133,21 @@ impl StreamV2 {
             .checked_sub(withdrawable).ok_or(StreamError::Overflow)
         Ok(funds_left_in_account)
     }
+
     fn get_beneficiary_remaining_allocation() -> Result<u64, StreamError>{
         let remaining_allocation = allocation_assigned.checked_sub(total_withdrawals).ok_or(StreamError::Overflow)?;
         Ok(remaining_allocation)?
     }
+
     fn get_beneficiary_withdrawable_amount<'info>(clock: &Clock) -> Result<u64, StreamError> {
-        let status = get_status(stream, clock)?;
-    
+
+        let unused_allocation = self.allocation_assigned - self.withdrawn_amount;
+        if unused_allocation <= 0 {
+            return Ok(0);
+        }
+
+        let status = get_status(clock)?;
+
         //Check if SCHEDULED
         if status == StreamStatus::Scheduled{
             return Ok(0);
@@ -124,30 +155,30 @@ impl StreamV2 {
     
         //Check if PAUSED
         if status == StreamStatus::Paused {
-            //let is_manual_pause = stream.escrow_vested_amount_snap_block_time > stream.stream_resumed_block_time;
-            let is_manual_pause = last_stop_block_time > last_resume_block_time;
-            let paused_withdrawable = match is_manual_pause {
-                true => (stream.escrow_vested_amount_snap * pow) as u64,
-                _ => (stream.allocation_left * pow) as u64
+            let is_manual_pause = primitive_is_manually_paused();
+            let withdrawable_while_paused = match is_manual_pause {
+                true => self.last_manual_stop_withdrawable_units_snap,
+                _ => self.allocation_assigned - self.withdrawn_amount
             };
-            return Ok(paused_withdrawable);
+            return Ok(cmp::max(withdrawable_while_paused, 0));
         }
     
         //Check if RUNNING
-        if stream.rate_interval_in_seconds <= 0 || stream.rate_amount <= 0.0 {
+        if self.rate_interval_in_seconds <= 0 || stream.rate_amount <= 0.0 {
             return Err(StreamError::InvalidArgument.into());
         }
-        let rate_amount_per_second = stream.rate_amount / (stream.rate_interval_in_seconds as f64);
-        let block_time_at_last_snap_or_resume = cmp::max(stream.stream_resumed_block_time, stream.escrow_vested_amount_snap_block_time);
-        let elapsed_time_since_last_snap_or_resume = (clock.unix_timestamp as u64)
-                                                    .checked_sub(block_time_at_last_snap_or_resume)
-                                                    .ok_or(StreamError::Overflow)?;
-        let vested_amount_since_last_snap_or_resume = rate_amount_per_second * elapsed_time_since_last_snap_or_resume as f64; 
-        let allocation_left_vested_amount = ((stream.escrow_vested_amount_snap * pow) as u64)
-                                            .checked_add((vested_amount_since_last_snap_or_resume * pow) as u64)
-                                            .ok_or(StreamError::Overflow)?;
-        let stream_allocation_left = (stream.allocation_left * pow) as u64;
-        let withdrawable = cmp::min(stream_allocation_left, allocation_left_vested_amount);
+        let streamed_units_per_second = primitive_get_streamed_units_per_second();
+        let cliff_units = primitive_get_cliff_units();
+        let now = clock.unix_timestamp as u64 * 1000u64;
+        let seconds_since_start = now - self.start_utc;
+
+        let non_stop_earning_units = cliff_units + (streamed_units_per_second * seconds_since_start);
+        let missed_units_while_paused = streamed_units_per_second * self.last_known_total_seconds_in_paused_status;
+        let entitled_earnings_units = non_stop_earning_units - missed_units_while_paused;
+
+        let withdrawable_units_while_running = entitled_earnings_units - self.withdrawn_amount;
+       
+        let withdrawable = cmp::min(unused_allocation, withdrawable_units_while_running);
         return Ok(withdrawable);
     }
 }
