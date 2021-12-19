@@ -230,7 +230,7 @@ impl Pack for StreamV2 {
             last_manual_resume_block_time_out, last_known_total_seconds_in_paused_status_out
         ) = mut_array_refs![output, 1, 32, 32, 8, 8, 8, 8, 8, 8, 8, 32, 32, 32, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 203];
 
-        let StreamV1 {
+        let StreamV2 {
             version, initialized, name, 
             treasurer_address, rate_amount, rate_interval_in_seconds, 
             start_utc, cliff_vest_amount, cliff_vest_percent,
@@ -243,29 +243,29 @@ impl Pack for StreamV2 {
             last_manual_resume_block_time, last_known_total_seconds_in_paused_status
         } = self;
 
-        initialized_output[0] = *initialized as u8;
-        stream_name_output.copy_from_slice(stream_name.as_ref());
-        treasurer_address_output.copy_from_slice(treasurer_address.as_ref());
-        *rate_amount_output = rate_amount.to_le_bytes();
-        *rate_interval_in_seconds_output = rate_interval_in_seconds.to_le_bytes();
-        *funded_on_utc_output = funded_on_utc.to_le_bytes();
-        *start_utc_output = start_utc.to_le_bytes();
-        *rate_cliff_in_seconds_output = rate_cliff_in_seconds.to_le_bytes();
-        *cliff_vest_amount_output = cliff_vest_amount.to_le_bytes();
-        *cliff_vest_percent_output = cliff_vest_percent.to_le_bytes();
-        beneficiary_address_output.copy_from_slice(beneficiary_address.as_ref());
-        beneficiary_associated_token_output.copy_from_slice(beneficiary_associated_token.as_ref());
-        treasury_address_output.copy_from_slice(treasury_address.as_ref());
-        *treasury_estimated_depletion_utc_output = treasury_estimated_depletion_utc.to_le_bytes();
-        *allocation_reserved_output = allocation_reserved.to_le_bytes();
-        *allocation_left_output = allocation_left.to_le_bytes();
-        *escrow_vested_amount_snap_output = escrow_vested_amount_snap.to_le_bytes();
-        *escrow_vested_amount_snap_slot_output = escrow_vested_amount_snap_slot.to_le_bytes();
-        *escrow_vested_amount_snap_block_time_output = escrow_vested_amount_snap_block_time.to_le_bytes();
-        *stream_resumed_slot_output = stream_resumed_slot.to_le_bytes();
-        *stream_resumed_block_time_output = stream_resumed_block_time.to_le_bytes();
-        *auto_pause_in_seconds_output = auto_pause_in_seconds.to_le_bytes();
-        *allocation_assigned_output = allocation_assigned.to_le_bytes();
+        initialized_out[0] = *initialized as u8;
+        name_out.copy_from_slice(name.as_ref());
+        treasurer_address_out.copy_from_slice(treasurer_address.as_ref());
+        *rate_amount_units_out = rate_amount_units.to_le_bytes();
+        *rate_interval_in_seconds_out = rate_interval_in_seconds.to_le_bytes();
+        *funded_on_utc_out = funded_on_utc.to_le_bytes();
+        *start_utc_out = start_utc.to_le_bytes();
+        *rate_cliff_in_seconds_out = rate_cliff_in_seconds.to_le_bytes();
+        *cliff_vest_amount_out = cliff_vest_amount.to_le_bytes();
+        *cliff_vest_percent_out = cliff_vest_percent.to_le_bytes();
+        beneficiary_address_out.copy_from_slice(beneficiary_address.as_ref());
+        beneficiary_associated_token_out.copy_from_slice(beneficiary_associated_token.as_ref());
+        treasury_address_out.copy_from_slice(treasury_address.as_ref());
+        *treasury_estimated_depletion_utc_out = treasury_estimated_depletion_utc.to_le_bytes();
+        *allocation_reserved_out = allocation_reserved.to_le_bytes();
+        *allocation_left_out = allocation_left.to_le_bytes();
+        *escrow_vested_amount_snap_out = escrow_vested_amount_snap.to_le_bytes();
+        *escrow_vested_amount_snap_slot_out = escrow_vested_amount_snap_slot.to_le_bytes();
+        *escrow_vested_amount_snap_block_time_out = escrow_vested_amount_snap_block_time.to_le_bytes();
+        *stream_resumed_slot_out = stream_resumed_slot.to_le_bytes();
+        *stream_resumed_block_time_out = stream_resumed_block_time.to_le_bytes();
+        *auto_pause_in_seconds_out = auto_pause_in_seconds.to_le_bytes();
+        *allocation_assigned_out = allocation_assigned.to_le_bytes();
     }
     
     fn unpack_from_slice(input: &[u8]) -> Result<Self, ProgramError> {
