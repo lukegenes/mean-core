@@ -160,7 +160,7 @@ impl Processor {
         )?;
 
         let clock = Clock::get()?;
-        let mut stream = StreamV1::unpack_from_slice(&stream_account_info.data.borrow())?;
+        let mut stream = StreamV2::unpack_from_slice(&stream_account_info.data.borrow())?;
         // Updating stream data
         stream.stream_name = stream_name;
         stream.treasurer_address = *treasurer_account_info.key;

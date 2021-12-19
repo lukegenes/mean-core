@@ -19,33 +19,30 @@ pub struct StreamV2 {
     pub name: String,
     pub treasurer_address: Pubkey,
     pub rate_amount_units: u64,
-    pub rate_interval_in_seconds: u64,
+    pub rate_interval_in_seconds: u64,    
     pub start_utc: u64,
     pub cliff_vest_amount_units: u64,
-    pub cliff_vest_percent: f64,
+    pub cliff_vest_percent: f64,    
     pub beneficiary_address: Pubkey,
     pub beneficiary_associated_token: Pubkey,
-    pub treasury_address: Pubkey,
+    pub treasury_address: Pubkey,    
     pub allocation_assigned_units: u64,
     pub allocation_reserved_units: u64,
-
+    //withdrawal tracking
     pub total_withdrawals_units: u64,
     pub last_withdrawal_units: u64,
     pub last_withdrawal_slot: u64,
-    pub last_withdrawal_block_time: u64,
-    
+    pub last_withdrawal_block_time: u64,    
     //how can a stream STOP? -> There are 2 ways: 
     //1) by a Manual Action (recordable when it happens) or 
     //2) by Running Out Of Funds (not recordable when it happens, needs to be calculated)
     pub last_manual_stop_withdrawable_units_snap: u64, 
     pub last_manual_stop_slot: u64,
     pub last_manual_stop_block_time: u64,
-
     //how can a RESUME take place? -> ONLY by a Manual Action
     pub last_manual_resume_allocation_change_units: u64,
     pub last_manual_resume_slot: u64,
     pub last_manual_resume_block_time: u64,
-
     //the total seconds that have been paused since the start_utc 
     //set when resume is called manually
     pub last_known_total_seconds_in_paused_status: u64 
@@ -186,29 +183,31 @@ impl StreamV2 {
 impl Default for StreamV2 {
     fn default() -> Self {
         Self {
+            version: 2,
             initialized: false,
-            stream_name: String::default(),
+            name: String::default(),
             treasurer_address: Pubkey::default(),             
-            rate_amount: 0.0,
+            rate_amount_units: 0,
             rate_interval_in_seconds: 0,
-            funded_on_utc: 0,
             start_utc: 0,
-            rate_cliff_in_seconds: 0,
-            cliff_vest_amount: 0.0,
+            cliff_vest_amount_units: 0,
             cliff_vest_percent: 0.0,
             beneficiary_address: Pubkey::default(),
             beneficiary_associated_token: Pubkey::default(),
             treasury_address: Pubkey::default(), 
-            treasury_estimated_depletion_utc: 0,
-            allocation_reserved: 0.0,
-            allocation_left: 0.0,
-            escrow_vested_amount_snap: 0.0,
-            escrow_vested_amount_snap_slot: 0,
-            escrow_vested_amount_snap_block_time: 0,
-            stream_resumed_slot: 0,
-            stream_resumed_block_time: 0,
-            auto_pause_in_seconds: 0,
-            allocation_assigned: 0.0
+            allocation_assigned_units: 0,
+            allocation_reserved_units: 0,
+            total_withdrawals_units: 0,
+            last_withdrawal_units: 0,
+            last_withdrawal_slot: 0,
+            last_withdrawal_block_time: 0,
+            last_manual_stop_withdrawable_units_snap: 0,
+            last_manual_stop_slot: 0,
+            last_manual_stop_block_time: 0,
+            last_manual_resume_allocation_change_units: 0,
+            last_manual_resume_slot: 0,
+            last_manual_resume_block_time: 0,
+            last_known_total_seconds_in_paused_status: 0
         }
     }
 }
@@ -219,59 +218,29 @@ impl Pack for StreamV2 {
     fn pack_into_slice(&self, output: &mut [u8]) {
 
         let output = array_mut_ref![output, 0, StreamV1::LEN];
-        let (
-            initialized_output,
-            stream_name_output,
-            treasurer_address_output,
-            rate_amount_output,
-            rate_interval_in_seconds_output,
-            funded_on_utc_output,
-            start_utc_output,
-            rate_cliff_in_seconds_output,
-            cliff_vest_amount_output,
-            cliff_vest_percent_output,
-            beneficiary_address_output,
-            beneficiary_associated_token_output,
-            treasury_address_output,
-            treasury_estimated_depletion_utc_output,
-            allocation_reserved_output,
-            allocation_left_output,
-            escrow_vested_amount_snap_output,
-            escrow_vested_amount_snap_slot_output,
-            escrow_vested_amount_snap_block_time_output,
-            stream_resumed_slot_output,
-            stream_resumed_block_time_output,
-            auto_pause_in_seconds_output,
-            allocation_assigned_output,
-            _additional_data
-            
+        let (version_out, initialized_out, name_out, 
+            treasurer_address_out,rate_amount_units_out, rate_interval_in_seconds_out, 
+            start_utc_out, cliff_vest_amount_out, cliff_vest_percent_out, 
+            beneficiary_address_out, beneficiary_associated_token_out, treasury_address_out, 
+            allocation_assigned_units_out, allocation_reserved_units_out, total_withdrawals_units_out,
+            last_withdrawal_units_out, last_withdrawal_slot_out, 
+            last_withdrawal_block_time_out, last_manual_stop_withdrawable_units_snap_out, 
+            last_manual_stop_slot_out, last_manual_stop_block_time_out,
+            last_manual_resume_allocation_change_units_out, last_manual_resume_slot_out,
+            last_manual_resume_block_time_out, last_known_total_seconds_in_paused_status_out
         ) = mut_array_refs![output, 1, 32, 32, 8, 8, 8, 8, 8, 8, 8, 32, 32, 32, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 203];
 
         let StreamV1 {
-            initialized,
-            stream_name,
-            treasurer_address,
-            rate_amount,
-            rate_interval_in_seconds,
-            funded_on_utc,
-            start_utc,
-            rate_cliff_in_seconds,
-            cliff_vest_amount,
-            cliff_vest_percent,
-            beneficiary_address,
-            beneficiary_associated_token,
-            treasury_address,
-            treasury_estimated_depletion_utc,
-            allocation_reserved,
-            allocation_left,
-            escrow_vested_amount_snap,
-            escrow_vested_amount_snap_slot,
-            escrow_vested_amount_snap_block_time,
-            stream_resumed_slot,
-            stream_resumed_block_time,
-            auto_pause_in_seconds,
-            allocation_assigned
-
+            version, initialized, name, 
+            treasurer_address, rate_amount, rate_interval_in_seconds, 
+            start_utc, cliff_vest_amount, cliff_vest_percent,
+            beneficiary_address, beneficiary_associated_token, treasury_address,
+            allocation_assigned_units, allocation_reserved_units, total_withdrawals,
+            last_withdrawal_units, last_withdrawal_slot, 
+            last_withdrawal_block_time, last_manual_stop_withdrawable_units_snap, 
+            last_manual_stop_slot, last_manual_stop_block_time,
+            last_manual_resume_allocation_change_units, last_manual_resume_slot,
+            last_manual_resume_block_time, last_known_total_seconds_in_paused_status
         } = self;
 
         initialized_output[0] = *initialized as u8;
