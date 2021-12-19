@@ -73,7 +73,6 @@ pub fn create_pda_account<'info>(
     base_account_info: &AccountInfo<'info>,
     pda_size: usize,
     pda_signer_seed: &[&[&[u8]]]
-
 ) -> ProgramResult {
 
     let rent = &Rent::from_account_info(rent_account_info)?;
