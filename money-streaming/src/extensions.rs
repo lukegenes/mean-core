@@ -262,13 +262,13 @@ pub fn transfer_tokens<'info>(
     ])
 }
 
-pub fn withdraw_funds_update_stream<'info>(
+pub fn post_withdrawal_update_stream<'info>(
     stream: &mut StreamV1,
     stream_account_info: &AccountInfo<'info>,
     associated_token_mint_info: &AccountInfo<'info>,
     clock: &Clock,
-    vested_amount: u64,
-    transfer_amount: u64
+    withdrawable_amount: u64,
+    withdrawn_amount: u64
 
 ) -> ProgramResult {
 
@@ -276,11 +276,12 @@ pub fn withdraw_funds_update_stream<'info>(
     let pow = num_traits::pow(10f64, associated_token_mint.decimals.into());
 
     // Update stream account data
-    let escrow_vested_amount_snap = vested_amount
-        .checked_sub(transfer_amount)
+    let escrow_vested_amount_snap = withdrawable_amount
+        .checked_sub(withdrawn_amount)
         .ok_or(StreamError::Overflow)?;
-
     stream.escrow_vested_amount_snap = escrow_vested_amount_snap as f64 / pow;
+
+    let stream_allocation_left = (stream.allocation_left * pow) as u64;
     let status = get_stream_status(stream, clock)?;
 
     if status == StreamStatus::Running {
@@ -288,15 +289,15 @@ pub fn withdraw_funds_update_stream<'info>(
         stream.stream_resumed_block_time = clock.unix_timestamp as u64;
     }
 
-    stream.allocation_left = ((stream.allocation_left * pow) as u64)
-        .checked_sub(transfer_amount)
+    stream.allocation_left = stream_allocation_left
+        .checked_sub(withdrawn_amount)
         .ok_or(StreamError::Overflow)? as f64 / pow;
     
     let stream_allocation_reserved = (stream.allocation_reserved * pow) as u64;
 
-    if stream_allocation_reserved >= transfer_amount {
+    if stream_allocation_reserved >= withdrawn_amount {
         stream.allocation_reserved = stream_allocation_reserved
-            .checked_sub(transfer_amount)
+            .checked_sub(withdrawn_amount)
             .ok_or(StreamError::Overflow)? as f64 / pow;
     }
     // Save
@@ -373,7 +374,7 @@ pub fn close_stream_transfer_vested_amount<'info>(
     let fee = (CLOSE_STREAM_PERCENT_FEE * vested_amount as f64 / 100f64) as u64;
     let transfer_amount = vested_amount.checked_sub(fee).ok_or(StreamError::Overflow)?;
     // Credit vested amount minus fee to the beneficiary
-    let _ = claim_treasury_funds(
+    let _ = transfer_from_treasury(
         &msp_account_info, &token_program_account_info, &treasury_account_info,
         &treasury_token_account_info, &beneficiary_token_account_info, transfer_amount
     )?;
@@ -386,7 +387,7 @@ pub fn close_stream_transfer_vested_amount<'info>(
         )?;
     }
     // Pay fee by the beneficiary from the vested amount
-    claim_treasury_funds(
+    transfer_from_treasury(
         &msp_account_info, &token_program_account_info, &treasury_account_info,
         &treasury_token_account_info, &fee_treasury_token_account_info, fee
     )
@@ -602,7 +603,7 @@ pub fn close_treasury_token_account<'info>(
     if treasury_token.amount > 0
     {
         // Credit all treasury token amount to treasurer
-        let _ = claim_treasury_funds(
+        let _ = transfer_from_treasury(
             &msp_account_info,
             &token_program_account_info,
             &treasury_account_info,

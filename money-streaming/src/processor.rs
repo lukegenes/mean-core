@@ -343,13 +343,11 @@ impl Processor {
 
         let mut stream = StreamV1::unpack_from_slice(&stream_account_info.data.borrow())?;
         let associated_token_mint = spl_token::state::Mint::unpack_from_slice(&associated_token_mint_info.data.borrow())?;        
-        let escrow_vested_amount = get_beneficiary_withdrawable_amount(
-            &stream, &clock, associated_token_mint.decimals.into()
-        )?;
+        let withdrawable_amount = get_beneficiary_withdrawable_amount(&stream, &clock, associated_token_mint.decimals.into())?;
         let pow = num_traits::pow(10f64, associated_token_mint.decimals.into());
-        let transfer_amount = (amount * pow) as u64;
+        let withdraw_request_amount = (amount * pow) as u64;
 
-        if transfer_amount > escrow_vested_amount {
+        if withdraw_request_amount > withdrawable_amount {
             return Err(StreamError::NotAllowedWithdrawalAmount.into());
         }
 
@@ -361,18 +359,18 @@ impl Processor {
             )?;
         }
         // Withdraw
-        let _ = claim_treasury_funds(
+        let _ = transfer_from_treasury(
             &msp_account_info, &token_program_account_info, &treasury_account_info,
-            &treasury_token_account_info, &beneficiary_token_account_info, transfer_amount
+            &treasury_token_account_info, &beneficiary_token_account_info, withdraw_request_amount
         )?;
         // Update stream data
-        let _ = withdraw_funds_update_stream(
+        let _ = post_withdrawal_update_stream(
             &mut stream, &stream_account_info, &associated_token_mint_info,
-            &clock, escrow_vested_amount, transfer_amount
+            &clock, withdrawable_amount, withdraw_request_amount
         )?;
         // Update treasury account data
         let _ = withdraw_funds_update_treasury(
-            &treasury_account_info, &associated_token_mint_info, transfer_amount
+            &treasury_account_info, &associated_token_mint_info, withdraw_request_amount
         )?;
 
         if fee_treasury_token_account_info.data_len() == 0 { // Create fee treasury associated token account if doesn't exist
@@ -383,7 +381,7 @@ impl Processor {
             )?;
         }
         
-        let fee = WITHDRAW_PERCENT_FEE * transfer_amount as f64 / 100f64;
+        let fee = WITHDRAW_PERCENT_FEE * withdraw_request_amount as f64 / 100f64;
         // Pay fees
         transfer_token_fee(
             &token_program_account_info,

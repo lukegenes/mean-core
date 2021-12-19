@@ -129,7 +129,7 @@ pub fn create_ata_account<'info>(
     Ok(())
 }
 
-pub fn claim_treasury_funds<'info>(
+pub fn transfer_from_treasury<'info>(
     msp_account_info: &AccountInfo<'info>,
     token_program_account_info: &AccountInfo<'info>,
     treasury_account_info: &AccountInfo<'info>,

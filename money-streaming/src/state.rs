@@ -261,6 +261,39 @@ pub struct StreamV1 {
     pub allocation_assigned: f64
 }
 
+#[derive(Clone, Debug)]
+pub struct StreamV2 {
+    pub initialized: bool,
+    pub stream_name: String,
+    pub treasurer_address: Pubkey,
+    pub rate_amount: f64,
+    pub rate_interval_in_seconds: u64,
+    pub start_utc: u64,
+    pub rate_cliff_in_seconds: u64,
+    pub cliff_vest_amount: f64,
+    pub cliff_vest_percent: f64,
+    pub beneficiary_address: Pubkey,
+    pub beneficiary_associated_token: Pubkey,
+    pub treasury_address: Pubkey,
+    pub allocation_assigned: f64,
+    pub allocation_reserved: f64,
+
+    pub total_withdrawals: f64,
+    pub last_withdrawal: f64,
+    pub last_withdrawal_slot: u64,
+    pub last_withdrawal_block_time: u64,
+    pub last_stop_withdrawable: f64, 
+    pub last_stop_withdrawable_slot: u64,
+    pub last_stop_withdrawable_block_time: u64,
+    pub last_resume_slot: u64,
+    pub last_resume_block_time: u64
+    //Funds sent to recipient = total_withdrawals + GetWithdrawableAmount()
+    //Funds left in account = allocation_assigned - total_withdrawals - GetWithdrawableAmount()
+    //Your remaining allocation = allocation_assigned - total_withdrawals
+    //Funds available to withdraw now = GetWithdrawableAmount()
+    //Est. Depletion = GetEstDepletion() {return start_utc + allocation_assigned/rate}
+}
+
 impl Sealed for StreamV1 {}
 
 impl IsInitialized for StreamV1 {

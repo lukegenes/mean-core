@@ -17,7 +17,7 @@ use solana_program::{
     sysvar::{ clock::Clock, Sysvar } 
 };
 
-pub fn claim_treasury_funds_v0<'info>(
+pub fn transfer_from_treasury_v0<'info>(
     msp_account_info: &AccountInfo<'info>,
     token_program_account_info: &AccountInfo<'info>,
     treasury_account_info: &AccountInfo<'info>,
@@ -254,12 +254,12 @@ pub fn withdraw_v0<'info>(
         )?;
     }
     // Withdraw
-    let _ = claim_treasury_funds_v0(
+    let _ = transfer_from_treasury_v0(
         &msp_account_info, &token_program_account_info, &treasury_account_info, 
         &treasury_token_account_info, &beneficiary_token_account_info, transfer_amount
     )?;
     // Update stream data
-    let _ = withdraw_funds_update_stream_v0(
+    let _ = post_withdrawal_update_stream_v0(
         &mut stream, &stream_account_info, &associated_token_mint_info, 
         &clock, escrow_vested_amount, transfer_amount
     )?;
@@ -593,7 +593,7 @@ pub fn add_funds_update_stream_v0<'info>(
     Ok(())
 }
 
-pub fn withdraw_funds_update_stream_v0<'info>(
+pub fn post_withdrawal_update_stream_v0<'info>(
     stream: &mut Stream,
     stream_account_info: &AccountInfo<'info>,
     associated_token_mint_info: &AccountInfo<'info>,
@@ -661,7 +661,7 @@ pub fn close_stream_transfer_vested_amount_v0<'info>(
         .ok_or(StreamError::Overflow)?;
 
     // Credit vested amount minus fee to the beneficiary
-    let _ = claim_treasury_funds_v0(
+    let _ = transfer_from_treasury_v0(
         &msp_account_info, &token_program_account_info, &treasury_account_info,
         &treasury_token_account_info, &beneficiary_token_account_info, transfer_amount
     )?;
@@ -675,7 +675,7 @@ pub fn close_stream_transfer_vested_amount_v0<'info>(
     }
 
     // Pay fee by the beneficiary from the vested amount
-    claim_treasury_funds_v0(
+    transfer_from_treasury_v0(
         &msp_account_info,
         &token_program_account_info,
         &treasury_account_info,
