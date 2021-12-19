@@ -263,6 +263,7 @@ pub struct StreamV1 {
 
 #[derive(Clone, Debug)]
 pub struct StreamV2 {
+    pub version: u8,
     pub initialized: bool,
     pub stream_name: String,
     pub treasurer_address: Pubkey,
