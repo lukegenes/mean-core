@@ -611,17 +611,10 @@ pub fn withdraw_funds_update_stream_v0<'info>(
         .checked_sub(transfer_amount)
         .ok_or(StreamError::Overflow)?;
 
-    let stream_allocation = ((stream.total_deposits * pow) as u64)
-        .checked_sub((stream.total_withdrawals * pow) as u64)
-        .ok_or(StreamError::Overflow)?;
-
     stream.escrow_vested_amount_snap = escrow_vested_amount_snap as f64 / pow;
     let status = get_stream_status_v0(stream, clock)?;
 
-    if status == StreamStatus::Paused {
-        stream.escrow_vested_amount_snap_block_height = clock.slot as u64;
-        stream.escrow_vested_amount_snap_block_time = clock.unix_timestamp as u64;
-    } else if escrow_vested_amount_snap <= stream_allocation {
+    if status == StreamStatus::Running {
         stream.stream_resumed_block_height = clock.slot as u64;
         stream.stream_resumed_block_time = clock.unix_timestamp as u64;
     }
