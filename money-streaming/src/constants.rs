@@ -1,4 +1,6 @@
-pub const MSP_OPS_ACCOUNT_ADDRESS: &str = "3TD6SWY9M1mLY2kZWJNavPLhwXvcRsWdnZLRaMzERJBw";
+// Accounts
+pub const FEE_TREASURY_ACCOUNT: &str = "3TD6SWY9M1mLY2kZWJNavPLhwXvcRsWdnZLRaMzERJBw";
+// Fee constants
 pub const CREATE_TREASURY_FLAT_FEE: f64 = 0.00001;
 pub const CREATE_STREAM_FLAT_FEE: f64 = 0.00001;
 pub const ADD_FUNDS_FLAT_FEE: f64 = 0.000025;

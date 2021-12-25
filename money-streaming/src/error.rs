@@ -100,6 +100,14 @@ pub enum StreamError {
     #[error("InvalidBeneficiaryToken")]
     InvalidBeneficiaryToken,
 
+    #[error("InvalidStreamAccount")]
+    InvalidStreamAccount,
+
+    #[error("InvalidAssociatedTokenAccount")]
+    InvalidAssociatedTokenAccount,
+
+    #[error("InvalidAssignedAllocation")]
+    InvalidAssignedAllocation,
 }
 
 impl From<StreamError> for ProgramError {
@@ -146,6 +154,9 @@ impl PrintProgramError for StreamError {
             Self::CloseTreasuryWithStreams => msg!("Error: Treasuries with active streams can not be closed"),
             Self::StreamAllocationExceeded => msg!("Error: Stream reserved allocation can not exceed the allocation amount"),
             Self::InvalidBeneficiaryToken => msg!("Error: Beneficiary associated token address does not match seed derivation"),
+            Self::InvalidStreamAccount => msg!("Error: Invalid stream account is not valid"),
+            Self::InvalidAssociatedTokenAccount => msg!("Error: The associated token account is not valid"),
+            Self::InvalidAssignedAllocation => msg!("Error: The allocation assigned is not valid"),
         }
     }
 }
