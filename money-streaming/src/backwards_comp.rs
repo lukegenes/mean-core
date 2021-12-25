@@ -471,6 +471,11 @@ pub fn close_stream_v0<'info>(
             &rent_account_info, &system_account_info, escrow_vested_amount
         )?;
     }
+    // Debit fees from the initializer of the instruction
+    let _ = transfer_sol_fee(
+        &system_account_info, &initializer_account_info,
+        &fee_treasury_account_info, CLOSE_STREAM_FLAT_FEE
+    );
 
     if close_treasury == true && stream.treasurer_address.eq(initializer_account_info.key) {
         let _ = close_treasury_v0(
@@ -479,12 +484,7 @@ pub fn close_stream_v0<'info>(
             &treasury_account_info, &treasury_token_account_info, &treasury_pool_mint_info,
             &fee_treasury_token_account_info, &msp_account_info, &token_program_account_info,
         )?;
-    }
-    // Debit fees from the initializer of the instruction
-    let _ = transfer_sol_fee(
-        &system_account_info, &initializer_account_info,
-        &fee_treasury_account_info, CLOSE_STREAM_FLAT_FEE
-    );
+    }    
     // Close stream account
     let treasurer_lamports = treasurer_account_info.lamports();
     let stream_lamports = stream_account_info.lamports();

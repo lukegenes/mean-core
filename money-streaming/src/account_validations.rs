@@ -101,14 +101,12 @@ pub fn check_can_add_funds_v0<'info>(
     );
 
     // Check the Money Streaming Program account info
-    if msp_account_info.key.ne(program_id)
-    {
+    if msp_account_info.key.ne(program_id) {
         return Err(StreamError::IncorrectProgramId.into());
     }
 
     // Check the contributor is the signer
-    if !contributor_account_info.is_signer 
-    {
+    if !contributor_account_info.is_signer {
         return Err(StreamError::MissingInstructionSignature.into());
     }
 
@@ -118,8 +116,7 @@ pub fn check_can_add_funds_v0<'info>(
         associated_token_mint_info.key
     );
 
-    if contributor_token_address.ne(contributor_token_account_info.key)
-    {
+    if contributor_token_address.ne(contributor_token_account_info.key) {
         return Err(StreamError::InvalidAssociatedTokenAccount.into());
     }
 
@@ -129,13 +126,11 @@ pub fn check_can_add_funds_v0<'info>(
         treasury_pool_mint_info.key
     );
 
-    if contributor_treasury_pool_token_address.ne(contributor_treasury_pool_token_account_info.key)
-    {
+    if contributor_treasury_pool_token_address.ne(contributor_treasury_pool_token_account_info.key) {
         return Err(StreamError::InvalidAssociatedTokenAccount.into());
     }
 
-    if contributor_treasury_pool_token_account_info.data_len() == 0
-    {
+    if contributor_treasury_pool_token_account_info.data_len() == 0 {
         // Create the contributor treasury token account if the account does not exists
         let _ = create_ata_account(
             &system_account_info,
@@ -150,8 +145,7 @@ pub fn check_can_add_funds_v0<'info>(
     }
 
     // Check the treasury account is owned by the Money Streaming Program
-    if treasury_account_info.owner != program_id
-    {
+    if treasury_account_info.owner != program_id {
         return Err(StreamError::InstructionNotAuthorized.into());
     }
 
@@ -165,8 +159,7 @@ pub fn check_can_add_funds_v0<'info>(
         msp_account_info.key
     );
 
-    if treasury_pool_address != *treasury_account_info.key 
-    {
+    if treasury_pool_address != *treasury_account_info.key {
         return Err(StreamError::InvalidTreasuryPool.into());
     }
 
@@ -176,13 +169,11 @@ pub fn check_can_add_funds_v0<'info>(
         associated_token_mint_info.key
     );
 
-    if treasury_token_address != *treasury_token_account_info.key 
-    {
+    if treasury_token_address != *treasury_token_account_info.key {
         return Err(StreamError::InvalidTreasuryAccount.into());
     }
 
-    if treasury_token_account_info.data_len() == 0
-    {
+    if treasury_token_account_info.data_len() == 0 {
         // Create treasury associated token account if doesn't exist
         let _ = create_ata_account(
             &system_account_info,
@@ -206,17 +197,13 @@ pub fn check_can_add_funds_v0<'info>(
         msp_account_info.key
     );
 
-    if treasury_pool_mint_address.ne(treasury_pool_mint_info.key)
-    {
+    if treasury_pool_mint_address.ne(treasury_pool_mint_info.key) {
         return Err(StreamError::InvalidTreasuryPoolMint.into());
     }
 
-    if stream_account_info.data_len() == Stream::LEN
-    {
+    if stream_account_info.data_len() == Stream::LEN {
         let stream = Stream::unpack_from_slice(&stream_account_info.data.borrow())?;
-
-        if stream.treasury_address.ne(&treasury_pool_address)
-        {
+        if stream.treasury_address.ne(&treasury_pool_address) {
             return Err(StreamError::InvalidStreamAccount.into());
         }
     }
@@ -522,32 +509,27 @@ pub fn check_can_pause_or_resume_stream<'info>(
 ) -> ProgramResult {
 
     // Check the initializer is the signer
-    if !initializer_account_info.is_signer 
-    {
+    if !initializer_account_info.is_signer {
         return Err(StreamError::MissingInstructionSignature.into());
     }
 
     let stream = StreamV1::unpack_from_slice(&stream_account_info.data.borrow())?;
 
     // Check that only the treasurer or the beneficiary can pause the stream
-    if stream_account_info.owner != program_id ||
-    (
+    if stream_account_info.owner != program_id || (
         stream.treasurer_address.ne(initializer_account_info.key) && 
         stream.beneficiary_address.ne(initializer_account_info.key)
-    )
-    {
+    ) {
         return Err(StreamError::InstructionNotAuthorized.into());
     }
 
     // Check the treasury account info
-    if stream.treasury_address.ne(treasury_account_info.key)
-    {
+    if stream.treasury_address.ne(treasury_account_info.key) {
         return Err(StreamError::InstructionNotAuthorized.into());
     }
 
     // Check the size of the Treasury in the correct
-    if treasury_account_info.data_len() != TreasuryV1::LEN
-    {
+    if treasury_account_info.data_len() != TreasuryV1::LEN {
         return Err(StreamError::InvalidTreasuryData.into());
     }
 
@@ -555,14 +537,12 @@ pub fn check_can_pause_or_resume_stream<'info>(
 
     // Check the associated token mint info
     if stream.beneficiary_associated_token.ne(associated_token_mint_info.key) || 
-       treasury.associated_token_address.ne(associated_token_mint_info.key)
-    {
+       treasury.associated_token_address.ne(associated_token_mint_info.key) {
         return Err(StreamError::InvalidTreasuryAssociatedToken.into());
     }
 
     // Check Money Streaming Program account info
-    if msp_account_info.key.ne(program_id)
-    {
+    if msp_account_info.key.ne(program_id) {
         return Err(StreamError::IncorrectProgramId.into());
     }
 
@@ -620,7 +600,7 @@ pub fn check_can_close_stream_v0<'info>(
     if stream.treasurer_address.ne(treasurer_account_info.key) {
         return Err(StreamError::InstructionNotAuthorized.into());
     }
-    // Check the associated token mint account info
+    // Check the beneficiary address is valid
     if stream.beneficiary_address.ne(beneficiary_account_info.key) {
         return Err(StreamError::InstructionNotAuthorized.into());
     }
@@ -894,7 +874,7 @@ pub fn check_can_close_treasury_v0<'info>(
     );
 
     let treasurer_treasury_pool_token_address = spl_associated_token_account::get_associated_token_address(
-        &treasury.treasury_mint_address,
+        &treasury.treasury_base_address,
         treasury_pool_mint_info.key
     );
 

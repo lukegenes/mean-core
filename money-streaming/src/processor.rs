@@ -111,6 +111,11 @@ impl Processor {
                 msg!("Instruction: CloseTreasury");
                 Self::process_close_treasury(accounts, program_id)
             },
+
+            StreamInstruction::RefreshTreasuryBalance => {
+                msg!("Instruction: RefreshTreasuryBalance");
+                Self::process_refresh_treasury_balance(accounts, program_id)
+            },
         }
     }
 
@@ -606,7 +611,7 @@ impl Processor {
         // Save
         TreasuryV1::pack_into_slice(&treasury, &mut treasury_account_info.data.borrow_mut());
 
-        if treasury.auto_close == true && auto_close_treasury == true && stream.treasurer_address.eq(initializer_account_info.key) {
+        if auto_close_treasury == true && stream.treasurer_address.eq(initializer_account_info.key) {
             let _ = close_stream_close_treasury(
                 program_id, &treasurer_account_info, &treasurer_token_account_info,
                 &treasurer_treasury_pool_token_account_info, &associated_token_mint_info,
@@ -813,6 +818,48 @@ impl Processor {
         **treasurer_account_info.lamports.borrow_mut() = treasurer_lamports
             .checked_add(treasury_lamports)
             .ok_or(StreamError::Overflow)?;
+
+        Ok(())
+    }
+
+    fn process_refresh_treasury_balance(
+        accounts: &[AccountInfo],
+        _program_id: &Pubkey
+
+    ) -> ProgramResult {
+
+        let account_info_iter = &mut accounts.iter();
+        let treasurer_account_info = next_account_info(account_info_iter)?;
+        let associated_token_mint_info = next_account_info(account_info_iter)?;
+        let treasury_account_info = next_account_info(account_info_iter)?;
+        let treasury_token_account_info = next_account_info(account_info_iter)?;
+
+        if !treasurer_account_info.is_signer {
+            return Err(StreamError::InstructionNotAuthorized.into());
+        }
+
+        let mut treasury = TreasuryV1::unpack_from_slice(&treasury_account_info.data.borrow())?;
+
+        msg!("treasury associated token address => {:?}", treasury.associated_token_address);
+
+        if treasury.associated_token_address.ne(&Pubkey::default()) && 
+           treasury.associated_token_address.ne(associated_token_mint_info.key) 
+        {
+            return Ok(());
+        } 
+        else {
+            let associated_token_mint = spl_token::state::Mint::unpack_from_slice(&associated_token_mint_info.data.borrow())?;
+            let treasury_token = spl_token::state::Account::unpack_from_slice(&treasury_token_account_info.data.borrow())?;
+            let pow = num_traits::pow(10f64, associated_token_mint.decimals.into());
+
+            treasury.balance = treasury_token.amount as f64 / pow;
+            
+            if treasury.associated_token_address.eq(&Pubkey::default()) {
+                treasury.associated_token_address = *associated_token_mint_info.key;
+            }
+
+            TreasuryV1::pack_into_slice(&treasury, &mut treasury_account_info.data.borrow_mut());
+        }
 
         Ok(())
     }

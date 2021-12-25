@@ -129,6 +129,9 @@ pub enum StreamInstruction {
     /// 9. `[]` The Money Streaming Program account
     /// 10. `[]` The token program account
     CloseTreasury,
+
+    ///
+    RefreshTreasuryBalance,
 }
 
 impl StreamInstruction {
@@ -149,6 +152,7 @@ impl StreamInstruction {
             5 => Self::unpack_close_stream(result)?,
             6 => Self::unpack_create_treasury(result)?,
             7 => Ok(Self::CloseTreasury)?,
+            8 => Ok(Self::RefreshTreasuryBalance)?,
 
             _ => return Err(StreamError::InvalidStreamInstruction.into()),
         })
@@ -245,6 +249,8 @@ impl StreamInstruction {
             },
 
             Self::CloseTreasury => buf.push(7),
+
+            Self::RefreshTreasuryBalance => buf.push(8),
         };
 
         buf
