@@ -1,0 +1,15 @@
+[programs.devnet]
+msp = "H6wJxgkcc93yeUFnsZHgor3Q3pSWgGpEysfqKrwLtMko"
+
+[programs.mainnet]
+msp = "H6wJxgkcc93yeUFnsZHgor3Q3pSWgGpEysfqKrwLtMko"
+
+[registry]
+url = "https://anchor.projectserum.com"
+
+[provider]
+cluster = "devnet"
+wallet = "/root/.config/solana/id.json"
+
+[scripts]
+test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
