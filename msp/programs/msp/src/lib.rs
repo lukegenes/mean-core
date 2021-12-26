@@ -59,4 +59,9 @@ pub mod msp {
     pub fn close_treasury(_ctx: Context<CloseTreasury>) -> ProgramResult {
         Ok(())
     }
+
+    // Refresh Treasury Balance
+    pub fn refresh_treasury_balance(_ctx: Context<RefreshTreasuryBalance>) -> ProgramResult {
+        Ok(())
+    }
 }

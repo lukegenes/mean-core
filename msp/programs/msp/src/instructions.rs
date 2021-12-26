@@ -446,3 +446,27 @@ pub struct CloseTreasury<'info> {
     pub msp: AccountInfo<'info>,
     pub token_program: Program<'info, Token>,
 }
+
+#[derive(Accounts)]
+pub struct RefreshTreasuryBalance<'info> {
+    #[account(constraint = treasurer.key() == treasury.treasurer_address @ ErrorCode::InvalidTreasurer)]
+    pub treasurer: Signer<'info>,
+    #[account(constraint = associated_token.key() == treasury.associated_token_address @ ErrorCode::InvalidAssociatedToken)]
+    pub associated_token: Account<'info, Mint>,
+    #[account(
+        mut,
+        constraint = treasurer.key() == treasury.treasurer_address @ ErrorCode::NotAuthorized,
+        constraint = treasury.version == 2 @ ErrorCode::InvalidTreasuryVersion,
+        constraint = treasury.initialized == true @ ErrorCode::TreasuryNotInitialized
+    )]
+    pub treasury: ProgramAccount<'info, TreasuryV2>,
+    #[account(
+        mut,
+        constraint = treasury_token.owner == treasury.key() @ ErrorCode::InvalidOwner,
+        constraint = (
+            treasury_token.mint == associated_token.key() &&
+            treasury_token.mint == treasury.associated_token_address
+        ) @ ErrorCode::InvalidAssociatedToken
+    )]
+    pub treasury_token: Account<'info, TokenAccount>
+}
