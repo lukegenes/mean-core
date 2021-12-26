@@ -20,7 +20,15 @@ pub mod msp {
 
     use super::*;
 
+    pub fn create_treasury(ctx: Context<CreateTreasury>) -> ProgramResult {
+        Ok(())
+    }
+
     pub fn create_stream(ctx: Context<CreateStream>) -> ProgramResult {
+        Ok(())
+    }
+
+    pub fn add_funds(ctx: Context<AddFunds>) -> ProgramResult {
         Ok(())
     }
 }
