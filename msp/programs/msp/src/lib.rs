@@ -31,4 +31,16 @@ pub mod msp {
     pub fn add_funds(ctx: Context<AddFunds>) -> ProgramResult {
         Ok(())
     }
+
+    pub fn withdraw(ctx: Context<Withdraw>) -> ProgramResult {
+        Ok(())
+    }
+
+    pub fn pause_stream(ctx: Context<PauseOrResumeStream>) -> ProgramResult {
+        Ok(())
+    }
+
+    pub fn resume_stream(ctx: Context<PauseOrResumeStream>) -> ProgramResult {
+        Ok(())
+    }
 }

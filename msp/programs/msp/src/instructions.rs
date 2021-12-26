@@ -165,3 +165,100 @@ pub struct AddFunds<'info> {
     pub rent: Sysvar<'info, Rent>,
 }
 
+#[derive(Accounts)]
+#[instruction(amount: u64)]
+pub struct Withdraw<'info> {
+    pub beneficiary: Signer<'info>,
+    #[account(
+        mut,
+        constraint = beneficiary_token.owner == beneficiary.key() @ ErrorCode::InvalidOwner,
+        constraint = (
+            beneficiary_token.mint == associated_token.key() &&
+            beneficiary_token.mint == stream.beneficiary_associated_token &&
+            beneficiary_token.mint == treasury.associated_token_address
+        ) @ ErrorCode::InvalidAssociatedToken
+    )]
+    pub beneficiary_token: Account<'info, TokenAccount>,
+    #[account(
+        constraint = (
+            associated_token.key() == treasury.associated_token_address &&
+            associated_token.key() == stream.beneficiary_associated_token
+        ) @ ErrorCode::InvalidTreasuryMint
+    )]
+    pub associated_token: Account<'info, Mint>,
+    #[account(
+        mut,
+        constraint = treasury.key() == stream.treasurer_address @ ErrorCode::InvalidTreasury,
+        constraint = treasury.version == 2 @ ErrorCode::InvalidTreasuryVersion,
+        constraint = treasury.initialized == true @ ErrorCode::TreasuryAlreadyInitialized,
+        constraint = treasury.to_account_info().data_len() == 300 @ ErrorCode::InvalidTreasurySize,
+    )]
+    pub treasury: ProgramAccount<'info, TreasuryV2>,
+    #[account(
+        mut,
+        constraint = treasury_token.owner == treasury.key() @ ErrorCode::InvalidOwner,
+        constraint = (
+            treasury_token.mint == associated_token.key() &&
+            treasury_token.mint == treasury.associated_token_address &&
+            treasury_token.mint == stream.beneficiary_associated_token
+        ) @ ErrorCode::InvalidAssociatedToken
+    )]
+    pub treasury_token: Account<'info, TokenAccount>,
+    #[account(
+        mut,
+        constraint = stream.treasury_address == treasury.key() @ ErrorCode::InvalidTreasury,
+        constraint = stream.beneficiary_address == beneficiary.key() @ ErrorCode::InvalidBeneficiary,
+        constraint = stream.beneficiary_associated_token == associated_token.key() @ ErrorCode::InvalidAssociatedToken,
+        constraint = stream.to_account_info().data_len() == 500 @ ErrorCode::InvalidStreamSize,
+    )]
+    pub stream: ProgramAccount<'info, StreamV2>,
+    #[account(
+        mut, 
+        constraint = fee_tresury.key() == fee_treasury::ID @ ErrorCode::InvalidFeeTreasuryAccount
+    )]
+    pub fee_tresury: SystemAccount<'info>,
+    pub fee_treasury_token: Account<'info, TokenAccount>,
+    #[account(constraint = msp.key() == msp::ID @ ErrorCode::InvalidProgramId)]
+    pub msp: AccountInfo<'info>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub token_program: Program<'info, Token>,
+    pub system_program: Program<'info, System>,
+    pub rent: Sysvar<'info, Rent>,
+}
+
+#[derive(Accounts)]
+pub struct PauseOrResumeStream<'info> {
+    pub initializer: Signer<'info>,
+    #[account(
+        mut,
+        constraint = treasury.key() == stream.treasury_address @ ErrorCode::InvalidTreasury,
+        constraint = treasury.version == 2 @ ErrorCode::InvalidTreasuryVersion,
+        constraint = treasury.initialized == true @ ErrorCode::TreasuryAlreadyInitialized
+    )]
+    pub treasury: ProgramAccount<'info, TreasuryV2>,
+    #[account(
+        constraint = (
+            associated_token.key() == stream.beneficiary_associated_token &&
+            associated_token.key() == treasury.associated_token_address
+        ) @ ErrorCode::InvalidAssociatedToken,
+    )]
+    pub associated_token: Account<'info, Mint>,
+    #[account(
+        mut,
+        constraint = stream.to_account_info().data_len() == 500 @ ErrorCode::InvalidStreamSize,
+        constraint = stream.treasury_address == treasury.key() @ ErrorCode::InvalidTreasury,
+        constraint = stream.beneficiary_associated_token == associated_token.key() @ ErrorCode::InvalidAssociatedToken,
+        constraint = (
+            stream.treasurer_address == initializer.key() || 
+            stream.beneficiary_address == initializer.key()
+        ) @ ErrorCode::NotAuthorized
+    )]
+    pub stream: ProgramAccount<'info, StreamV2>,
+    #[account(
+        mut, 
+        constraint = fee_tresury.key() == fee_treasury::ID @ ErrorCode::InvalidFeeTreasuryAccount
+    )]
+    pub fee_tresury: SystemAccount<'info>,
+    #[account(constraint = msp.key() == msp::ID @ ErrorCode::InvalidProgramId)]
+    pub msp: AccountInfo<'info>,
+}
