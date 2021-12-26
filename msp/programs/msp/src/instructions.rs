@@ -38,7 +38,7 @@ pub struct CreateTreasury<'info> {
         space = Mint::LEN,
         constraint = treasury_mint.decimals == TREASURY_POOL_MINT_DECIMALS @ ErrorCode::InvalidTreasuryMintDecimals
     )]
-    pub treasury_mint: ProgramAccount<'info, Mint>,
+    pub treasury_mint: Account<'info, Mint>,
     #[account(
         mut, 
         constraint = fee_tresury.key() == fee_treasury::ID @ ErrorCode::InvalidFeeTreasuryAccount
@@ -112,14 +112,14 @@ pub struct AddFunds<'info> {
             contributor_token.mint == stream.beneficiary_associated_token
         ) @ ErrorCode::InvalidAssociatedToken
     )]
-    pub contributor_token: Account<'info, TokenAccount>,
+    pub contributor_token: Box<Account<'info, TokenAccount>>,
     #[account(
         init_if_needed,
         payer = contributor,
         token::mint = treasury_mint,
         token::authority = contributor
     )]
-    pub contributor_treasury_token: Account<'info, TokenAccount>,
+    pub contributor_treasury_token: Box<Account<'info, TokenAccount>>,
     #[account(
         mut,
         constraint = treasury.version == 2 @ ErrorCode::InvalidTreasuryVersion,
@@ -131,19 +131,19 @@ pub struct AddFunds<'info> {
         constraint = treasury_token.owner == treasury.key() @ ErrorCode::InvalidOwner,
         constraint = treasury_token.mint == treasury.associated_token_address @ ErrorCode::InvalidAssociatedToken
     )]
-    pub treasury_token: Account<'info, TokenAccount>,
+    pub treasury_token: Box<Account<'info, TokenAccount>>,
     #[account(
         constraint = (
             associated_token.key() == stream.beneficiary_associated_token &&
             associated_token.key() == treasury.associated_token_address
         ) @ ErrorCode::InvalidAssociatedToken,
     )]
-    pub associated_token: Account<'info, Mint>,
+    pub associated_token: Box<Account<'info, Mint>>,
     #[account(
         constraint = treasury_mint.decimals == TREASURY_POOL_MINT_DECIMALS @ ErrorCode::InvalidTreasuryMintDecimals,
         constraint = treasury_mint.key() == treasury.mint_address @ ErrorCode::InvalidTreasuryMint
     )]
-    pub treasury_mint: Account<'info, Mint>,
+    pub treasury_mint: Box<Account<'info, Mint>>,
     #[account(
         mut,
         constraint = stream.to_account_info().data_len() == 500 @ ErrorCode::InvalidStreamSize,
@@ -178,14 +178,14 @@ pub struct Withdraw<'info> {
             beneficiary_token.mint == treasury.associated_token_address
         ) @ ErrorCode::InvalidAssociatedToken
     )]
-    pub beneficiary_token: Account<'info, TokenAccount>,
+    pub beneficiary_token: Box<Account<'info, TokenAccount>>,
     #[account(
         constraint = (
             associated_token.key() == treasury.associated_token_address &&
             associated_token.key() == stream.beneficiary_associated_token
         ) @ ErrorCode::InvalidTreasuryMint
     )]
-    pub associated_token: Account<'info, Mint>,
+    pub associated_token: Box<Account<'info, Mint>>,
     #[account(
         mut,
         constraint = treasury.key() == stream.treasurer_address @ ErrorCode::InvalidTreasury,
@@ -203,7 +203,7 @@ pub struct Withdraw<'info> {
             treasury_token.mint == stream.beneficiary_associated_token
         ) @ ErrorCode::InvalidAssociatedToken
     )]
-    pub treasury_token: Account<'info, TokenAccount>,
+    pub treasury_token: Box<Account<'info, TokenAccount>>,
     #[account(
         mut,
         constraint = stream.treasury_address == treasury.key() @ ErrorCode::InvalidTreasury,
@@ -226,7 +226,7 @@ pub struct Withdraw<'info> {
             fee_treasury_token.mint == stream.beneficiary_associated_token
         ) @ ErrorCode::InvalidAssociatedToken
     )]
-    pub fee_treasury_token: Account<'info, TokenAccount>,
+    pub fee_treasury_token: Box<Account<'info, TokenAccount>>,
     #[account(constraint = msp.key() == msp::ID @ ErrorCode::InvalidProgramId)]
     pub msp: AccountInfo<'info>,
     pub associated_token_program: Program<'info, AssociatedToken>,
@@ -305,12 +305,12 @@ pub struct CloseStream<'info> {
             treasurer_token.mint == associated_token.key()
         ) @ ErrorCode::InvalidAssociatedToken
     )]
-    pub treasurer_token: Account<'info, TokenAccount>,
+    pub treasurer_token: Box<Account<'info, TokenAccount>>,
     #[account(
         mut,
         constraint = treasurer_treasury_token.owner == treasury.key() @ ErrorCode::InvalidOwner
     )]
-    pub treasurer_treasury_token: Account<'info, TokenAccount>,
+    pub treasurer_treasury_token: Box<Account<'info, TokenAccount>>,
     #[account(
         mut,
         constraint = treasury.version == 2 @ ErrorCode::InvalidTreasuryVersion,
@@ -326,14 +326,14 @@ pub struct CloseStream<'info> {
             beneficiary_token.mint == treasury.associated_token_address
         ) @ ErrorCode::InvalidAssociatedToken
     )]
-    pub beneficiary_token: Account<'info, TokenAccount>,
+    pub beneficiary_token: Box<Account<'info, TokenAccount>>,
     #[account(
         constraint = (
             associated_token.key() == stream.beneficiary_associated_token &&
             associated_token.key() == treasury.associated_token_address
         ) @ ErrorCode::InvalidAssociatedToken,
     )]
-    pub associated_token: Account<'info, Mint>,
+    pub associated_token: Box<Account<'info, Mint>>,
     #[account(
         mut,
         constraint = treasury.key() == stream.treasury_address @ ErrorCode::InvalidTreasury,
@@ -350,12 +350,12 @@ pub struct CloseStream<'info> {
             treasury_token.mint == stream.beneficiary_associated_token
         ) @ ErrorCode::InvalidAssociatedToken
     )]
-    pub treasury_token: Account<'info, TokenAccount>,
+    pub treasury_token: Box<Account<'info, TokenAccount>>,
     #[account(
         constraint = treasury_mint.decimals == TREASURY_POOL_MINT_DECIMALS @ ErrorCode::InvalidTreasuryMintDecimals,
         constraint = treasury_mint.key() == treasury.mint_address @ ErrorCode::InvalidTreasuryMint
     )]
-    pub treasury_mint: Account<'info, Mint>,
+    pub treasury_mint: Box<Account<'info, Mint>>,
     #[account(
         mut,
         constraint = stream.treasury_address == treasury.key() @ ErrorCode::InvalidTreasury,
@@ -378,7 +378,7 @@ pub struct CloseStream<'info> {
             fee_treasury_token.mint == stream.beneficiary_associated_token
         ) @ ErrorCode::InvalidAssociatedToken
     )]
-    pub fee_treasury_token: Account<'info, TokenAccount>,
+    pub fee_treasury_token: Box<Account<'info, TokenAccount>>,
     #[account(constraint = msp.key() == msp::ID @ ErrorCode::InvalidProgramId)]
     pub msp: AccountInfo<'info>,
     pub associated_token_program: Program<'info, AssociatedToken>,
@@ -399,14 +399,14 @@ pub struct CloseTreasury<'info> {
             treasurer_token.mint == associated_token.key()
         ) @ ErrorCode::InvalidAssociatedToken
     )]
-    pub treasurer_token: Account<'info, TokenAccount>,
+    pub treasurer_token: Box<Account<'info, TokenAccount>>,
     #[account(
         mut,
         constraint = treasurer_treasury_token.owner == treasury.key() @ ErrorCode::InvalidOwner
     )]
-    pub treasurer_treasury_token: Account<'info, TokenAccount>,
+    pub treasurer_treasury_token: Box<Account<'info, TokenAccount>>,
     #[account(constraint = associated_token.key() == treasury.associated_token_address @ ErrorCode::InvalidAssociatedToken)]
-    pub associated_token: Account<'info, Mint>,
+    pub associated_token: Box<Account<'info, Mint>>,
     #[account(
         mut,
         constraint = treasurer.key() == treasury.treasurer_address @ ErrorCode::NotAuthorized,
@@ -422,7 +422,7 @@ pub struct CloseTreasury<'info> {
             treasury_token.mint == treasury.associated_token_address
         ) @ ErrorCode::InvalidAssociatedToken
     )]
-    pub treasury_token: Account<'info, TokenAccount>,
+    pub treasury_token: Box<Account<'info, TokenAccount>>,
     #[account(
         constraint = treasury_mint.decimals == TREASURY_POOL_MINT_DECIMALS @ ErrorCode::InvalidTreasuryMintDecimals,
         constraint = treasury_mint.key() == treasury.mint_address @ ErrorCode::InvalidTreasuryMint
@@ -441,7 +441,7 @@ pub struct CloseTreasury<'info> {
             fee_treasury_token.mint == treasury.associated_token_address
         ) @ ErrorCode::InvalidAssociatedToken
     )]
-    pub fee_treasury_token: Account<'info, TokenAccount>,
+    pub fee_treasury_token: Box<Account<'info, TokenAccount>>,
     #[account(constraint = msp.key() == msp::ID @ ErrorCode::InvalidProgramId)]
     pub msp: AccountInfo<'info>,
     pub token_program: Program<'info, Token>,
