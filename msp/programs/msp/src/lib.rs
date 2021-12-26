@@ -20,27 +20,43 @@ pub mod msp {
 
     use super::*;
 
-    pub fn create_treasury(ctx: Context<CreateTreasury>) -> ProgramResult {
+    // Create Treasury
+    pub fn create_treasury(_ctx: Context<CreateTreasury>) -> ProgramResult {
         Ok(())
     }
 
-    pub fn create_stream(ctx: Context<CreateStream>) -> ProgramResult {
+    // Create Stream
+    pub fn create_stream(_ctx: Context<CreateStream>) -> ProgramResult {
         Ok(())
     }
 
-    pub fn add_funds(ctx: Context<AddFunds>) -> ProgramResult {
+    // Add Funds
+    pub fn add_funds(_ctx: Context<AddFunds>) -> ProgramResult {
         Ok(())
     }
 
-    pub fn withdraw(ctx: Context<Withdraw>) -> ProgramResult {
+    // Withdraw
+    pub fn withdraw(_ctx: Context<Withdraw>) -> ProgramResult {
         Ok(())
     }
 
-    pub fn pause_stream(ctx: Context<PauseOrResumeStream>) -> ProgramResult {
+    // Pause Stream
+    pub fn pause_stream(_ctx: Context<PauseOrResumeStream>) -> ProgramResult {
         Ok(())
     }
 
-    pub fn resume_stream(ctx: Context<PauseOrResumeStream>) -> ProgramResult {
+    // Resume Stream
+    pub fn resume_stream(_ctx: Context<PauseOrResumeStream>) -> ProgramResult {
+        Ok(())
+    }
+
+    // Close Stream
+    pub fn close_stream(_ctx: Context<CloseStream>) -> ProgramResult {
+        Ok(())
+    }
+
+    // Close Treasury
+    pub fn close_treasury(_ctx: Context<CloseTreasury>) -> ProgramResult {
         Ok(())
     }
 }

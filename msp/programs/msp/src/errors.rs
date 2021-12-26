@@ -34,6 +34,8 @@ pub enum ErrorCode {
     InvalidStreamSize,
     #[msg("Invalid treasury size")]
     InvalidTreasurySize,
+    #[msg("Invalid treasurer")]
+    InvalidTreasurer,
     #[msg("Invalid beneficiary")]
     InvalidBeneficiary,
 }
