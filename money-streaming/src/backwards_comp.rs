@@ -223,27 +223,32 @@ pub fn withdraw_v0<'info>(
     )?;
 
     let mut stream = Stream::unpack_from_slice(&stream_account_info.data.borrow())?;
-    let associated_token_mint = spl_token::state::Mint::unpack_from_slice(&associated_token_mint_info.data.borrow())?;        
-    let mut escrow_vested_amount = get_beneficiary_withdrawable_amount_v0(
-        &stream, &clock, associated_token_mint.decimals.into()
-    )?;
 
+    if stream.cliff_vest_amount == 0f64 || stream.cliff_vest_percent == 0f64 || stream.cliff_vest_percent == 100f64 {
+        return Err(StreamError::NotAllowedWithdrawalAmount.into());
+    }
+
+    let associated_token_mint = spl_token::state::Mint::unpack_from_slice(&associated_token_mint_info.data.borrow())?;  
     let pow = num_traits::pow(10f64, associated_token_mint.decimals.into());
-    let treasury_token = spl_token::state::Account::unpack_from_slice(&treasury_token_account_info.data.borrow())?;
+    let mut cliff_amount = (stream.cliff_vest_amount * pow) as u64;
     let stream_allocation = ((stream.total_deposits * pow) as u64)
         .checked_sub((stream.total_withdrawals * pow) as u64)
         .ok_or(StreamError::Overflow)?;
 
-    if stream_allocation > 0 && escrow_vested_amount > stream_allocation {
-        escrow_vested_amount = stream_allocation;
-    } else if escrow_vested_amount > treasury_token.amount {
-        escrow_vested_amount = treasury_token.amount;
+    if stream.cliff_vest_percent > 0f64 {
+        cliff_amount = (stream_allocation as f64 * pow * stream.cliff_vest_percent / 100f64) as u64;
     }
 
-    let transfer_amount = (amount * pow) as u64;
+    let mut transfer_amount = (amount * pow) as u64;
 
-    if transfer_amount > escrow_vested_amount {
-        return Err(StreamError::NotAllowedWithdrawalAmount.into());
+    if transfer_amount > cliff_amount {
+        transfer_amount = cliff_amount;
+    } else {
+        let left_cliff_amount = cliff_amount
+            .checked_sub(transfer_amount)
+            .ok_or(StreamError::Overflow)? as f64 / pow;                
+        stream.cliff_vest_percent = 0.0;
+        stream.cliff_vest_amount = left_cliff_amount;
     }
 
     if beneficiary_token_account_info.data_len() == 0 { // Create beneficiary associated token account if doesn't exist
@@ -261,7 +266,7 @@ pub fn withdraw_v0<'info>(
     // Update stream data
     let _ = withdraw_funds_update_stream_v0(
         &mut stream, &stream_account_info, &associated_token_mint_info, 
-        &clock, escrow_vested_amount, transfer_amount
+        &clock, cliff_amount, transfer_amount
     )?;
 
     if fee_treasury_token_account_info.data_len() == 0 { // Create treasury associated token account if doesn't exist

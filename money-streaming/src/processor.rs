@@ -347,15 +347,29 @@ impl Processor {
         )?;
 
         let mut stream = StreamV1::unpack_from_slice(&stream_account_info.data.borrow())?;
-        let associated_token_mint = spl_token::state::Mint::unpack_from_slice(&associated_token_mint_info.data.borrow())?;        
-        let escrow_vested_amount = get_beneficiary_withdrawable_amount(
-            &stream, &clock, associated_token_mint.decimals.into()
-        )?;
-        let pow = num_traits::pow(10f64, associated_token_mint.decimals.into());
-        let transfer_amount = (amount * pow) as u64;
 
-        if transfer_amount > escrow_vested_amount {
+        if stream.cliff_vest_amount == 0f64 || stream.cliff_vest_percent == 0f64 || stream.cliff_vest_percent == 100f64 {
             return Err(StreamError::NotAllowedWithdrawalAmount.into());
+        }
+
+        let associated_token_mint = spl_token::state::Mint::unpack_from_slice(&associated_token_mint_info.data.borrow())?;  
+        let pow = num_traits::pow(10f64, associated_token_mint.decimals.into());
+        let mut cliff_amount = (stream.cliff_vest_amount * pow) as u64;
+
+        if stream.cliff_vest_percent > 0f64 {
+            cliff_amount = (stream.allocation_assigned * pow * stream.cliff_vest_percent / 100f64) as u64;
+        }
+
+        let mut transfer_amount = (amount * pow) as u64;
+
+        if transfer_amount > cliff_amount {
+            transfer_amount = cliff_amount;
+        } else {
+            let left_cliff_amount = cliff_amount
+                .checked_sub(transfer_amount)
+                .ok_or(StreamError::Overflow)? as f64 / pow;                
+            stream.cliff_vest_percent = 0.0;
+            stream.cliff_vest_amount = left_cliff_amount;
         }
 
         if beneficiary_token_account_info.data_len() == 0 { // Create treasury associated token account if doesn't exist
@@ -368,12 +382,12 @@ impl Processor {
         // Withdraw
         let _ = claim_treasury_funds(
             &msp_account_info, &token_program_account_info, &treasury_account_info,
-            &treasury_token_account_info, &beneficiary_token_account_info, transfer_amount
+            &treasury_token_account_info, &beneficiary_token_account_info, cliff_amount
         )?;
         // Update stream data
         let _ = withdraw_funds_update_stream(
             &mut stream, &stream_account_info, &associated_token_mint_info,
-            &clock, escrow_vested_amount, transfer_amount
+            &clock, cliff_amount, transfer_amount
         )?;
         // Update treasury account data
         let _ = withdraw_funds_update_treasury(
@@ -388,7 +402,7 @@ impl Processor {
             )?;
         }
         
-        let fee = WITHDRAW_PERCENT_FEE * transfer_amount as f64 / 100f64;
+        let fee = WITHDRAW_PERCENT_FEE * cliff_amount as f64 / 100f64;
         // Pay fees
         transfer_token_fee(
             &token_program_account_info,
