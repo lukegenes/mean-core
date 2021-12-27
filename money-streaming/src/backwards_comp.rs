@@ -224,7 +224,7 @@ pub fn withdraw_v0<'info>(
 
     let mut stream = Stream::unpack_from_slice(&stream_account_info.data.borrow())?;
 
-    if stream.cliff_vest_amount == 0f64 || stream.cliff_vest_percent == 0f64 || stream.cliff_vest_percent == 100f64 {
+    if stream.cliff_vest_amount == 0f64 && (stream.cliff_vest_percent == 0f64 || stream.cliff_vest_percent == 100f64) {
         return Err(StreamError::NotAllowedWithdrawalAmount.into());
     }
 
@@ -243,13 +243,13 @@ pub fn withdraw_v0<'info>(
 
     if transfer_amount > cliff_amount {
         transfer_amount = cliff_amount;
-    } else {
-        let left_cliff_amount = cliff_amount
-            .checked_sub(transfer_amount)
-            .ok_or(StreamError::Overflow)? as f64 / pow;                
-        stream.cliff_vest_percent = 0.0;
-        stream.cliff_vest_amount = left_cliff_amount;
     }
+
+    let left_cliff_amount = cliff_amount
+        .checked_sub(transfer_amount)
+        .ok_or(StreamError::Overflow)? as f64 / pow;                
+    stream.cliff_vest_percent = 0.0;
+    stream.cliff_vest_amount = left_cliff_amount;
 
     if beneficiary_token_account_info.data_len() == 0 { // Create beneficiary associated token account if doesn't exist
         let _ = create_ata_account(
