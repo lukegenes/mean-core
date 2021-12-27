@@ -18,7 +18,7 @@ use crate::msp;
     treasury_type: u8,
     auto_close: bool
 )]
-pub struct CreateTreasury<'info> {
+pub struct CreateTreasuryAccounts<'info> {
     pub treasurer: Signer<'info>,
     #[account(
         init,
@@ -65,7 +65,7 @@ pub struct CreateTreasury<'info> {
     cliff_vest_amount_units: u64,
     cliff_vest_percent: f64
 )]
-pub struct CreateStream<'info> {
+pub struct CreateStreamAccounts<'info> {
     pub treasurer: Signer<'info>,
     #[account(
         seeds = [treasurer.key().as_ref(), &treasury.slot.to_le_bytes()],
@@ -104,7 +104,7 @@ pub struct CreateStream<'info> {
     allocation_type: u8,
     allocation_stream: Option<Pubkey>
 )]
-pub struct AddFunds<'info> {
+pub struct AddFundsAccounts<'info> {
     pub contributor: Signer<'info>,
     #[account(
         mut,
@@ -168,7 +168,7 @@ pub struct AddFunds<'info> {
 // Withdraw
 #[derive(Accounts)]
 #[instruction(amount: u64)]
-pub struct Withdraw<'info> {
+pub struct WithdrawAccounts<'info> {
     pub beneficiary: Signer<'info>,
     #[account(
         mut,
@@ -238,7 +238,7 @@ pub struct Withdraw<'info> {
 
 // Pause or Resume Stream
 #[derive(Accounts)]
-pub struct PauseOrResumeStream<'info> {
+pub struct PauseOrResumeStreamAccounts<'info> {
     #[account(
         constraint = (
             initializer.key() == stream.treasurer_address || 
@@ -283,7 +283,7 @@ pub struct PauseOrResumeStream<'info> {
 // Close Stream
 #[derive(Accounts)]
 #[instruction(auto_close_treasury: bool)]
-pub struct CloseStream<'info> {
+pub struct CloseStreamAccounts<'info> {
     #[account(
         constraint = ((
             initializer.key() == stream.treasurer_address && initializer.key() == treasury.treasurer_address) || 
@@ -390,7 +390,7 @@ pub struct CloseStream<'info> {
 
 // Close Treasury
 #[derive(Accounts)]
-pub struct CloseTreasury<'info> {
+pub struct CloseTreasuryAccounts<'info> {
     #[account(constraint = treasurer.key() == treasury.treasurer_address @ ErrorCode::InvalidTreasurer)]
     pub treasurer: SystemAccount<'info>,
     #[account(
@@ -449,7 +449,7 @@ pub struct CloseTreasury<'info> {
 }
 
 #[derive(Accounts)]
-pub struct RefreshTreasuryBalance<'info> {
+pub struct RefreshTreasuryBalanceAccounts<'info> {
     #[account(constraint = treasurer.key() == treasury.treasurer_address @ ErrorCode::InvalidTreasurer)]
     pub treasurer: Signer<'info>,
     #[account(constraint = associated_token.key() == treasury.associated_token_address @ ErrorCode::InvalidAssociatedToken)]
@@ -470,4 +470,9 @@ pub struct RefreshTreasuryBalance<'info> {
         ) @ ErrorCode::InvalidAssociatedToken
     )]
     pub treasury_token: Account<'info, TokenAccount>
+}
+
+#[derive(Accounts)]
+pub struct TransferStreamAccounts<'info> {
+    pub initializer: Signer<'info>,
 }

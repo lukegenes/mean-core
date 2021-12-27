@@ -24,7 +24,7 @@ pub mod msp {
 
     // Create Treasury
     pub fn create_treasury(
-        ctx: Context<CreateTreasury>,
+        ctx: Context<CreateTreasuryAccounts>,
         slot: u64,
         bump: u8,
         name: String,
@@ -32,7 +32,7 @@ pub mod msp {
         auto_close: bool,
         
     ) -> ProgramResult {
-        
+
         // Initialize Treasury
         let treasury = &mut ctx.accounts.treasury;
         treasury.version = 2;
@@ -50,7 +50,6 @@ pub mod msp {
         treasury.total_withdrawals_units = 0;
         treasury.total_streams = 0;
         treasury.created_on_utc = Clock::get()?.unix_timestamp as u64 * 1000u64;
-        treasury.depletion_units_per_second = 0.0;
         treasury.treasury_type = treasury_type;
         treasury.auto_close = auto_close;
         treasury.initialized = true;
@@ -85,42 +84,47 @@ pub mod msp {
     }
 
     // Create Stream
-    pub fn create_stream(_ctx: Context<CreateStream>) -> ProgramResult {
+    pub fn create_stream(_ctx: Context<CreateStreamAccounts>) -> ProgramResult {
         Ok(())
     }
 
     // Add Funds
-    pub fn add_funds(_ctx: Context<AddFunds>) -> ProgramResult {
+    pub fn add_funds(_ctx: Context<AddFundsAccounts>) -> ProgramResult {
         Ok(())
     }
 
     // Withdraw
-    pub fn withdraw(_ctx: Context<Withdraw>) -> ProgramResult {
+    pub fn withdraw(_ctx: Context<WithdrawAccounts>) -> ProgramResult {
         Ok(())
     }
 
     // Pause Stream
-    pub fn pause_stream(_ctx: Context<PauseOrResumeStream>) -> ProgramResult {
+    pub fn pause_stream(_ctx: Context<PauseOrResumeStreamAccounts>) -> ProgramResult {
         Ok(())
     }
 
     // Resume Stream
-    pub fn resume_stream(_ctx: Context<PauseOrResumeStream>) -> ProgramResult {
+    pub fn resume_stream(_ctx: Context<PauseOrResumeStreamAccounts>) -> ProgramResult {
         Ok(())
     }
 
     // Close Stream
-    pub fn close_stream(_ctx: Context<CloseStream>) -> ProgramResult {
+    pub fn close_stream(_ctx: Context<CloseStreamAccounts>) -> ProgramResult {
         Ok(())
     }
 
     // Close Treasury
-    pub fn close_treasury(_ctx: Context<CloseTreasury>) -> ProgramResult {
+    pub fn close_treasury(_ctx: Context<CloseTreasuryAccounts>) -> ProgramResult {
         Ok(())
     }
 
     // Refresh Treasury Balance
-    pub fn refresh_treasury_balance(_ctx: Context<RefreshTreasuryBalance>) -> ProgramResult {
+    pub fn refresh_treasury_balance(_ctx: Context<RefreshTreasuryBalanceAccounts>) -> ProgramResult {
         Ok(())
     }
+
+    // Transfer Stream
+    pub fn transfer_stream(_ctx: Context<TransferStreamAccounts>) -> ProgramResult {
+        Ok(())
+    } 
 }
