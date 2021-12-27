@@ -14,7 +14,7 @@ use crate::msp;
 #[instruction(
     slot: u64,
     bump: u8,
-    label: String,
+    name: String,
     treasury_type: u8,
     auto_close: bool
 )]
@@ -41,9 +41,9 @@ pub struct CreateTreasury<'info> {
     pub treasury_mint: Account<'info, Mint>,
     #[account(
         mut, 
-        constraint = fee_tresury.key() == fee_treasury::ID @ ErrorCode::InvalidFeeTreasuryAccount
+        constraint = fee_treasury.key() == fee_treasury::ID @ ErrorCode::InvalidFeeTreasuryAccount
     )]
-    pub fee_tresury: SystemAccount<'info>,
+    pub fee_treasury: SystemAccount<'info>,
     #[account(constraint = msp.key() == msp::ID @ ErrorCode::InvalidProgramId)]
     pub msp: AccountInfo<'info>,
     pub token_program: Program<'info, Token>,

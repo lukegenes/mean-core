@@ -4,6 +4,7 @@ use anchor_lang::prelude::*;
 pub struct TreasuryV2 {
     pub initialized: bool,
     pub version: u8,
+    pub bump: u8,
     pub slot: u64,
     pub name: String,        
     pub treasurer_address: Pubkey,
@@ -15,7 +16,7 @@ pub struct TreasuryV2 {
     pub last_known_balance_block_time: u64,
 
     pub allocation_reserved_units: u64,
-    pub allocation_assigned_units: f64,
+    pub allocation_assigned_units: u64,
     pub total_withdrawals_units: u64,
 
     pub total_streams: u64,
