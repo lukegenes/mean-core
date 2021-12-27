@@ -105,7 +105,7 @@ pub enum StreamInstruction {
     /// 0. `[signer]` The treasurer account (the creator of the treasury)
     /// 1. `[writable]` The treasury account
     /// 2. `[writable]` The treasury pool token mint account (The mint account of the treasury pool token issued by the treasury).
-    /// 3. `[]` The Money Streaming Program operations account.
+    /// 3. `[writable]` The Money Streaming Program operations account.
     /// 4. `[]` The Money Streaming Program account.
     /// 5. `[]` The Token Program account.    
     /// 6. `[]` System Program account.
@@ -403,6 +403,42 @@ impl StreamInstruction {
     })
  }
 
+ pub fn create_treasury(
+    program_id: &Pubkey,
+    treasurer: Pubkey,
+    treasury: Pubkey,
+    treasury_pool_token: Pubkey,
+    fee_treasury: Pubkey,
+    slot: u64,
+    label: String,
+    treasury_type: u8,
+    auto_close: bool
+
+ ) -> Result<Instruction, StreamError> {
+
+    if let Err(_error) = check_program_account(program_id) {
+        return Err(StreamError::IncorrectProgramId.into());
+    }
+
+    let data = StreamInstruction::CreateTreasury { slot, label, treasury_type, auto_close }.pack();
+    let accounts = vec![
+        AccountMeta::new_readonly(treasurer, true),
+        AccountMeta::new(treasury, false),
+        AccountMeta::new(treasury_pool_token, false),
+        AccountMeta::new(fee_treasury, false),
+        AccountMeta::new_readonly(*program_id, false),
+        AccountMeta::new_readonly(spl_token::id(), false),
+        AccountMeta::new_readonly(system_program::id(), false),
+        AccountMeta::new_readonly(solana_program::sysvar::rent::id(), false)
+    ];
+
+    Ok(Instruction { 
+        program_id: *program_id, 
+        accounts, 
+        data 
+    })
+ }
+
  pub fn add_funds(
     program_id: &Pubkey,
     stream_address: &Pubkey,
@@ -501,6 +537,7 @@ impl StreamInstruction {
  }
 
  pub fn close_treasury(
+    program_id: &Pubkey,
     treasurer_account_address: Pubkey,
     treasurer_token_account_address: Pubkey,
     treasurer_treasury_pool_token_account_address: Pubkey,
@@ -510,8 +547,7 @@ impl StreamInstruction {
     treasury_pool_mint_address: Pubkey,
     msp_ops_account_address: Pubkey,
     msp_ops_token_account_address: Pubkey,
-    token_program_account_address: Pubkey,
-    program_id: &Pubkey,
+    token_program_account_address: Pubkey
 
  ) -> Result<Instruction, StreamError> {
 

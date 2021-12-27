@@ -480,6 +480,7 @@ pub fn close_stream_close_treasury<'info>(
     ];
 
     let close_treasury_ix = close_treasury(
+        program_id,
         *treasurer_account_info.key,
         *treasurer_token_account_info.key,
         *treasurer_treasury_pool_token_account_info.key,
@@ -489,8 +490,7 @@ pub fn close_stream_close_treasury<'info>(
         *treasury_pool_mint_info.key,
         *fee_treasury_account_info.key,
         *fee_treasury_token_account_info.key,
-        *token_program_account_info.key,
-        program_id
+        *token_program_account_info.key
     )?;
 
     invoke_signed(&close_treasury_ix, 
