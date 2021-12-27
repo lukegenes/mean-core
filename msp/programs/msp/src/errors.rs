@@ -38,4 +38,7 @@ pub enum ErrorCode {
     InvalidTreasurer,
     #[msg("Invalid beneficiary")]
     InvalidBeneficiary,
+    // Stream
+    #[msg("Invalid argument")]
+    InvalidArgument,
 }

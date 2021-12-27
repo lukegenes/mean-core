@@ -54,6 +54,7 @@ pub struct CreateTreasury<'info> {
 // Create Stream
 #[derive(Accounts, Clone)]
 #[instruction(
+    treasury_bump: u8,
     name: String,
     start_utc: u64,   
     rate_amount_units: u64,
@@ -68,7 +69,7 @@ pub struct CreateStream<'info> {
     pub treasurer: Signer<'info>,
     #[account(
         seeds = [treasurer.key().as_ref(), &treasury.slot.to_le_bytes()],
-        bump = treasury.bump
+        bump = treasury_bump
     )]
     pub treasury: ProgramAccount<'info, TreasuryV2>,
     #[account(

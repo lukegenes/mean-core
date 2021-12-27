@@ -4,7 +4,6 @@ use anchor_lang::prelude::*;
 pub struct TreasuryV2 {
     pub initialized: bool,
     pub version: u8,
-    pub bump: u8,
     pub slot: u64,
     pub name: String,        
     pub treasurer_address: Pubkey,
@@ -24,4 +23,15 @@ pub struct TreasuryV2 {
     pub depletion_units_per_second: f64,
     pub treasury_type: u8,
     pub auto_close: bool   
+}
+
+impl TreasuryV2 {
+
+    fn get_est_depletion_time<'info>(&self) -> u64 {
+        //Est. Depletion = GetEstDepletion() {
+        //    var amountLeft = allocation_assigned_units - total_withdrawals_units;
+        //    var secondsLeft = amountLeft / depletion_units_per_second
+        //    return now_utc + secondsLeft;
+        return 0;
+    }
 }
